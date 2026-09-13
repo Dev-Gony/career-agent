@@ -1,0 +1,153 @@
+{
+  "job_posting": {
+    "identity": {
+      "posting_id": "job-001",
+      "title": "AI Automation Engineer",
+      "status": "open"
+    },
+    "source": {
+      "platform": "example",
+      "url": "https://example.com/jobs/ai-automation-engineer",
+      "collected_at": "2026-09-13",
+      "input_method": "manual"
+    },
+    "company": {
+      "name": "Example Company",
+      "industry": "software",
+      "size": "unknown"
+    },
+    "role": {
+      "normalized_title": "AI Automation Engineer",
+      "category": "AI Automation",
+      "seniority": "junior_or_unknown",
+      "summary": "AI, API, 자동화 기술을 활용해 반복 업무를 줄이고 운영 효율을 개선하는 역할"
+    },
+    "responsibilities": [
+      "내부 반복 업무 자동화",
+      "외부 API 연동",
+      "LLM 기반 업무 도구 개발",
+      "자동화 결과 모니터링 및 개선"
+    ],
+    "requirements": [
+      {
+        "type": "skill",
+        "name": "Python",
+        "level": "required",
+        "evidence_text": "Python을 활용한 개발 경험"
+      },
+      {
+        "type": "experience",
+        "name": "REST API integration",
+        "level": "required",
+        "evidence_text": "REST API 연동 경험"
+      },
+      {
+        "type": "experience",
+        "name": "automation project",
+        "level": "required",
+        "evidence_text": "업무 자동화 또는 유사 프로젝트 경험"
+      }
+    ],
+    "preferred_qualifications": [
+      {
+        "type": "skill",
+        "name": "Docker",
+        "evidence_text": "Docker 사용 경험 우대"
+      },
+      {
+        "type": "cloud",
+        "name": "AWS",
+        "evidence_text": "AWS 환경 운영 경험 우대"
+      },
+      {
+        "type": "skill",
+        "name": "LLM API",
+        "evidence_text": "LLM API 활용 경험 우대"
+      }
+    ],
+    "technologies": {
+      "required": [
+        "Python",
+        "REST API"
+      ],
+      "preferred": [
+        "Docker",
+        "AWS",
+        "LLM API"
+      ],
+      "mentioned": [
+        "GitHub",
+        "Slack"
+      ]
+    },
+    "experience": {
+      "minimum_years": 0,
+      "maximum_years": null,
+      "level_text": "신입 또는 경력",
+      "equivalent_experience_allowed": true
+    },
+    "education": {
+      "required": false,
+      "level": "unknown",
+      "notes": null
+    },
+    "employment": {
+      "type": "full_time",
+      "contract_period": null,
+      "probation": "unknown"
+    },
+    "location": {
+      "region": "서울",
+      "district": null,
+      "remote": "unknown"
+    },
+    "compensation": {
+      "disclosed": false,
+      "min": null,
+      "max": null,
+      "currency": "KRW",
+      "period": "annual"
+    },
+    "work_environment": {
+      "collaboration": [
+        "개발 및 운영 조직과 협업"
+      ],
+      "pace": [
+        "작은 자동화 과제를 빠르게 검증하고 개선"
+      ],
+      "ownership": [
+        "자동화 과제 발굴부터 운영 개선까지 참여"
+      ]
+    },
+    "extracted_keywords": {
+      "role_keywords": [
+        "AI",
+        "automation",
+        "workflow"
+      ],
+      "skill_keywords": [
+        "Python",
+        "API",
+        "Docker",
+        "AWS",
+        "LLM"
+      ]
+    },
+    "analysis_notes": {
+      "facts": [
+        "Python 개발 경험이 필수 조건으로 제시된 예제",
+        "REST API 연동 경험이 필수 조건으로 제시된 예제",
+        "Docker와 AWS는 우대 조건으로 분리된 예제"
+      ],
+      "interpretations": [
+        "단순 분석보다 구현과 자동화 비중이 높은 직무를 가정한 예제"
+      ],
+      "unknowns": [
+        "실제 클라우드 사용 비중",
+        "실제 팀 규모",
+        "실제 연봉 범위"
+      ]
+    },
+    "raw_text": "이 파일은 구조 확인을 위한 비식별 예제 데이터이며 실제 채용공고 전문을 포함하지 않습니다."
+  }
+}
