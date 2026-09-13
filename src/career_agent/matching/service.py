@@ -7,6 +7,7 @@ from typing import Any
 
 from .eligibility import EligibilityMatchError, assess_eligibility
 from .experience import ExperienceMatchError, match_experience_requirements
+from .recommendation import RecommendationError, build_application_recommendation
 from .technology import TechnologyMatchError, match_technology_requirements
 
 
@@ -170,9 +171,18 @@ def match_job_requirements(
         ],
         seen_source_ids=seen_source_ids,
     )
+    try:
+        application_recommendation = build_application_recommendation(
+            required_matches,
+            preferred_matches,
+            eligibility,
+            responsibilities_evaluated=False,
+        )
+    except RecommendationError as error:
+        raise RequirementMatchError(str(error)) from error
 
     return {
-        "scope": "requirements_and_preferred_only",
+        "scope": "requirements_preferred_eligibility_and_recommendation",
         "inputs": {
             "profile_id": profile_id,
             "posting_id": posting_id,
@@ -184,12 +194,12 @@ def match_job_requirements(
         "eligibility": eligibility,
         "required_matches": required_matches,
         "preferred_matches": preferred_matches,
+        "application_recommendation": application_recommendation,
         "metadata": {
             "matching_rules_version": "0.1",
             "analysis_mode": "mvp_rule_based",
             "incomplete_sections": [
                 "responsibility_matches",
-                "application_recommendation",
             ],
         },
     }

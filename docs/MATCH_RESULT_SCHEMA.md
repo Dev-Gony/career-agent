@@ -294,8 +294,11 @@
         - "Docker와 AWS 경험은 추가 확인 필요"
       next_steps:
         - "실제 공고의 상세 업무와 기술 사용 비중 확인"
+      interpretation: "현재 프로필과 공고 조건의 비교 결과이며 합격 가능성 예측이 아님"
 
 `decision` 값은 `docs/MATCHING_RULES.md`의 지원 판단 목록만 사용한다.
+
+`confidence`는 합격 확률이 아니라 입력과 판정 근거의 명확성을 나타낸다. `interpretation`에는 이 결과가 합격 가능성 예측이 아니라는 경계를 명시한다.
 
 ## 17. analysis_notes
 

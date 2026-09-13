@@ -54,6 +54,10 @@ class RequirementMatchingServiceTest(unittest.TestCase):
         self.assertNotIn(
             "eligibility", result["metadata"]["incomplete_sections"]
         )
+        self.assertNotIn(
+            "application_recommendation",
+            result["metadata"]["incomplete_sections"],
+        )
 
     def test_keeps_unsupported_condition_as_unknown(self) -> None:
         posting = deepcopy(self.posting)

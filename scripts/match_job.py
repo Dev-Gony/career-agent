@@ -60,6 +60,18 @@ def _print_eligibility(eligibility: dict) -> None:
         print(f"  판단: {condition['reason']}")
 
 
+def _print_recommendation(recommendation: dict) -> None:
+    print(f"지원 판단: {recommendation['decision']}")
+    print(f"판단 근거 신뢰도: {recommendation['confidence']}")
+    for reason in recommendation["reasons"]:
+        print(f"- 근거: {reason}")
+    for caution in recommendation["cautions"]:
+        print(f"- 주의: {caution}")
+    for next_step in recommendation["next_steps"]:
+        print(f"- 다음 행동: {next_step}")
+    print(f"- 해석: {recommendation['interpretation']}")
+
+
 def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -76,10 +88,11 @@ def main() -> int:
         return 1
 
     print("통합 요구사항 비교 결과")
-    print("주의: 주요 업무와 최종 지원 추천은 아직 평가하지 않습니다.")
+    print("주의: 주요 업무 적합도는 아직 별도로 평가하지 않습니다.")
     _print_section("필수 조건", result["required_matches"])
     _print_section("우대 조건", result["preferred_matches"])
     _print_eligibility(result["eligibility"])
+    _print_recommendation(result["application_recommendation"])
     return 0
 
 
