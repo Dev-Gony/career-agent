@@ -21,6 +21,8 @@ _EXPERIENCE_ALIASES = {
     "automation project": "automation_project",
     "업무 자동화": "automation_project",
     "자동화 프로젝트": "automation_project",
+    "software engineering experience": "software_engineering_experience",
+    "소프트웨어 개발 경력": "software_engineering_experience",
 }
 
 
@@ -59,6 +61,8 @@ def _experience_concept(item: dict[str, Any]) -> str | None:
         return "rest_api_integration"
     if "자동화" in evidence_text and ("경험" in evidence_text or "프로젝트" in evidence_text):
         return "automation_project"
+    if "software engineering experience" in evidence_text or "소프트웨어 개발 경력" in evidence_text:
+        return "software_engineering_experience"
     return None
 
 
@@ -124,6 +128,34 @@ def _validate_behavior(raw_behavior: Any, position: int) -> dict[str, Any]:
     }
 
 
+def _validate_career(raw_career: Any, position: int) -> dict[str, Any]:
+    if not isinstance(raw_career, dict):
+        raise ExperienceMatchError(
+            f"profile.career_history[{position}]는 객체여야 합니다."
+        )
+    responsibilities = raw_career.get("responsibilities", [])
+    if not isinstance(responsibilities, list) or not all(
+        isinstance(item, str) for item in responsibilities
+    ):
+        raise ExperienceMatchError("경력 responsibilities는 문자열 배열이어야 합니다.")
+    return {
+        "career_id": _required_text(raw_career, "career_id"),
+        "role": _required_text(raw_career, "role"),
+        "responsibilities": [
+            item.strip() for item in responsibilities if item.strip()
+        ],
+    }
+
+
+def _career_items(profile: dict[str, Any]) -> list[Any]:
+    history = profile.get("career_history", [])
+    if isinstance(history, dict):
+        return [history]
+    if isinstance(history, list):
+        return history
+    raise ExperienceMatchError("'career_history'는 객체 또는 배열이어야 합니다.")
+
+
 def _contains_any(values: list[str], terms: tuple[str, ...]) -> bool:
     text = " ".join(_normalized(value) for value in values)
     return any(term in text for term in terms)
@@ -162,6 +194,24 @@ def _skill_supports(skill: dict[str, Any], concept: str) -> bool:
     if concept != "rest_api_integration":
         return False
     return _normalized(skill["name"]) in {"rest api", "restful api", "api integration"}
+
+
+def _career_supports(career: dict[str, Any], concept: str) -> bool:
+    if concept != "software_engineering_experience":
+        return False
+    return _contains_any(
+        [career["role"], *career["responsibilities"]],
+        (
+            "웹개발",
+            "웹 개발",
+            "web development",
+            "software engineer",
+            "backend",
+            "백엔드",
+            "서버 운영",
+            "server operation",
+        ),
+    )
 
 
 def _skill_evidence(skill: dict[str, Any]) -> dict[str, str]:
@@ -205,11 +255,23 @@ def _behavior_evidence(behavior: dict[str, Any]) -> dict[str, str]:
     }
 
 
+def _career_evidence(career: dict[str, Any]) -> dict[str, str]:
+    detail = ", ".join(career["responsibilities"]) or career["role"]
+    return {
+        "source_type": "career",
+        "source_name": career["role"],
+        "source_id": career["career_id"],
+        "evidence_level": "work",
+        "detail": detail,
+    }
+
+
 def _assess_experience(
     concept: str | None,
     skills: list[dict[str, Any]],
     projects: list[dict[str, Any]],
     behaviors: list[dict[str, Any]],
+    careers: list[dict[str, Any]],
 ) -> tuple[str, str, str, list[dict[str, str]]]:
     if concept is None:
         return (
@@ -226,6 +288,9 @@ def _assess_experience(
     related_behaviors = [
         behavior for behavior in behaviors if _behavior_supports(behavior, concept)
     ]
+    related_careers = [
+        career for career in careers if _career_supports(career, concept)
+    ]
     completed_projects = [
         project for project in related_projects if project["status"] == "completed"
     ]
@@ -236,6 +301,15 @@ def _assess_experience(
     evidence = [*(_skill_evidence(skill) for skill in related_skills)]
     evidence.extend(_project_evidence(project, concept) for project in related_projects)
     evidence.extend(_behavior_evidence(behavior) for behavior in related_behaviors)
+    evidence.extend(_career_evidence(career) for career in related_careers)
+
+    if concept == "software_engineering_experience" and related_careers:
+        return (
+            "partial",
+            "related",
+            "웹개발·유지보수와 서버 운영 경력은 관련 근거이나 요구 연수와 AI/ML 또는 백엔드 운영 시스템의 직접 소유 범위는 확인되지 않습니다.",
+            evidence,
+        )
 
     if completed_projects or strong_skills:
         reason = (
@@ -314,6 +388,7 @@ def _assess_items(
     skills: list[dict[str, Any]],
     projects: list[dict[str, Any]],
     behaviors: list[dict[str, Any]],
+    careers: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     matches: list[dict[str, Any]] = []
     for position, raw_item in enumerate(items):
@@ -327,14 +402,23 @@ def _assess_items(
         source_id = _required_text(raw_item, id_field)
         name = _required_text(raw_item, "name")
         evidence_text = _required_text(raw_item, "evidence_text")
+        concept = _experience_concept(raw_item)
         result, directness, reason, user_evidence = _assess_experience(
-            _experience_concept(raw_item), skills, projects, behaviors
+            concept, skills, projects, behaviors, careers
         )
         unknowns = []
         next_action = None
         if result == "unknown":
             unknowns.append(f"{name}의 실제 수행 경험")
             next_action = f"프로필 자료에서 {name} 수행 경험을 추가 확인"
+        elif result == "partial" and concept == "software_engineering_experience":
+            unknowns.extend(
+                [
+                    "총 소프트웨어 엔지니어링 경력 연수",
+                    "AI/ML 또는 백엔드 운영 시스템 직접 소유 범위",
+                ]
+            )
+            next_action = "경력 자료에서 총 연수와 운영 시스템 직접 소유 범위를 확인"
         elif result in {"partial", "gap"}:
             next_action = f"기존 프로젝트에서 {name}의 동작 결과와 증거를 보강"
 
@@ -386,6 +470,10 @@ def match_experience_requirements(
             _required_list(profile, "behavior_evidence")
         )
     ]
+    careers = [
+        _validate_career(career, position)
+        for position, career in enumerate(_career_items(profile))
+    ]
 
     required_matches = _assess_items(
         _required_list(posting, "requirements"),
@@ -394,6 +482,7 @@ def match_experience_requirements(
         skills=skills,
         projects=projects,
         behaviors=behaviors,
+        careers=careers,
     )
     preferred_matches = _assess_items(
         _required_list(posting, "preferred_qualifications"),
@@ -402,6 +491,7 @@ def match_experience_requirements(
         skills=skills,
         projects=projects,
         behaviors=behaviors,
+        careers=careers,
     )
 
     return {

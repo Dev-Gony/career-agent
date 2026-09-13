@@ -134,6 +134,59 @@ class ExperienceMatchingTest(unittest.TestCase):
             )
         )
 
+    def test_uses_career_as_partial_evidence_for_compound_software_experience(self) -> None:
+        posting = deepcopy(self.posting)
+        posting["job_posting"]["requirements"] = [
+            {
+                "requirement_id": "requirement-software-engineering",
+                "type": "experience",
+                "name": "software engineering experience",
+                "level": "required",
+                "evidence_text": (
+                    "3+ years of software engineering experience with direct "
+                    "ownership of AI/ML or backend systems in production."
+                ),
+            }
+        ]
+
+        result = match_experience_requirements(self.profile, posting)
+        match = result["required_matches"][0]
+
+        self.assertEqual("partial", match["assessment"]["result"])
+        self.assertEqual("related", match["assessment"]["directness"])
+        self.assertEqual(
+            {"career"},
+            {item["source_type"] for item in match["user_evidence"]},
+        )
+        self.assertEqual("career-001", match["user_evidence"][0]["source_id"])
+        self.assertEqual(
+            [
+                "총 소프트웨어 엔지니어링 경력 연수",
+                "AI/ML 또는 백엔드 운영 시스템 직접 소유 범위",
+            ],
+            match["unknowns"],
+        )
+
+    def test_missing_career_keeps_software_experience_unknown(self) -> None:
+        profile = deepcopy(self.profile)
+        profile["profile"]["career_history"] = []
+        posting = deepcopy(self.posting)
+        posting["job_posting"]["requirements"] = [
+            {
+                "requirement_id": "requirement-software-engineering",
+                "type": "experience",
+                "name": "software engineering experience",
+                "level": "required",
+                "evidence_text": "Software engineering experience required.",
+            }
+        ]
+
+        result = match_experience_requirements(profile, posting)
+
+        self.assertEqual(
+            "unknown", result["required_matches"][0]["assessment"]["result"]
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
