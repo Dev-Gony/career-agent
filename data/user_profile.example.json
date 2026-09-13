@@ -31,6 +31,7 @@
         "organization_type": "비공개",
         "role": "웹개발 및 유지보수",
         "period": "비공개",
+        "duration_years": null,
         "responsibilities": [
           "웹 개발 및 유지보수",
           "서버 운영 관련 업무"
@@ -54,6 +55,12 @@
         ]
       }
     ],
+    "education": {
+      "level": "unknown",
+      "field": null,
+      "status": "unknown",
+      "notes": "공개 예제에서는 학력 정보를 확인하지 않음"
+    },
     "projects": [
       {
         "project_id": "project-tech-news",

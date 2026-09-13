@@ -51,6 +51,15 @@ def _print_section(title: str, matches: list[dict]) -> None:
         print("- 평가할 조건 없음")
 
 
+def _print_eligibility(eligibility: dict) -> None:
+    print(f"지원 가능 조건: {eligibility['status']}")
+    for condition in eligibility["conditions"]:
+        print(f"- {condition['type']}: {condition['result']}")
+        print(f"  공고: {condition['posting_value']}")
+        print(f"  사용자: {condition['user_value']}")
+        print(f"  판단: {condition['reason']}")
+
+
 def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -67,9 +76,10 @@ def main() -> int:
         return 1
 
     print("통합 요구사항 비교 결과")
-    print("주의: 지원 가능 조건, 주요 업무와 최종 지원 추천은 아직 평가하지 않습니다.")
+    print("주의: 주요 업무와 최종 지원 추천은 아직 평가하지 않습니다.")
     _print_section("필수 조건", result["required_matches"])
     _print_section("우대 조건", result["preferred_matches"])
+    _print_eligibility(result["eligibility"])
     return 0
 
 

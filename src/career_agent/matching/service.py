@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
+from .eligibility import EligibilityMatchError, assess_eligibility
 from .experience import ExperienceMatchError, match_experience_requirements
 from .technology import TechnologyMatchError, match_technology_requirements
 
@@ -144,7 +145,8 @@ def match_job_requirements(
     try:
         technology = match_technology_requirements(profile_document, posting_document)
         experience = match_experience_requirements(profile_document, posting_document)
-    except (TechnologyMatchError, ExperienceMatchError) as error:
+        eligibility = assess_eligibility(profile_document, posting_document)
+    except (TechnologyMatchError, ExperienceMatchError, EligibilityMatchError) as error:
         raise RequirementMatchError(str(error)) from error
 
     seen_source_ids: set[str] = set()
@@ -179,13 +181,13 @@ def match_job_requirements(
             "required": _summarize(required_matches),
             "preferred": _summarize(preferred_matches),
         },
+        "eligibility": eligibility,
         "required_matches": required_matches,
         "preferred_matches": preferred_matches,
         "metadata": {
             "matching_rules_version": "0.1",
             "analysis_mode": "mvp_rule_based",
             "incomplete_sections": [
-                "eligibility",
                 "responsibility_matches",
                 "application_recommendation",
             ],

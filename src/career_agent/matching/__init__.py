@@ -1,10 +1,13 @@
 """Profile and job-posting matching functions."""
 
+from .eligibility import EligibilityMatchError, assess_eligibility
 from .experience import ExperienceMatchError, match_experience_requirements
 from .service import RequirementMatchError, match_job_requirements
 from .technology import TechnologyMatchError, match_technology_requirements
 
 __all__ = [
+    "EligibilityMatchError",
+    "assess_eligibility",
     "ExperienceMatchError",
     "match_experience_requirements",
     "RequirementMatchError",

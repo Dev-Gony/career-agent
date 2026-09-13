@@ -34,6 +34,7 @@
     |-- basic
     |-- career_goals
     |-- career_history
+    |-- education
     |-- projects
     |-- skills
     |-- behavior_evidence
@@ -98,6 +99,7 @@
         organization_type: "비공개 또는 업종 수준"
         role: "웹개발 및 유지보수"
         period: "YYYY-MM ~ YYYY-MM"
+        duration_years: 3.5
         responsibilities:
           - "웹 개발 및 유지보수"
           - "서버 운영 관련 업무"
@@ -114,7 +116,28 @@
             result: "서버 관련 비용을 크게 절감"
             evidence_level: "real_work"
 
-정확한 수치가 확인되지 않은 경우 추정치를 사실처럼 저장하지 않는다.
+정확한 수치가 확인되지 않은 경우 추정치를 사실처럼 저장하지 않는다. `duration_years`는 해당 경력의 확인된 연수를 0 이상의 숫자로 기록하며, 비공개이거나 계산할 수 없으면 `null`을 사용한다.
+
+## 6.1 education
+
+공고의 필수 학력 조건과 비교하는 데 필요한 최소 정보만 저장한다.
+
+    education:
+      level: "unknown"
+      field: null
+      status: "unknown"
+      notes: "이력서에서 아직 확인하지 않음"
+
+권장 `level` 값:
+
+- high_school
+- associate
+- bachelor
+- master
+- doctorate
+- unknown
+
+`status`는 `completed`, `in_progress`, `unknown`을 사용한다. 학력 정보가 없거나 공개 예제에서 비식별화한 경우 `unknown`으로 유지하며, 임의로 최종 학력을 추정하지 않는다.
 
 ## 7. projects
 

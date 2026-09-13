@@ -50,6 +50,10 @@ class RequirementMatchingServiceTest(unittest.TestCase):
         self.assertEqual(2, result["summary"]["preferred"]["gap"])
         self.assertEqual("sample-user-001", result["inputs"]["profile_id"])
         self.assertEqual("job-001", result["inputs"]["posting_id"])
+        self.assertEqual("eligible", result["eligibility"]["status"])
+        self.assertNotIn(
+            "eligibility", result["metadata"]["incomplete_sections"]
+        )
 
     def test_keeps_unsupported_condition_as_unknown(self) -> None:
         posting = deepcopy(self.posting)
