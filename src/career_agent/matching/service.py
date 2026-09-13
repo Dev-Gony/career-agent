@@ -8,6 +8,7 @@ from typing import Any
 from .eligibility import EligibilityMatchError, assess_eligibility
 from .experience import ExperienceMatchError, match_experience_requirements
 from .recommendation import RecommendationError, build_application_recommendation
+from .responsibility import ResponsibilityMatchError, match_responsibilities
 from .technology import TechnologyMatchError, match_technology_requirements
 
 
@@ -147,7 +148,13 @@ def match_job_requirements(
         technology = match_technology_requirements(profile_document, posting_document)
         experience = match_experience_requirements(profile_document, posting_document)
         eligibility = assess_eligibility(profile_document, posting_document)
-    except (TechnologyMatchError, ExperienceMatchError, EligibilityMatchError) as error:
+        responsibility = match_responsibilities(profile_document, posting_document)
+    except (
+        TechnologyMatchError,
+        ExperienceMatchError,
+        EligibilityMatchError,
+        ResponsibilityMatchError,
+    ) as error:
         raise RequirementMatchError(str(error)) from error
 
     seen_source_ids: set[str] = set()
@@ -176,13 +183,14 @@ def match_job_requirements(
             required_matches,
             preferred_matches,
             eligibility,
-            responsibilities_evaluated=False,
+            responsibility_matches=responsibility["responsibility_matches"],
+            responsibilities_evaluated=True,
         )
     except RecommendationError as error:
         raise RequirementMatchError(str(error)) from error
 
     return {
-        "scope": "requirements_preferred_eligibility_and_recommendation",
+        "scope": "requirements_responsibilities_eligibility_and_recommendation",
         "inputs": {
             "profile_id": profile_id,
             "posting_id": posting_id,
@@ -190,16 +198,20 @@ def match_job_requirements(
         "summary": {
             "required": _summarize(required_matches),
             "preferred": _summarize(preferred_matches),
+            "responsibilities": responsibility["summary"],
         },
         "eligibility": eligibility,
         "required_matches": required_matches,
         "preferred_matches": preferred_matches,
+        "responsibility_matches": responsibility["responsibility_matches"],
         "application_recommendation": application_recommendation,
         "metadata": {
             "matching_rules_version": "0.1",
             "analysis_mode": "mvp_rule_based",
             "incomplete_sections": [
-                "responsibility_matches",
+                "strengths",
+                "gaps",
+                "unknowns",
             ],
         },
     }

@@ -93,6 +93,16 @@ class ApplicationRecommendationTest(unittest.TestCase):
             result["application_recommendation"]["decision"],
         )
 
+    def test_unknown_responsibility_lowers_active_to_recommended(self) -> None:
+        posting = deepcopy(self.posting)
+        posting["job_posting"]["responsibilities"].append(
+            {"responsibility_id": "responsibility-sales", "text": "해외 영업 전략 수립"}
+        )
+
+        result = match_job_requirements(self.profile, posting)
+
+        self.assertEqual("지원 추천", result["application_recommendation"]["decision"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -164,6 +164,7 @@ def build_application_recommendation(
     preferred_matches: Any,
     eligibility: Any,
     *,
+    responsibility_matches: Any = None,
     responsibilities_evaluated: bool = False,
 ) -> dict[str, Any]:
     """Create a recommendation without treating it as hiring probability."""
@@ -171,11 +172,33 @@ def build_application_recommendation(
     required = _require_match_list(required_matches, "required_matches")
     preferred = _require_match_list(preferred_matches, "preferred_matches")
     eligibility_result = _require_eligibility(eligibility)
+    responsibilities = (
+        _require_match_list(responsibility_matches, "responsibility_matches")
+        if responsibilities_evaluated
+        else []
+    )
     decision, confidence, reasons, next_steps = _recommendation_for(
         required, eligibility_result
     )
     cautions = _preferred_cautions(preferred)
-    if not responsibilities_evaluated:
+    if responsibilities_evaluated:
+        responsibility_uncertain = _names_with_result(
+            responsibilities, {"partial", "gap", "unknown"}
+        )
+        if responsibilities and not responsibility_uncertain:
+            reasons.append(
+                f"주요 업무 {len(responsibilities)}건 모두 프로젝트 또는 행동 증거와 연결됩니다."
+            )
+        else:
+            cautions.append(
+                "직접 근거가 부족한 주요 업무가 있습니다: "
+                f"{_join_names(responsibility_uncertain) or '주요 업무 미확인'}."
+            )
+            if decision == "적극 지원":
+                decision = "지원 추천"
+                confidence = "medium"
+            next_steps.append("근거가 부족한 주요 업무를 실제 프로젝트·경력 자료와 대조합니다.")
+    else:
         cautions.append("공고의 주요 업무 적합도는 아직 별도로 평가하지 않았습니다.")
         next_steps.append("주요 업무와 사용자 프로젝트·경력 증거를 추가로 비교합니다.")
 

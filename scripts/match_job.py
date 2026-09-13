@@ -88,9 +88,10 @@ def main() -> int:
         return 1
 
     print("통합 요구사항 비교 결과")
-    print("주의: 주요 업무 적합도는 아직 별도로 평가하지 않습니다.")
+    print("주의: 현재 구조화된 입력을 사용한 규칙 기반 비교이며 합격 가능성 예측이 아닙니다.")
     _print_section("필수 조건", result["required_matches"])
     _print_section("우대 조건", result["preferred_matches"])
+    _print_section("주요 업무", result["responsibility_matches"])
     _print_eligibility(result["eligibility"])
     _print_recommendation(result["application_recommendation"])
     return 0
