@@ -1,0 +1,364 @@
+{
+  "profile": {
+    "basic": {
+      "profile_id": "sample-user-001",
+      "locale": "ko-KR",
+      "career_status": "job_seeker",
+      "location_preference": [
+        "수도권"
+      ],
+      "employment_type_preference": [
+        "정규직"
+      ]
+    },
+    "career_goals": {
+      "primary_goal": "AI 및 자동화 관련 직무 취업",
+      "priorities": [
+        "실제 문제를 해결하는 업무",
+        "자동화 및 AI 활용",
+        "눈에 보이는 결과가 있는 업무",
+        "데이터와 기술을 실제 행동으로 연결하는 업무"
+      ],
+      "avoid_if_possible": [
+        "반복적인 수작업 중심 업무",
+        "분석 결과를 정기 리포트로만 끝내는 업무",
+        "목적이 불명확한 장기 반복 업무"
+      ]
+    },
+    "career_history": [
+      {
+        "organization_type": "비공개",
+        "role": "웹개발 및 유지보수",
+        "period": "비공개",
+        "responsibilities": [
+          "웹 개발 및 유지보수",
+          "서버 운영 관련 업무"
+        ],
+        "achievements": [
+          {
+            "title": "서버 비용 최적화",
+            "problem": "기존 서버 사양과 비용이 실제 사용량 대비 과도할 가능성을 발견",
+            "actions": [
+              "과거 사용량과 현재 서버 사양 비교",
+              "축소 가능한 사양 검토",
+              "리스크와 재증설 가능성을 포함해 개선안 제안",
+              "승인 후 서버 사양 조정",
+              "정상 운영 여부 확인"
+            ],
+            "result": "서버 관련 비용 절감",
+            "evidence_level": "real_work",
+            "notes": "정확한 전후 청구액은 별도 근거 확인 전까지 수치화하지 않음"
+          }
+        ]
+      }
+    ],
+    "projects": [
+      {
+        "name": "Tech News Automation",
+        "type": "personal",
+        "status": "completed",
+        "problem": "여러 기술 블로그의 새 글을 반복적으로 확인하고 핵심 내용을 직접 정리해야 하는 문제",
+        "solution": "기술 블로그 글을 수집하고 LLM으로 요약한 뒤 Slack으로 정기 전달하는 자동화 파이프라인 구축",
+        "technologies": [
+          "Python",
+          "Gemini API",
+          "GitHub Actions",
+          "Slack Incoming Webhook"
+        ],
+        "capabilities_demonstrated": [
+          "외부 데이터 수집",
+          "중복 방지",
+          "LLM 요약",
+          "상태 관리",
+          "재시도 처리",
+          "예약 자동 실행",
+          "Slack 전달"
+        ],
+        "evidence": {
+          "repository": "Dev-Gony/technews",
+          "demo_available": true,
+          "public": true
+        }
+      },
+      {
+        "name": "Career Agent",
+        "type": "personal",
+        "status": "planning",
+        "problem": "개인 역량과 실제 채용공고를 반복적으로 비교하고 취업 준비 우선순위를 정하기 어려운 문제",
+        "solution": "개인 프로파일과 채용공고를 비교하여 적합도, 역량 격차, 학습 및 포트폴리오 방향을 추천하는 Agent 설계",
+        "technologies": [],
+        "capabilities_demonstrated": [],
+        "evidence": {
+          "repository": "Dev-Gony/career-agent",
+          "demo_available": false,
+          "public": true
+        }
+      }
+    ],
+    "skills": [
+      {
+        "name": "Python",
+        "level": "project",
+        "evidence": [
+          "Tech News Automation"
+        ],
+        "notes": "자동화 스크립트 및 API 연동 경험"
+      },
+      {
+        "name": "SQL",
+        "level": "learning",
+        "evidence": [
+          "교육 과정"
+        ],
+        "notes": "현재 학습 중"
+      },
+      {
+        "name": "GitHub Actions",
+        "level": "project",
+        "evidence": [
+          "Tech News Automation 정기 실행"
+        ],
+        "notes": "예약 실행과 자동화 워크플로 구성 경험"
+      },
+      {
+        "name": "REST API",
+        "level": "project",
+        "evidence": [
+          "Gemini API 연동",
+          "Slack Webhook 연동"
+        ],
+        "notes": "외부 서비스 연동 경험"
+      },
+      {
+        "name": "LLM API",
+        "level": "project",
+        "evidence": [
+          "Tech News Automation"
+        ],
+        "notes": "LLM 기반 요약 자동화 경험"
+      },
+      {
+        "name": "Tableau",
+        "level": "learning",
+        "evidence": [
+          "교육 과정"
+        ],
+        "notes": "현재 학습 중"
+      },
+      {
+        "name": "Salesforce Apex",
+        "level": "learning",
+        "evidence": [
+          "교육 과정"
+        ],
+        "notes": "현재 학습 중"
+      },
+      {
+        "name": "Agentic Workflow",
+        "level": "learning",
+        "evidence": [
+          "교육 과정",
+          "Career Agent 기획"
+        ],
+        "notes": "Agent 설계 및 도구 연결 학습 중"
+      }
+    ],
+    "behavior_evidence": [
+      {
+        "situation": "서버 비용 이상 발견",
+        "pattern": [
+          "비효율 감지",
+          "사용량과 사양 비교",
+          "리스크 검토",
+          "개선안 제안",
+          "실행",
+          "정상 운영 확인"
+        ],
+        "interpretation": "비효율 탐지와 구조적 개선",
+        "evidence_level": "real_work"
+      },
+      {
+        "situation": "반복적인 기술 뉴스 확인",
+        "pattern": [
+          "반복 문제 인식",
+          "데이터 수집 방식 정리",
+          "LLM 요약 적용",
+          "중복 방지 상태 관리",
+          "예약 자동 실행",
+          "Slack 전달"
+        ],
+        "interpretation": "반복 업무를 자동화로 제거하고 운영 가능한 흐름으로 전환",
+        "evidence_level": "project"
+      },
+      {
+        "situation": "낯선 오류 또는 문제 원인 탐색",
+        "pattern": [
+          "로그 확인",
+          "검색 및 문서 탐색",
+          "가설 설정",
+          "재시도 및 비교",
+          "원인 확인"
+        ],
+        "interpretation": "원인 추적과 가설 검증에 강한 탐색 성향",
+        "evidence_level": "observed_behavior"
+      }
+    ],
+    "assessments": {
+      "integrated_profile": {
+        "summary": [
+          "비효율이나 이상을 발견하면 구조를 파악하고 기술을 조합해 실제로 바꾸는 과정에서 몰입하는 경향",
+          "문제와 결과가 명확할수록 실행력이 높아지는 경향",
+          "추상적인 장기 목표와 자유시간에서는 실행 구조가 약해질 수 있음"
+        ],
+        "role_in_analysis": "supporting"
+      },
+      "big_five": {
+        "summary": [
+          "개방성이 높음",
+          "신중함과 책임 관련 특성은 높지만 질서감과 자기훈련은 상대적으로 낮음"
+        ],
+        "role_in_analysis": "supporting"
+      },
+      "via": {
+        "summary": [
+          "호기심과 창의성이 주요 강점 후보"
+        ],
+        "role_in_analysis": "supporting"
+      },
+      "hexaco": {
+        "summary": [
+          "개방성 관련 특성이 상대적으로 높음"
+        ],
+        "role_in_analysis": "supporting"
+      },
+      "situational_judgment": {
+        "summary": [
+          "근거를 확인한 뒤 판단하려는 경향",
+          "자유시간에서는 실행 구조가 약해질 수 있음",
+          "문서화를 완료 직후 생략할 위험이 있음"
+        ],
+        "role_in_analysis": "supporting"
+      }
+    },
+    "work_preferences": {
+      "preferred": [
+        "문제가 명확한 업무",
+        "해결 방법에 자율성이 있는 환경",
+        "결과를 직접 확인할 수 있는 업무",
+        "비효율을 개선하거나 자동화하는 업무",
+        "근거 중심의 짧은 협업",
+        "낯선 문제를 탐색하고 해결하는 업무"
+      ],
+      "less_preferred": [
+        "목적이 불명확한 반복 업무",
+        "장시간 회의 중심 환경",
+        "분석 결과를 정기 보고로만 끝내는 업무",
+        "변화가 거의 없는 반복 운영 업무"
+      ]
+    },
+    "learning_preferences": {
+      "approach": "project_first",
+      "preferred_flow": [
+        "문제 정의",
+        "작은 산출물 정의",
+        "구현",
+        "막힌 개념만 학습",
+        "작동 확인",
+        "핵심 구조 설명",
+        "최소 기록"
+      ],
+      "avoid": [
+        "기술명만 정한 추상적인 공부 목표",
+        "완강 자체를 목표로 하는 장기 학습",
+        "작동 여부를 확인하지 않는 이론 중심 학습"
+      ]
+    },
+    "strengths": [
+      "비효율과 이상을 발견하는 탐지력",
+      "검색, AI, 문서, 로그를 조합한 원인 탐색",
+      "새로운 방법을 감당 가능한 위험 범위에서 실험",
+      "문제 해결 결과를 실제 변화로 연결하는 실용성",
+      "근거를 바탕으로 판단을 수정하는 성향",
+      "압박 상황에서도 비교적 침착하게 문제를 보는 경향"
+    ],
+    "risks": [
+      {
+        "risk": "새로운 아이디어가 현재 핵심 프로젝트를 밀어내는 현상",
+        "mitigation": "핵심 프로젝트 완료 전 새 아이디어는 backlog에만 기록"
+      },
+      {
+        "risk": "자유시간에서 시작이 늦어지는 현상",
+        "mitigation": "첫 행동을 15분 안에 완료 가능한 결과로 정의"
+      },
+      {
+        "risk": "마감 직전 몰입에 의존하는 실행 방식",
+        "mitigation": "주간 완료물과 외부 데모 일정을 미리 설정"
+      },
+      {
+        "risk": "AI가 만든 코드를 작동 확인만 하고 구조 이해를 건너뛰는 현상",
+        "mitigation": "구조 이유, 실패 지점, 수정 포인트를 짧게 기록"
+      },
+      {
+        "risk": "해결 직후 README와 문서화를 생략하는 현상",
+        "mitigation": "문서 업데이트를 완료 조건에 포함"
+      }
+    ],
+    "target_roles": [
+      {
+        "role": "AI Automation / Workflow Engineer",
+        "priority": 1,
+        "hypothesis": "실제 문제를 데이터, API, AI, 자동화로 연결하는 행동 패턴과 높은 일치 가능성"
+      },
+      {
+        "role": "AI Solutions Engineer",
+        "priority": 2,
+        "hypothesis": "문제 정의, PoC, 구축, 결과 확인 과정과 연관 가능성"
+      },
+      {
+        "role": "Enterprise Solution / ITSM",
+        "priority": 3,
+        "hypothesis": "프로세스와 워크플로 개선 경험과 연결 가능성"
+      },
+      {
+        "role": "Cloud / FinOps Automation",
+        "priority": 4,
+        "hypothesis": "서버 비용 최적화 경험과 연결 가능하지만 현재 관심도와 데이터 접근성은 추가 확인 필요"
+      },
+      {
+        "role": "Data Analyst / Analytics Automation",
+        "priority": "conditional",
+        "hypothesis": "분석 결과를 자동화나 실제 행동으로 연결하는 역할일 경우 적합도 상승 가능성"
+      }
+    ],
+    "evidence_sources": [
+      {
+        "id": "integrated-profile-v3",
+        "type": "self_analysis_report",
+        "title": "통합 자기이해·학습·직무 프로파일 v3",
+        "date": "2026-09-13",
+        "storage": "private"
+      },
+      {
+        "id": "technews-repo",
+        "type": "github_project",
+        "title": "Tech News Automation",
+        "storage": "public",
+        "reference": "Dev-Gony/technews"
+      },
+      {
+        "id": "career-agent-repo",
+        "type": "github_project",
+        "title": "Career Agent",
+        "storage": "public",
+        "reference": "Dev-Gony/career-agent"
+      }
+    ]
+  },
+  "metadata": {
+    "schema_version": "0.1",
+    "data_type": "anonymized_example",
+    "intended_use": "Career Agent development and public repository example",
+    "contains_sensitive_personal_data": false,
+    "last_updated": "2026-09-13"
+  }
+}
