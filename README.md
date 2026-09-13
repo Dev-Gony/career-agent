@@ -28,7 +28,7 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
 
 ## 현재 개발 단계
 
-현재는 첫 기능 구현 단계입니다.
+현재는 실제 ATS 공고 자동 입력 검증 단계입니다.
 
 완료:
 
@@ -58,11 +58,13 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
 - 필수·우대·지원 가능 조건을 조합하는 근거 기반 지원 추천 구현
 - 공고 주요 업무를 사용자 기술·프로젝트·행동 증거에 연결하는 업무 매처 구현
 - 판정 근거에서 지원 강점, 확인된 부족과 미확인 항목을 생성하는 인사이트 기능 구현
+- Greenhouse 공개 Job Board API의 상세 공고 1건을 내부 스키마로 변환하는 조회 전용 연동 구현
+- 실제 Sendbird 서울 AI 공고를 로컬 파일로 구조화하고 기존 매칭기에 연결해 전체 흐름 확인
 
 다음 단계:
 
-1. 관심 기업 1곳의 공식 ATS 상세 공고를 매칭 기능에 연결
-2. 실제 상세 공고 1건으로 전체 판정 검증
+1. 실제 상세 공고 결과에서 중요한 복합 조건의 추출·판정 범위를 보강
+2. ATS 공고 발견과 상세 구조화를 한 실행 흐름으로 연결
 3. 결과 식별자와 사실·해석 분리 영역을 포함한 저장 가능한 결과 생성
 4. 문서 입력과 대화가 가능한 첫 Slack 인터페이스 설계 및 구현
 5. 하루 1회 실행과 성공·실패 상태 기록
@@ -80,6 +82,7 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
     |   |-- JOB_DISCOVERY_SCHEMA.md
     |   |-- JOB_SEARCH_PLAN_SCHEMA.md
     |   |-- INCRUIT_RSS_MAPPING.md
+    |   |-- GREENHOUSE_API_MAPPING.md
     |   |-- MATCHING_RULES.md
     |   `-- MATCH_RESULT_SCHEMA.md
     |-- data/
@@ -98,6 +101,8 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
     |       |   |-- report.py
     |       |   |-- service.py
     |       |   `-- store.py
+    |       |-- ingestion/
+    |       |   `-- greenhouse.py
     |       `-- matching/
     |           |-- eligibility.py
     |           |-- experience.py
@@ -109,6 +114,7 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
     |-- scripts/
     |   |-- discover_incruit.py
     |   |-- list_discoveries.py
+    |   |-- import_greenhouse_job.py
     |   |-- match_job.py
     |   |-- match_job_experiences.py
     |   `-- match_job_technologies.py
@@ -118,6 +124,7 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
     |   |-- test_discovery_service.py
     |   |-- test_incruit_rss.py
     |   |-- test_incruit_feed.py
+    |   |-- test_greenhouse_ingestion.py
     |   |-- test_match_insights.py
     |   |-- test_discovery_store.py
     |   |-- test_eligibility_matching.py
@@ -156,6 +163,10 @@ RSS나 공식 API에서 발견한 후보를 상세 분석 전 단계에서 저�
 ### docs/INCRUIT_RSS_MAPPING.md
 
 비식별 합성 인크루트 RSS 항목을 발견 레코드로 변환하는 필드별 계약과 실패 처리 범위를 정의합니다.
+
+### docs/GREENHOUSE_API_MAPPING.md
+
+Greenhouse 공개 Job Board API 공고를 내부 채용공고 스키마로 변환하는 기준과 조회 전용 접근 경계를 정의합니다.
 
 ### docs/MATCHING_RULES.md
 
@@ -205,6 +216,18 @@ RSS나 공식 API에서 발견한 후보를 상세 분석 전 단계에서 저�
 
 통합 명령은 아직 평가하지 못하는 조건도 결과에서 누락하지 않고 `unknown`으로 표시합니다. 필수·우대 조건, 주요 업무, 경력·학력·지역·고용 형태, 지원 강점·부족·미확인 항목과 근거 기반 지원 추천을 출력합니다. 추천은 합격 확률이 아니라 현재 프로필과 공고의 비교 결과입니다.
 
+Greenhouse를 사용하는 기업의 공개 상세공고 1건을 자동으로 구조화합니다. board token과 job ID는 해당 기업의 공개 채용 URL 또는 API에서 확인한 값을 사용합니다.
+
+    python scripts/import_greenhouse_job.py --board sendbird --job-id 8395379002
+
+기본 출력은 Git에서 제외된 `private-data/greenhouse-<board>-<job-id>.json`입니다. 공고 전문은 저장하지 않으며, 인식된 주요 업무·필수 조건·우대 조건과 원문 URL을 저장합니다.
+
+구조화된 실공고를 기존 매칭기에 넣습니다.
+
+    python scripts/match_job.py --posting private-data/greenhouse-sendbird-8395379002.json
+
+현재 예시 ID는 2026-09-13 실제 공개 상태를 확인한 값이므로 이후 공고가 마감되면 API 조회가 실패할 수 있습니다.
+
 현재 테스트 범위:
 
 - 합성 RSS 항목을 기대 발견 레코드로 변환
@@ -237,8 +260,11 @@ RSS나 공식 API에서 발견한 후보를 상세 분석 전 단계에서 저�
 - 여러 판정에 반복 연결된 프로젝트와 기술 증거의 강점 우선순위 정렬
 - 필수·우대·지원 불가 조건의 `immediate`·`preferred_only`·`blocking` 부족 구분
 - 정보 부재를 부족으로 바꾸지 않는 미확인 항목 생성
+- 허용된 Greenhouse 공개 API의 GET 요청과 외부 리디렉션 거부
+- Greenhouse 본문의 필수·우대·주요 업무 섹션 분리
+- 명시된 경력 연수·서울 지역·하이브리드 근무 추출과 고용 형태 미추정
 
-현재 구현은 공식 인크루트 RSS를 읽고 로컬 JSON에 신규 후보를 저장하며, 구조화된 예제 공고의 기술·경험 요구사항, 주요 업무와 지원 가능 조건을 비교해 강점·부족·미확인 항목과 지원 판단을 생성합니다. 아직 LLM 호출, 상세 공고 수집 또는 Slack 연동은 하지 않습니다.
+현재 구현은 공식 인크루트 RSS를 읽고 로컬 JSON에 신규 후보를 저장하며, 구조화된 공고의 기술·경험 요구사항, 주요 업무와 지원 가능 조건을 비교해 강점·부족·미확인 항목과 지원 판단을 생성합니다. Greenhouse 공개 API의 상세 공고 1건을 사용자의 복사·붙여넣기 없이 이 흐름에 넣을 수 있습니다. 아직 LLM 호출, 발견 후보와 상세 입력의 자동 연결 또는 Slack 연동은 하지 않습니다.
 
 ## 예상 MVP 흐름
 
@@ -303,6 +329,6 @@ MVP가 실제로 유용하다고 판단되면 다음 기능을 검토합니다.
 
 ## 프로젝트 상태
 
-현재 상태: 자동 공고 발견 및 핵심 근거 기반 매칭 결과 구현
+현재 상태: 자동 공고 발견, 공식 ATS 상세 입력 및 핵심 근거 기반 매칭 구현
 
-공식 인크루트 RSS를 읽어 프로필 기반 발견 레코드로 변환하고 실행 간 중복을 제거해 로컬에 저장하는 첫 동작 가능한 기능을 구현했습니다. 실제 첫 실행은 신규 20건, 두 번째 실행은 신규 0건과 중복 20건으로 확인했습니다. 구조화된 예제 공고에서는 필수·우대·지원 가능 조건과 주요 업무를 비교해 지원 강점, 확인된 부족, 미확인 항목과 다섯 가지 지원 판단 중 하나를 생성할 수 있습니다. 다음에는 기업 공식 ATS 상세 공고 1건을 자동 입력으로 연결합니다.
+공식 인크루트 RSS를 읽어 프로필 기반 발견 레코드로 변환하고 실행 간 중복을 제거해 로컬에 저장하는 첫 동작 가능한 기능을 구현했습니다. 실제 첫 실행은 신규 20건, 두 번째 실행은 신규 0건과 중복 20건으로 확인했습니다. Greenhouse 공개 Job Board API에서는 실제 Sendbird 서울 AI 공고 1건을 내부 스키마로 구조화하고 기존 매칭기에 연결했습니다. 실공고 결과는 Python과 LLM API 증거를 연결했고, 사용자 경력 연수·고용 형태·하이브리드 근무 선호가 확인되지 않은 점은 조건부로 남겼습니다. 다음에는 실제 결과에서 중요한 복합 조건을 보강하고 발견 후보에서 상세 분석으로 이어지는 한 흐름을 연결합니다.
