@@ -17,6 +17,12 @@ _SOURCE_TYPE_PRIORITY = {
     "skill": 2,
     "behavior": 3,
 }
+_ELIGIBILITY_SUBJECT_LABELS = {
+    "experience": "경력 연수",
+    "education": "학력 조건",
+    "employment": "고용 형태",
+    "location": "근무 지역·방식",
+}
 
 
 def _validated_matches(value: Any, name: str) -> list[dict[str, Any]]:
@@ -175,46 +181,80 @@ def _unknown_impact(source_section: str) -> str:
     }.get(source_section, "매칭 판정에 영향")
 
 
+def _unknown_priority(source_section: str) -> str:
+    return {
+        "requirements": "critical",
+        "eligibility": "critical",
+        "responsibilities": "high",
+        "preferred_qualifications": "low",
+    }.get(source_section, "medium")
+
+
+def _match_unknowns(
+    matches: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    unknowns: list[dict[str, str]] = []
+    for match in matches:
+        result = match["assessment"].get("result")
+        requirement = match["requirement"]
+        source_section = str(requirement.get("source_section", "unknown"))
+        requirement_name = str(requirement.get("name", "미분류 조건"))
+        next_action = str(
+            match.get("next_action")
+            or f"{requirement_name} 관련 사용자 근거를 확인할 수 있는가"
+        )
+        if result == "unknown":
+            subjects = [requirement_name]
+        elif result == "partial":
+            raw_unknowns = match.get("unknowns", [])
+            if not isinstance(raw_unknowns, list) or not all(
+                isinstance(item, str) for item in raw_unknowns
+            ):
+                raise MatchInsightsError("부분 일치 unknowns는 문자열 배열이어야 합니다.")
+            subjects = [item.strip() for item in raw_unknowns if item.strip()]
+        else:
+            continue
+        for subject in subjects:
+            unknowns.append(
+                {
+                    "subject": subject,
+                    "source": source_section,
+                    "impact": _unknown_impact(source_section),
+                    "priority": _unknown_priority(source_section),
+                    "question": next_action,
+                }
+            )
+    return unknowns
+
+
 def _build_unknowns(
     required: list[dict[str, Any]],
     preferred: list[dict[str, Any]],
     responsibilities: list[dict[str, Any]],
     eligibility: dict[str, Any],
 ) -> list[dict[str, str]]:
-    unknowns: list[dict[str, str]] = []
-    for match in [*required, *preferred, *responsibilities]:
-        if match["assessment"].get("result") != "unknown":
-            continue
-        requirement = match["requirement"]
-        subject = str(requirement.get("name", "미분류 조건"))
-        source_section = str(requirement.get("source_section", "unknown"))
-        unknowns.append(
-            {
-                "subject": subject,
-                "source": source_section,
-                "impact": _unknown_impact(source_section),
-                "question": str(
-                    match.get("next_action") or f"{subject} 관련 사용자 근거를 확인할 수 있는가"
-                ),
-            }
-        )
+    unknowns = _match_unknowns(required)
 
     for condition in eligibility["conditions"]:
         if not isinstance(condition, dict):
             raise MatchInsightsError("eligibility.conditions 항목은 객체여야 합니다.")
         if condition.get("result") != "needs_confirmation":
             continue
-        subject = str(condition.get("type", "미분류 지원 조건"))
+        condition_type = str(condition.get("type", "미분류 지원 조건"))
+        subject = _ELIGIBILITY_SUBJECT_LABELS.get(condition_type, condition_type)
         unknowns.append(
             {
                 "subject": subject,
                 "source": "eligibility",
                 "impact": "지원 가능 여부에 영향",
+                "priority": _unknown_priority("eligibility"),
                 "question": str(
                     condition.get("reason") or f"{subject} 조건을 확인할 수 있는가"
                 ),
             }
         )
+    unknowns.extend(_match_unknowns(responsibilities))
+    unknowns.extend(_match_unknowns(preferred))
     return unknowns
 
 

@@ -88,6 +88,68 @@ class MatchInsightsTest(unittest.TestCase):
         self.assertEqual(1, len(blocking))
         self.assertEqual("experience", blocking[0]["name"])
 
+    def test_unknowns_are_ordered_by_decision_impact(self) -> None:
+        posting = deepcopy(self.posting)
+        posting["job_posting"]["requirements"].append(
+            {
+                "requirement_id": "requirement-unknown",
+                "type": "other",
+                "name": "Unknown required condition",
+                "level": "required",
+                "evidence_text": "Unknown required condition",
+            }
+        )
+        posting["job_posting"]["preferred_qualifications"].append(
+            {
+                "qualification_id": "qualification-unknown",
+                "type": "other",
+                "name": "Unknown preferred condition",
+                "evidence_text": "Unknown preferred condition",
+            }
+        )
+        posting["job_posting"]["responsibilities"].append(
+            {
+                "responsibility_id": "responsibility-unknown",
+                "text": "Unrecognized responsibility",
+            }
+        )
+        posting["job_posting"]["employment"]["type"] = "unknown"
+
+        result = match_job_requirements(self.profile, posting)
+
+        self.assertEqual(
+            ["requirements", "eligibility", "responsibilities", "preferred_qualifications"],
+            [item["source"] for item in result["unknowns"]],
+        )
+        self.assertEqual(
+            ["critical", "critical", "high", "low"],
+            [item["priority"] for item in result["unknowns"]],
+        )
+        self.assertEqual("고용 형태", result["unknowns"][1]["subject"])
+
+    def test_partial_requirement_unknown_is_promoted_for_review(self) -> None:
+        posting = deepcopy(self.posting)
+        posting["job_posting"]["requirements"] = [
+            {
+                "requirement_id": "requirement-software-engineering",
+                "type": "experience",
+                "name": "software engineering experience",
+                "level": "required",
+                "evidence_text": (
+                    "3+ years of software engineering experience with direct "
+                    "ownership of AI/ML or backend systems in production."
+                ),
+            }
+        ]
+
+        result = match_job_requirements(self.profile, posting)
+
+        self.assertEqual(
+            "AI/ML 또는 백엔드 운영 시스템 직접 소유 범위",
+            result["unknowns"][0]["subject"],
+        )
+        self.assertEqual("critical", result["unknowns"][0]["priority"])
+
 
 if __name__ == "__main__":
     unittest.main()

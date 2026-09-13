@@ -414,7 +414,6 @@ def _assess_items(
         elif result == "partial" and concept == "software_engineering_experience":
             unknowns.extend(
                 [
-                    "총 소프트웨어 엔지니어링 경력 연수",
                     "AI/ML 또는 백엔드 운영 시스템 직접 소유 범위",
                 ]
             )

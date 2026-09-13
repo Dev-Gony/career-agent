@@ -44,6 +44,18 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _print_review_priorities(result: dict, *, limit: int = 5) -> None:
+    unknowns = result["unknowns"]
+    print("우선 확인할 항목")
+    for item in unknowns[:limit]:
+        print(f"- [{item['impact']}] {item['subject']}")
+        print(f"  확인: {item['question']}")
+    if not unknowns:
+        print("- 없음")
+    elif len(unknowns) > limit:
+        print(f"- 나머지 {len(unknowns) - limit}개는 저장된 JSON에서 확인")
+
+
 def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -81,6 +93,7 @@ def main() -> int:
     print(f"- 지원 시 강조할 강점: {len(result['strengths'])}개")
     print(f"- 추가 확인 항목: {len(result['unknowns'])}개")
     print(f"- 저장: {output_path}")
+    _print_review_priorities(result)
     print("주의: 현재 프로필과 규칙 기반 비교 결과이며 합격 가능성 예측이 아닙니다.")
     return 0
 

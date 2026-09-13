@@ -243,9 +243,19 @@
       - subject: "Kubernetes 사용 경험"
         source: "preferred_qualifications"
         impact: "우대 조건 판정에만 영향"
+        priority: "low"
         question: "Kubernetes를 사용해 애플리케이션을 배포한 경험이 있는가"
 
 질문은 판단을 바꿀 가능성이 큰 항목부터 정렬한다.
+
+권장 `priority` 값:
+
+- `critical`: 필수 조건 또는 지원 가능 여부에 영향
+- `high`: 주요 업무 적합도에 영향
+- `medium`: 기타 매칭 판정에 영향
+- `low`: 우대 조건 판정에만 영향
+
+전체 미확인 목록은 결과 JSON에 유지하되 사용자 화면이나 메시지에서는 우선순위가 높은 일부 항목을 먼저 보여줄 수 있다.
 
 ## 14. learning_recommendations
 
