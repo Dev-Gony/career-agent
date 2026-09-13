@@ -1,0 +1,477 @@
+{
+  "match_result": {
+    "identity": {
+      "analysis_id": "analysis-job-001-sample-user-001-v1",
+      "status": "completed",
+      "created_at": "2026-09-13T18:22:42+09:00"
+    },
+    "inputs": {
+      "profile_id": "sample-user-001",
+      "profile_schema_version": "0.1",
+      "posting_id": "job-001",
+      "posting_source_url": "https://example.com/jobs/ai-automation-engineer",
+      "posting_collected_at": "2026-09-13"
+    },
+    "summary": {
+      "required": {
+        "total": 3,
+        "strong_match": 3,
+        "match": 0,
+        "partial": 0,
+        "gap": 0,
+        "unknown": 0
+      },
+      "preferred": {
+        "total": 3,
+        "strong_match": 1,
+        "match": 0,
+        "partial": 0,
+        "gap": 2,
+        "unknown": 0
+      }
+    },
+    "eligibility": {
+      "status": "eligible",
+      "conditions": [
+        {
+          "type": "experience",
+          "posting_value": "신입 또는 경력",
+          "user_value": "실무 경력 있음",
+          "result": "met",
+          "reason": "최소 경력 연수 제한이 없고 사용자 프로파일에 실무 경력이 있음"
+        },
+        {
+          "type": "education",
+          "posting_value": "학력 필수 아님",
+          "user_value": "확인하지 않음",
+          "result": "not_applicable",
+          "reason": "공고가 필수 학력 조건을 제시하지 않음"
+        },
+        {
+          "type": "employment",
+          "posting_value": "정규직",
+          "user_value": "정규직 선호",
+          "result": "met",
+          "reason": "공고의 고용 형태가 사용자의 선호와 일치함"
+        },
+        {
+          "type": "location",
+          "posting_value": "서울",
+          "user_value": "수도권 선호",
+          "result": "met",
+          "reason": "근무 지역이 사용자의 선호 지역에 포함됨"
+        }
+      ]
+    },
+    "required_matches": [
+      {
+        "requirement": {
+          "source_section": "requirements",
+          "source_id": "requirement-python",
+          "type": "skill",
+          "name": "Python",
+          "evidence_text": "Python을 활용한 개발 경험"
+        },
+        "assessment": {
+          "result": "strong_match",
+          "directness": "exact",
+          "confidence": "high",
+          "reason": "완료된 자동화 프로젝트에서 Python을 사용한 직접 증거가 있음"
+        },
+        "user_evidence": [
+          {
+            "source_type": "skill",
+            "source_name": "Python",
+            "source_id": "skill-python",
+            "evidence_level": "project",
+            "detail": "자동화 스크립트와 API 연동에 Python을 사용함"
+          },
+          {
+            "source_type": "project",
+            "source_name": "Tech News Automation",
+            "source_id": "project-tech-news",
+            "evidence_level": "project",
+            "detail": "Python으로 외부 데이터 수집, 중복 방지, LLM 요약과 예약 실행 흐름을 구현함"
+          }
+        ],
+        "unknowns": [],
+        "next_action": null
+      },
+      {
+        "requirement": {
+          "source_section": "requirements",
+          "source_id": "requirement-rest-api",
+          "type": "experience",
+          "name": "REST API integration",
+          "evidence_text": "REST API 연동 경험"
+        },
+        "assessment": {
+          "result": "strong_match",
+          "directness": "exact",
+          "confidence": "high",
+          "reason": "프로젝트에서 두 외부 서비스를 API와 Webhook으로 연동한 직접 증거가 있음"
+        },
+        "user_evidence": [
+          {
+            "source_type": "skill",
+            "source_name": "REST API",
+            "source_id": "skill-rest-api",
+            "evidence_level": "project",
+            "detail": "Gemini API와 Slack Webhook을 연동함"
+          },
+          {
+            "source_type": "project",
+            "source_name": "Tech News Automation",
+            "source_id": "project-tech-news",
+            "evidence_level": "project",
+            "detail": "외부 서비스 연동을 포함한 자동화 파이프라인을 구현함"
+          }
+        ],
+        "unknowns": [],
+        "next_action": null
+      },
+      {
+        "requirement": {
+          "source_section": "requirements",
+          "source_id": "requirement-automation-project",
+          "type": "experience",
+          "name": "automation project",
+          "evidence_text": "업무 자동화 또는 유사 프로젝트 경험"
+        },
+        "assessment": {
+          "result": "strong_match",
+          "directness": "exact",
+          "confidence": "high",
+          "reason": "반복적인 정보 확인 업무를 정기 실행되는 자동화 흐름으로 전환한 프로젝트 증거가 있음"
+        },
+        "user_evidence": [
+          {
+            "source_type": "project",
+            "source_name": "Tech News Automation",
+            "source_id": "project-tech-news",
+            "evidence_level": "project",
+            "detail": "수집, 중복 방지, 요약, 상태 관리, 재시도, 예약 실행과 전달을 구현함"
+          },
+          {
+            "source_type": "behavior",
+            "source_name": "반복적인 기술 뉴스 확인",
+            "source_id": "behavior-tech-news-automation",
+            "evidence_level": "observed_behavior",
+            "detail": "반복 문제를 인식하고 운영 가능한 자동화 흐름으로 전환함"
+          }
+        ],
+        "unknowns": [],
+        "next_action": null
+      }
+    ],
+    "preferred_matches": [
+      {
+        "requirement": {
+          "source_section": "preferred_qualifications",
+          "source_id": "qualification-docker",
+          "type": "skill",
+          "name": "Docker",
+          "evidence_text": "Docker 사용 경험 우대"
+        },
+        "assessment": {
+          "result": "gap",
+          "directness": "none",
+          "confidence": "high",
+          "reason": "Docker를 설치한 적은 있지만 컨테이너 실행이나 프로젝트 사용 경험이 없음을 확인함"
+        },
+        "user_evidence": [
+          {
+            "source_type": "skill",
+            "source_name": "Docker",
+            "source_id": "skill-docker",
+            "evidence_level": "exposure",
+            "detail": "로컬 설치만 했으며 컨테이너 실행이나 프로젝트 사용 경험은 없음"
+          }
+        ],
+        "unknowns": [],
+        "next_action": "우대 조건이므로 지원을 막지 않고 반복 요구 여부를 확인한 뒤 보완"
+      },
+      {
+        "requirement": {
+          "source_section": "preferred_qualifications",
+          "source_id": "qualification-aws",
+          "type": "cloud",
+          "name": "AWS",
+          "evidence_text": "AWS 환경 운영 경험 우대"
+        },
+        "assessment": {
+          "result": "gap",
+          "directness": "none",
+          "confidence": "high",
+          "reason": "AWS CLI 화면을 확인한 적만 있고 AWS 서비스를 직접 사용하거나 운영한 경험이 없음을 확인함"
+        },
+        "user_evidence": [
+          {
+            "source_type": "skill",
+            "source_name": "AWS",
+            "source_id": "skill-aws",
+            "evidence_level": "exposure",
+            "detail": "AWS CLI 화면을 확인한 적만 있으며 서비스 사용이나 운영 경험은 없음"
+          }
+        ],
+        "unknowns": [],
+        "next_action": "한 개 예제 공고의 우대사항만으로 학습을 시작하지 않고 실제 공고의 반복 요구 여부를 확인"
+      },
+      {
+        "requirement": {
+          "source_section": "preferred_qualifications",
+          "source_id": "qualification-llm-api",
+          "type": "skill",
+          "name": "LLM API",
+          "evidence_text": "LLM API 활용 경험 우대"
+        },
+        "assessment": {
+          "result": "strong_match",
+          "directness": "exact",
+          "confidence": "high",
+          "reason": "Gemini API를 사용해 기술 뉴스 요약을 자동화한 프로젝트 증거가 있음"
+        },
+        "user_evidence": [
+          {
+            "source_type": "skill",
+            "source_name": "LLM API",
+            "source_id": "skill-llm-api",
+            "evidence_level": "project",
+            "detail": "LLM 기반 요약 자동화에 Gemini API를 사용함"
+          },
+          {
+            "source_type": "project",
+            "source_name": "Tech News Automation",
+            "source_id": "project-tech-news",
+            "evidence_level": "project",
+            "detail": "수집한 기술 글을 LLM으로 요약하는 단계를 구현함"
+          }
+        ],
+        "unknowns": [],
+        "next_action": null
+      }
+    ],
+    "responsibility_matches": [
+      {
+        "requirement": {
+          "source_section": "responsibilities",
+          "source_id": "responsibility-001",
+          "type": "responsibility",
+          "name": "내부 반복 업무 자동화",
+          "evidence_text": "내부 반복 업무 자동화"
+        },
+        "assessment": {
+          "result": "strong_match",
+          "directness": "exact",
+          "confidence": "high",
+          "reason": "반복적인 확인 업무를 예약 실행되는 자동화 흐름으로 전환한 증거가 있음"
+        },
+        "user_evidence": [
+          {
+            "source_type": "project",
+            "source_name": "Tech News Automation",
+            "source_id": "project-tech-news",
+            "evidence_level": "project",
+            "detail": "반복적인 기술 뉴스 확인과 정리 과정을 자동화함"
+          }
+        ],
+        "unknowns": [],
+        "next_action": null
+      },
+      {
+        "requirement": {
+          "source_section": "responsibilities",
+          "source_id": "responsibility-002",
+          "type": "responsibility",
+          "name": "외부 API 연동",
+          "evidence_text": "외부 API 연동"
+        },
+        "assessment": {
+          "result": "strong_match",
+          "directness": "exact",
+          "confidence": "high",
+          "reason": "Gemini API와 Slack Webhook 연동 경험이 있음"
+        },
+        "user_evidence": [
+          {
+            "source_type": "skill",
+            "source_name": "REST API",
+            "source_id": "skill-rest-api",
+            "evidence_level": "project",
+            "detail": "두 외부 서비스와 연동한 프로젝트 경험이 있음"
+          }
+        ],
+        "unknowns": [],
+        "next_action": null
+      },
+      {
+        "requirement": {
+          "source_section": "responsibilities",
+          "source_id": "responsibility-003",
+          "type": "responsibility",
+          "name": "LLM 기반 업무 도구 개발",
+          "evidence_text": "LLM 기반 업무 도구 개발"
+        },
+        "assessment": {
+          "result": "strong_match",
+          "directness": "exact",
+          "confidence": "high",
+          "reason": "LLM으로 수집 콘텐츠를 요약해 전달하는 도구를 구현함"
+        },
+        "user_evidence": [
+          {
+            "source_type": "project",
+            "source_name": "Tech News Automation",
+            "source_id": "project-tech-news",
+            "evidence_level": "project",
+            "detail": "Gemini API 기반 요약 자동화를 구현함"
+          }
+        ],
+        "unknowns": [],
+        "next_action": null
+      },
+      {
+        "requirement": {
+          "source_section": "responsibilities",
+          "source_id": "responsibility-004",
+          "type": "responsibility",
+          "name": "자동화 결과 모니터링 및 개선",
+          "evidence_text": "자동화 결과 모니터링 및 개선"
+        },
+        "assessment": {
+          "result": "match",
+          "directness": "related",
+          "confidence": "high",
+          "reason": "GitHub Actions에서 실행 성공과 실패 상태 및 단계별 로그를 확인할 수 있고 재시도 처리도 있지만 별도 실패 요약이나 능동 알림은 없음"
+        },
+        "user_evidence": [
+          {
+            "source_type": "project",
+            "source_name": "Tech News Automation",
+            "source_id": "project-tech-news",
+            "evidence_level": "project",
+            "detail": "GitHub Actions 실행 상태와 로그를 확인할 수 있으며 중복 방지 상태 관리와 Gemini 오류 재시도를 구현함"
+          }
+        ],
+        "unknowns": [],
+        "next_action": "향후 필요하면 개별 수집 실패 요약과 능동 실패 알림을 추가"
+      }
+    ],
+    "strengths": [
+      {
+        "title": "운영 가능한 자동화 프로젝트 경험",
+        "related_requirements": [
+          "automation project",
+          "Python"
+        ],
+        "evidence": [
+          "Tech News Automation"
+        ],
+        "reason": "수집부터 중복 방지, 요약, 예약 실행과 전달까지 전체 흐름을 구현함"
+      },
+      {
+        "title": "외부 서비스 연동 경험",
+        "related_requirements": [
+          "REST API integration",
+          "LLM API"
+        ],
+        "evidence": [
+          "Gemini API 연동",
+          "Slack Webhook 연동"
+        ],
+        "reason": "서로 다른 외부 서비스를 하나의 자동화 흐름에 연결함"
+      },
+      {
+        "title": "비효율 탐지와 개선 실행",
+        "related_requirements": [
+          "내부 반복 업무 자동화",
+          "자동화 결과 모니터링 및 개선"
+        ],
+        "evidence": [
+          "서버 비용 최적화",
+          "반복적인 기술 뉴스 확인 자동화"
+        ],
+        "reason": "문제를 발견한 뒤 비교, 개선, 실행과 확인까지 진행한 행동 증거가 있음"
+      }
+    ],
+    "gaps": [
+      {
+        "name": "Docker 프로젝트 사용 경험",
+        "priority": "preferred_only",
+        "reason": "설치 경험만 있고 컨테이너 실행이나 프로젝트 적용 경험이 없음",
+        "recommended_action": "지원은 진행하되 반복적으로 요구되는 경우 기존 Tech News Automation에 적용"
+      },
+      {
+        "name": "AWS 서비스 사용 및 운영 경험",
+        "priority": "preferred_only",
+        "reason": "CLI 화면을 확인한 적만 있고 AWS 서비스를 직접 사용하거나 운영한 경험이 없음",
+        "recommended_action": "실제 관심 공고 여러 건에서 반복적으로 요구될 때 학습 우선순위를 결정"
+      }
+    ],
+    "unknowns": [],
+    "learning_recommendations": [
+      {
+        "topic": "Docker",
+        "priority": "preferred_only",
+        "based_on": "Docker 사용 경험 우대와 현재 설치만 한 상태",
+        "action": "기존 Tech News Automation을 컨테이너에서 실행할 수 있게 구성",
+        "deliverable": "Dockerfile과 로컬 실행 문서",
+        "completion_evidence": "새 환경에서 이미지 빌드와 Tech News Automation 실행 성공"
+      }
+    ],
+    "portfolio_recommendations": [
+      {
+        "target_project": "Tech News Automation",
+        "related_gap": "Docker 프로젝트 사용 경험 부족",
+        "change": "컨테이너 실행 환경 추가",
+        "reason": "새 프로젝트 없이 기존 자동화 프로젝트의 재현성과 실행 환경 구성 능력을 증명할 수 있음",
+        "expected_evidence": "Dockerfile, 실행 명령, 실행 성공 로그"
+      }
+    ],
+    "application_recommendation": {
+      "decision": "적극 지원",
+      "confidence": "high",
+      "reasons": [
+        "세 가지 필수 조건 모두 프로젝트 기반 직접 증거가 있음",
+        "핵심 자동화 업무와 연결되는 프로젝트 및 행동 증거가 있음",
+        "확인된 지원 불가 조건이나 필수 역량 부족이 없음"
+      ],
+      "cautions": [
+        "Docker와 AWS는 우대 조건이지만 현재 직접 사용 경험이 없음",
+        "GitHub Actions에서 기본 실행 상태와 로그는 확인할 수 있지만 개별 소스 실패를 별도로 요약하거나 능동 알림하는 기능은 없음",
+        "예제 공고이므로 실제 조직의 기술 사용 수준과 운영 범위는 확인되지 않음"
+      ],
+      "next_steps": [
+        "지원은 진행하고 Docker와 AWS 우대 조건 부족은 지원서에서 과장하지 않음",
+        "Docker는 실제 공고에서 반복 요구될 경우 Tech News Automation 확장으로 보완",
+        "AWS는 여러 실제 공고에서 요구 빈도를 확인한 뒤 학습 우선순위를 결정",
+        "실제 공고 분석에서는 회사와 업무 맥락을 추가 확인"
+      ]
+    },
+    "analysis_notes": {
+      "facts": [
+        "Python, REST API 연동, 자동화 프로젝트 경험이 필수 조건으로 제시됨",
+        "Docker, AWS, LLM API 경험은 우대 조건으로 제시됨",
+        "사용자 프로파일에 Python, REST API, 자동화 프로젝트, LLM API 사용 증거가 있음",
+        "Docker는 설치 경험만 있고 AWS는 CLI 화면을 확인한 경험만 있음",
+        "Tech News Automation은 GitHub Actions에서 실행 상태와 단계별 로그를 확인할 수 있음"
+      ],
+      "interpretations": [
+        "사용자의 Tech News Automation 프로젝트가 예제 직무의 핵심 업무와 직접 연결됨",
+        "필수 조건 기준으로는 지원 우선순위가 높은 공고로 판단됨"
+      ],
+      "unknowns": [
+        "예제 회사의 실제 기술 사용 비중"
+      ]
+    },
+    "metadata": {
+      "schema_version": "0.1",
+      "matching_rules_version": "0.1",
+      "analysis_mode": "expected_example",
+      "generated_by": "career-agent-design",
+      "human_review_status": "not_reviewed",
+      "data_type": "anonymized_example",
+      "contains_sensitive_personal_data": false
+    }
+  }
+}

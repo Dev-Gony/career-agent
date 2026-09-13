@@ -1,0 +1,130 @@
+{
+  "ranking_cases": [
+    {
+      "case_id": "ranking-direct-primary-role",
+      "description": "최우선 목표 직무 표현이 제목에 직접 나타나는 수도권 정규직 후보",
+      "candidate": {
+        "title": "비식별 예시 AI 업무 자동화 솔루션 엔지니어",
+        "company": "비식별 예시 기업 A",
+        "location_text": "서울",
+        "employment_type_text": "정규직",
+        "content_scope": "metadata_only"
+      },
+      "expected": {
+        "related_target_role_ids": [
+          "role-ai-automation",
+          "role-ai-solutions"
+        ],
+        "positive_signals": [
+          "AI",
+          "업무 자동화",
+          "솔루션 엔지니어",
+          "수도권",
+          "정규직"
+        ],
+        "rank_down_signals": [],
+        "location_assessment": "match",
+        "employment_assessment": "match",
+        "priority": "high",
+        "confidence": "medium",
+        "match_ready": false,
+        "reason": "최우선 목표 직무 표현이 직접 나타나고 객관 선호 조건과 일치하지만 상세 자격 요건은 없음"
+      }
+    },
+    {
+      "case_id": "ranking-indirect-enterprise-role",
+      "description": "정확한 목표 직무명은 아니지만 엔터프라이즈 솔루션 축과 관련된 후보",
+      "candidate": {
+        "title": "비식별 예시 DX 솔루션 구축 엔지니어",
+        "company": "비식별 예시 기업 B",
+        "location_text": "경기",
+        "employment_type_text": "정규직",
+        "content_scope": "metadata_only"
+      },
+      "expected": {
+        "related_target_role_ids": [
+          "role-enterprise-solution",
+          "role-ai-solutions"
+        ],
+        "positive_signals": [
+          "솔루션",
+          "구축",
+          "수도권",
+          "정규직"
+        ],
+        "rank_down_signals": [],
+        "location_assessment": "match",
+        "employment_assessment": "match",
+        "priority": "medium",
+        "confidence": "low",
+        "match_ready": false,
+        "reason": "솔루션 구축 경험과 연결될 가능성은 있지만 제목만으로 AI 또는 자동화 업무 비중을 확인할 수 없음"
+      }
+    },
+    {
+      "case_id": "ranking-conditional-data-role",
+      "description": "조건부 목표 직무와 관련되지만 실제 행동 연결 여부를 확인할 수 없는 후보",
+      "candidate": {
+        "title": "비식별 예시 데이터 분석 담당자",
+        "company": "비식별 예시 기업 C",
+        "location_text": "서울",
+        "employment_type_text": null,
+        "content_scope": "metadata_only"
+      },
+      "expected": {
+        "related_target_role_ids": [
+          "role-data-analytics-automation"
+        ],
+        "positive_signals": [
+          "데이터 분석",
+          "수도권"
+        ],
+        "rank_down_signals": [],
+        "location_assessment": "match",
+        "employment_assessment": "unknown",
+        "priority": "review",
+        "confidence": "low",
+        "match_ready": false,
+        "reason": "조건부 목표 직무이지만 분석 결과가 자동화나 실제 행동으로 연결되는 역할인지 확인할 수 없음"
+      }
+    },
+    {
+      "case_id": "ranking-lower-cloud-operations-role",
+      "description": "후순위 목표 직무와 관련되지만 지역 및 고용형태 선호와 다른 후보",
+      "candidate": {
+        "title": "비식별 예시 클라우드 운영 담당자",
+        "company": "비식별 예시 기업 D",
+        "location_text": "부산",
+        "employment_type_text": "계약직",
+        "content_scope": "metadata_only"
+      },
+      "expected": {
+        "related_target_role_ids": [
+          "role-cloud-finops"
+        ],
+        "positive_signals": [
+          "클라우드 운영"
+        ],
+        "rank_down_signals": [
+          "수도권 밖",
+          "비정규 고용형태",
+          "자동화 또는 비용 최적화 표현 없음"
+        ],
+        "location_assessment": "mismatch",
+        "employment_assessment": "mismatch",
+        "priority": "low",
+        "confidence": "medium",
+        "match_ready": false,
+        "reason": "후순위 목표 직무와 일부 관련되지만 선호 조건과 다르고 현재 강점과 연결되는 자동화 및 비용 최적화 표현이 없음"
+      }
+    }
+  ],
+  "metadata": {
+    "schema_version": "1.0",
+    "profile_id": "sample-user-001",
+    "search_plan_id": "search-plan-sample-user-001-v1",
+    "is_example": true,
+    "contains_real_posting_content": false,
+    "creates_final_match_result": false
+  }
+}

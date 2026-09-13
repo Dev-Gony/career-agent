@@ -4,7 +4,7 @@
 
 이 문서는 Career Agent가 채용공고를 일관된 방식으로 읽고 사용자 프로파일과 비교할 수 있도록 채용공고의 표준 구조를 정의한다.
 
-초기 버전에서는 채용공고 원문을 사용자가 직접 입력하거나 붙여넣는 방식으로 시작한다. 자동 수집은 분석 결과의 유용성을 확인한 뒤 추가한다.
+구현 전 분석 검증에는 고정된 예제 공고를 사용한다. 이는 매칭 결과를 재현하기 위한 테스트 입력이며, 사용자의 반복적인 복사·붙여넣기를 최종 입력 방식으로 삼지 않는다. 자동 발견과 상세 수집의 경계는 `docs/JOB_DISCOVERY_PLAN.md`에서 별도로 정의한다.
 
 ## 2. 설계 원칙
 
@@ -74,9 +74,9 @@
 - `platform`: 사람인, 잡코리아, 인크루트, 원티드, 기업 채용 페이지 등
 - `url`: 공고 원문 URL
 - `collected_at`: 수집 또는 확인 날짜
-- `input_method`: manual, api, crawler 등
+- `input_method`: manual, official_api, rss, search_api, ats_api, permitted_html 등
 
-자동 수집을 도입하기 전에는 `manual`을 기본값으로 사용한다.
+공개 예제와 고정 테스트 입력에는 `manual`을 사용할 수 있다. 실제 자동 처리에서는 발견 경로와 상세 내용의 출처를 구분할 수 있는 구체적인 값을 사용한다. `permitted_html`은 이용약관과 robots 정책을 모두 확인해 자동 접근이 허용된 경우에만 사용한다.
 
 ## 6. company
 
@@ -112,10 +112,14 @@
 예시:
 
     responsibilities:
-      - "내부 반복 업무 자동화"
-      - "외부 API 연동"
-      - "LLM 기반 업무 도구 개발"
-      - "자동화 결과 모니터링 및 개선"
+      - responsibility_id: "responsibility-001"
+        text: "내부 반복 업무 자동화"
+      - responsibility_id: "responsibility-002"
+        text: "외부 API 연동"
+      - responsibility_id: "responsibility-003"
+        text: "LLM 기반 업무 도구 개발"
+      - responsibility_id: "responsibility-004"
+        text: "자동화 결과 모니터링 및 개선"
 
 업무는 가능하면 한 항목에 한 의미만 담는다.
 
@@ -126,11 +130,13 @@
 예시:
 
     requirements:
-      - type: "skill"
+      - requirement_id: "requirement-python"
+        type: "skill"
         name: "Python"
         level: "required"
         evidence_text: "Python을 활용한 개발 경험"
-      - type: "experience"
+      - requirement_id: "requirement-rest-api"
+        type: "experience"
         name: "API integration"
         level: "required"
         evidence_text: "REST API 연동 경험"
@@ -154,10 +160,12 @@
 예시:
 
     preferred_qualifications:
-      - type: "skill"
+      - qualification_id: "qualification-docker"
+        type: "skill"
         name: "Docker"
         evidence_text: "Docker 사용 경험 우대"
-      - type: "cloud"
+      - qualification_id: "qualification-aws"
+        type: "cloud"
         name: "AWS"
         evidence_text: "AWS 환경 운영 경험 우대"
 
@@ -321,7 +329,19 @@ Agent가 공고를 구조화하면서 남기는 해석 영역이다.
 
 실제 운영에서는 저작권, 이용약관, 저장 필요성을 고려해 원문 전체 보관 여부를 결정한다.
 
-## 21. 비교에 필요한 최소 필드
+## 21. 항목 식별자
+
+매칭 결과에서 배열 위치가 아니라 공고 항목을 안정적으로 참조할 수 있도록 주요 비교 항목에 ID를 둔다.
+
+권장 필드:
+
+- `responsibility_id`: 주요 업무
+- `requirement_id`: 필수 조건
+- `qualification_id`: 우대 조건
+
+ID는 한 채용공고 안에서 중복되지 않아야 하며 항목 순서가 바뀌어도 변경하지 않는다. 같은 공고를 다시 수집해 문구가 조금 달라지더라도 같은 의미의 항목이면 가능한 한 기존 ID를 유지한다.
+
+## 22. 비교에 필요한 최소 필드
 
 Career Agent의 첫 매칭 테스트에 필요한 최소 항목은 다음과 같다.
 
@@ -337,7 +357,7 @@ Career Agent의 첫 매칭 테스트에 필요한 최소 항목은 다음과 같
 
 이 최소 필드만으로도 사용자 프로파일과 첫 수동 비교 테스트를 진행할 수 있어야 한다.
 
-## 22. 다음 단계
+## 23. 다음 단계
 
 이 스키마를 기준으로 다음 작업을 진행한다.
 

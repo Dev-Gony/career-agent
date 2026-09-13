@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>비식별 합성 채용정보 RSS</title>
+    <link>https://example.com/rss</link>
+    <description>Career Agent 변환 검증을 위한 합성 RSS</description>
+    <lastBuildDate>Sun, 13 Sep 2026 09:00:00 +0900</lastBuildDate>
+    <item>
+      <title><![CDATA[[비식별 예시 기업] 비식별 예시 AI 자동화 엔지니어]]></title>
+      <link>https://example.com/jobs/view?job=0000000000000</link>
+      <description><![CDATA[▨ 회사명 : 비식별 예시 기업<br><br>▨ 경력 : 신입<br><br>▨ 학력 : 무관<br><br>▨ 지역 : 경기<br><br>▨ 마감일 : 09/30]]></description>
+      <author>비식별 예시 기업</author>
+      <pubDate>Fri, 11 Sep 2026 21:09:01 +0900</pubDate>
+    </item>
+  </channel>
+</rss>

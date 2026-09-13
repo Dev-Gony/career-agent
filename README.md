@@ -28,7 +28,7 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
 
 ## 현재 개발 단계
 
-현재는 구현 전 문서 설계 단계입니다.
+현재는 첫 기능 구현 단계입니다.
 
 완료:
 
@@ -36,35 +36,76 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
 - 저장소 공통 작업 규칙 작성
 - MVP 요구사항 정의
 - 사용자 프로파일 데이터 구조 설계
+- 비식별 사용자 프로파일 예제 작성
+- 채용공고 데이터 구조 및 예제 작성
+- 근거 기반 매칭 규칙 정의
+- 매칭 결과 구조 및 기대 결과 예제 작성
+- 개인정보 및 비밀정보 제외 규칙 추가
+- 입력과 결과 사이의 안정적인 ID 참조 검증
+- 프로필 기반 자동 검색 계획과 후보 우선순위 기대 사례 작성
+- 합성 인크루트 RSS와 발견 레코드의 변환 계약 작성
+- 합성 RSS 항목 1개를 프로필 기반 발견 레코드로 변환하는 기능 구현
+- 정상 변환, 필수 필드 누락과 위험한 XML 구조에 대한 단위 테스트 작성
+- RSS 여러 항목을 독립적으로 변환하고 항목별 오류를 분리하는 기능 구현
+- 로컬 JSON 저장소를 이용한 실행 간 중복 제거 구현
+- 허용된 인크루트 RSS만 읽는 네트워크 함수 구현
+- 실제 RSS 20개를 로컬 저장하고 다음 실행에서 중복 20개로 판정하는 실행 명령 구현
+- 저장된 후보를 우선순위, 회사, 제목, 지역과 원문 링크로 확인하는 로컬 목록 구현
+- 구조화된 공고의 기술 요구사항을 사용자 프로필 증거와 비교하는 최소 매처 구현
 
 다음 단계:
 
-1. 비식별 사용자 프로파일 예제 작성
-2. 실제 개인 프로파일 로컬 데이터 작성
-3. 채용공고 데이터 구조 정의
-4. 채용공고 1개를 이용한 수동 비교 분석
-5. 분석 결과가 실제 취업 준비에 도움이 되는지 검증
+1. REST API 연동과 자동화 프로젝트 같은 경험 요구사항 매칭
+2. 지원 가능 조건과 근거 기반 지원 추천 생성
+3. 관심 기업 1곳의 공식 ATS 상세 공고를 매칭 기능에 연결
+4. 실제 상세 공고 1건으로 전체 판정 검증
+5. 문서 입력과 대화가 가능한 첫 Slack 인터페이스 설계 및 구현
 
 ## 저장소 구조
 
     career-agent/
     |-- AGENTS.md
     |-- README.md
-    `-- docs/
-        |-- PRD.md
-        `-- USER_PROFILE_SCHEMA.md
-
-향후 구현 단계에서는 다음과 같이 확장할 예정입니다.
-
-    career-agent/
-    |-- AGENTS.md
-    |-- README.md
     |-- docs/
+    |   |-- PRD.md
+    |   |-- USER_PROFILE_SCHEMA.md
+    |   |-- JOB_POSTING_SCHEMA.md
+    |   |-- JOB_DISCOVERY_PLAN.md
+    |   |-- JOB_DISCOVERY_SCHEMA.md
+    |   |-- JOB_SEARCH_PLAN_SCHEMA.md
+    |   |-- INCRUIT_RSS_MAPPING.md
+    |   |-- MATCHING_RULES.md
+    |   `-- MATCH_RESULT_SCHEMA.md
     |-- data/
-    |   `-- user_profile.example.json
-    |-- private-data/          Git에 올리지 않는 개인 데이터
+    |   |-- user_profile.example.json
+    |   |-- job_posting.example.json
+    |   |-- job_discovery.example.json
+    |   |-- job_search_plan.example.json
+    |   |-- job_discovery_ranking_cases.example.json
+    |   |-- incruit_rss_item.example.xml
+    |   `-- match_result.example.json
     |-- src/
-    `-- tests/
+    |   `-- career_agent/
+    |       |-- discovery/
+    |       |   |-- incruit_feed.py
+    |       |   |-- incruit_rss.py
+    |       |   |-- report.py
+    |       |   |-- service.py
+    |       |   `-- store.py
+    |       `-- matching/
+    |           `-- technology.py
+    |-- scripts/
+    |   |-- discover_incruit.py
+    |   |-- list_discoveries.py
+    |   `-- match_job_technologies.py
+    |-- tests/
+    |   |-- test_discovery_report.py
+    |   |-- test_discovery_service.py
+    |   |-- test_incruit_rss.py
+    |   |-- test_incruit_feed.py
+    |   |-- test_discovery_store.py
+    |   `-- test_technology_matching.py
+    `-- 작업일지.md
 
 ## 문서
 
@@ -75,6 +116,78 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
 ### docs/USER_PROFILE_SCHEMA.md
 
 경력, 프로젝트, 기술 역량, 행동 사례, 자기이해 검사, 업무 및 학습 성향을 Career Agent가 읽을 수 있는 표준 구조로 정의합니다.
+
+### docs/JOB_POSTING_SCHEMA.md
+
+채용공고의 주요 업무, 필수 조건, 우대 조건과 출처 정보를 비교 가능한 구조로 정의합니다.
+
+### docs/JOB_DISCOVERY_PLAN.md
+
+공식 API, RSS, 검색엔진, 기업 ATS와 제한적인 직접 수집을 비교하고 개인용 MVP의 자동 공고 발견 경계를 정의합니다.
+
+### docs/JOB_DISCOVERY_SCHEMA.md
+
+RSS나 공식 API에서 발견한 후보를 상세 분석 전 단계에서 저장하기 위한 최소 구조를 정의합니다.
+
+### docs/JOB_SEARCH_PLAN_SCHEMA.md
+
+사용자가 검색 조건을 다시 입력하지 않아도 프로필에서 직무 축, 역량 신호와 후보 정렬 기준을 생성하는 구조를 정의합니다.
+
+### docs/INCRUIT_RSS_MAPPING.md
+
+비식별 합성 인크루트 RSS 항목을 발견 레코드로 변환하는 필드별 계약과 실패 처리 범위를 정의합니다.
+
+### docs/MATCHING_RULES.md
+
+실제 증거의 우선순위, 일치 수준, 부족과 정보 부족의 구분 및 지원 판단 원칙을 정의합니다.
+
+### docs/MATCH_RESULT_SCHEMA.md
+
+공고 요구사항과 사용자 근거를 연결한 판정, 부족 역량, 추천과 지원 판단의 결과 구조를 정의합니다.
+
+## 현재 구현 실행
+
+현재 구현은 Python 표준 라이브러리만 사용하며 별도 패키지 설치가 필요하지 않습니다.
+
+저장소 루트에서 다음 명령으로 테스트합니다.
+
+    python -m unittest discover -s tests -v
+
+실제 인크루트 RSS에서 신규 후보를 발견하고 로컬에 저장합니다.
+
+    python scripts/discover_incruit.py
+
+실제 발견 결과는 Git에서 제외된 `private-data/discoveries.json`에 저장됩니다. 명령 출력에는 처리 건수, 오류 건수, 신규 및 중복 건수와 우선순위 집계만 표시됩니다.
+
+저장된 후보를 로컬 목록으로 확인합니다.
+
+    python scripts/list_discoveries.py --limit 10
+
+특정 발견 우선순위만 확인할 수도 있습니다.
+
+    python scripts/list_discoveries.py --priority high --limit 10
+
+예제 사용자 프로필과 예제 공고의 기술 요구사항만 비교합니다.
+
+    python scripts/match_job_technologies.py
+
+다른 구조화된 입력 파일은 `--profile`과 `--posting`으로 지정할 수 있습니다. 현재 이 명령은 `skill`과 `cloud` 유형만 평가하며 업무 경험, 지원 조건과 최종 지원 추천은 아직 만들지 않습니다.
+
+현재 테스트 범위:
+
+- 합성 RSS 항목을 기대 발견 레코드로 변환
+- RSS 여러 항목 중 정상 항목 보존과 항목별 오류 분리
+- 제목이 없는 RSS 항목 거부
+- `DOCTYPE` 또는 `ENTITY`가 포함된 XML 거부
+- 같은 공고의 실행 간 중복 제거
+- 손상된 로컬 저장 파일 보호
+- 허용되지 않은 RSS 호스트와 과도한 응답 크기 거부
+- RSS 읽기, 변환, 프로필 기반 정렬과 중복 저장의 전체 실행 조합
+- 한글과 지역 구분자를 정리한 로컬 후보 목록 출력
+- 프로젝트 수준 기술의 강한 일치와 학습 수준 기술의 부분 일치 판정
+- 실제 사용이 없다고 확인된 노출 경험과 프로필 정보 부재의 `gap`/`unknown` 구분
+
+현재 구현은 공식 인크루트 RSS를 읽고 로컬 JSON에 신규 후보를 저장하며, 구조화된 예제 공고의 기술 요구사항을 규칙 기반으로 비교합니다. 아직 LLM 호출, 상세 공고 수집, 전체 매칭 분석 또는 Slack 연동은 하지 않습니다.
 
 ## 예상 MVP 흐름
 
@@ -101,7 +214,7 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
             v
     지원 판단
 
-첫 MVP에서는 채용공고를 자동 수집하지 않고 사용자가 직접 입력한 공고로 분석 품질부터 검증합니다.
+구현 전 검증에는 고정된 예제 공고를 사용합니다. 이는 매칭 규칙을 재현하기 위한 테스트 입력이며, 사용자가 공고를 계속 복사해 붙여넣는 방식을 최종 제품 흐름으로 삼지 않습니다. 개인용 MVP의 실제 입력은 이용 조건을 지키는 자동 발견 경로부터 작은 범위로 연결합니다.
 
 ## 향후 확장 방향
 
@@ -139,6 +252,6 @@ MVP가 실제로 유용하다고 판단되면 다음 기능을 검토합니다.
 
 ## 프로젝트 상태
 
-현재 상태: 문서 설계 진행 중
+현재 상태: 자동 공고 발견 및 최소 기술 매칭 기능 구현
 
-아직 실제 Career Agent 애플리케이션은 구현하지 않았습니다. 문서와 데이터 구조를 먼저 확정한 뒤 가장 작은 분석 MVP부터 구현합니다.
+공식 인크루트 RSS를 읽어 프로필 기반 발견 레코드로 변환하고 실행 간 중복을 제거해 로컬에 저장하는 첫 동작 가능한 기능을 구현했습니다. 실제 첫 실행은 신규 20건, 두 번째 실행은 신규 0건과 중복 20건으로 확인했습니다. 구조화된 예제 공고에서는 Python과 LLM API의 프로젝트 증거, Docker와 AWS의 노출 경험을 구분할 수 있습니다. 다음에는 REST API 연동과 자동화 프로젝트 같은 경험 요구사항을 근거에 연결합니다.

@@ -23,25 +23,40 @@
       "summary": "AI, API, 자동화 기술을 활용해 반복 업무를 줄이고 운영 효율을 개선하는 역할"
     },
     "responsibilities": [
-      "내부 반복 업무 자동화",
-      "외부 API 연동",
-      "LLM 기반 업무 도구 개발",
-      "자동화 결과 모니터링 및 개선"
+      {
+        "responsibility_id": "responsibility-001",
+        "text": "내부 반복 업무 자동화"
+      },
+      {
+        "responsibility_id": "responsibility-002",
+        "text": "외부 API 연동"
+      },
+      {
+        "responsibility_id": "responsibility-003",
+        "text": "LLM 기반 업무 도구 개발"
+      },
+      {
+        "responsibility_id": "responsibility-004",
+        "text": "자동화 결과 모니터링 및 개선"
+      }
     ],
     "requirements": [
       {
+        "requirement_id": "requirement-python",
         "type": "skill",
         "name": "Python",
         "level": "required",
         "evidence_text": "Python을 활용한 개발 경험"
       },
       {
+        "requirement_id": "requirement-rest-api",
         "type": "experience",
         "name": "REST API integration",
         "level": "required",
         "evidence_text": "REST API 연동 경험"
       },
       {
+        "requirement_id": "requirement-automation-project",
         "type": "experience",
         "name": "automation project",
         "level": "required",
@@ -50,16 +65,19 @@
     ],
     "preferred_qualifications": [
       {
+        "qualification_id": "qualification-docker",
         "type": "skill",
         "name": "Docker",
         "evidence_text": "Docker 사용 경험 우대"
       },
       {
+        "qualification_id": "qualification-aws",
         "type": "cloud",
         "name": "AWS",
         "evidence_text": "AWS 환경 운영 경험 우대"
       },
       {
+        "qualification_id": "qualification-llm-api",
         "type": "skill",
         "name": "LLM API",
         "evidence_text": "LLM API 활용 경험 우대"

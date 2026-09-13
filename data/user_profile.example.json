@@ -27,6 +27,7 @@
     },
     "career_history": [
       {
+        "career_id": "career-001",
         "organization_type": "비공개",
         "role": "웹개발 및 유지보수",
         "period": "비공개",
@@ -36,6 +37,7 @@
         ],
         "achievements": [
           {
+            "achievement_id": "achievement-001",
             "title": "서버 비용 최적화",
             "problem": "기존 서버 사양과 비용이 실제 사용량 대비 과도할 가능성을 발견",
             "actions": [
@@ -54,6 +56,7 @@
     ],
     "projects": [
       {
+        "project_id": "project-tech-news",
         "name": "Tech News Automation",
         "type": "personal",
         "status": "completed",
@@ -72,6 +75,7 @@
           "상태 관리",
           "재시도 처리",
           "예약 자동 실행",
+          "GitHub Actions 실행 상태 및 로그 확인",
           "Slack 전달"
         ],
         "evidence": {
@@ -81,6 +85,7 @@
         }
       },
       {
+        "project_id": "project-career-agent",
         "name": "Career Agent",
         "type": "personal",
         "status": "planning",
@@ -97,6 +102,7 @@
     ],
     "skills": [
       {
+        "skill_id": "skill-python",
         "name": "Python",
         "level": "project",
         "evidence": [
@@ -105,6 +111,7 @@
         "notes": "자동화 스크립트 및 API 연동 경험"
       },
       {
+        "skill_id": "skill-sql",
         "name": "SQL",
         "level": "learning",
         "evidence": [
@@ -113,6 +120,7 @@
         "notes": "현재 학습 중"
       },
       {
+        "skill_id": "skill-github-actions",
         "name": "GitHub Actions",
         "level": "project",
         "evidence": [
@@ -121,6 +129,7 @@
         "notes": "예약 실행과 자동화 워크플로 구성 경험"
       },
       {
+        "skill_id": "skill-rest-api",
         "name": "REST API",
         "level": "project",
         "evidence": [
@@ -130,6 +139,7 @@
         "notes": "외부 서비스 연동 경험"
       },
       {
+        "skill_id": "skill-llm-api",
         "name": "LLM API",
         "level": "project",
         "evidence": [
@@ -138,6 +148,7 @@
         "notes": "LLM 기반 요약 자동화 경험"
       },
       {
+        "skill_id": "skill-tableau",
         "name": "Tableau",
         "level": "learning",
         "evidence": [
@@ -146,6 +157,7 @@
         "notes": "현재 학습 중"
       },
       {
+        "skill_id": "skill-salesforce-apex",
         "name": "Salesforce Apex",
         "level": "learning",
         "evidence": [
@@ -154,6 +166,7 @@
         "notes": "현재 학습 중"
       },
       {
+        "skill_id": "skill-agentic-workflow",
         "name": "Agentic Workflow",
         "level": "learning",
         "evidence": [
@@ -161,10 +174,29 @@
           "Career Agent 기획"
         ],
         "notes": "Agent 설계 및 도구 연결 학습 중"
+      },
+      {
+        "skill_id": "skill-docker",
+        "name": "Docker",
+        "level": "exposure",
+        "evidence": [
+          "로컬 설치"
+        ],
+        "notes": "설치만 했으며 컨테이너 실행이나 프로젝트 사용 경험은 없음"
+      },
+      {
+        "skill_id": "skill-aws",
+        "name": "AWS",
+        "level": "exposure",
+        "evidence": [
+          "AWS CLI 화면 확인"
+        ],
+        "notes": "CLI 화면을 확인한 적만 있으며 서비스 사용이나 운영 경험은 없음"
       }
     ],
     "behavior_evidence": [
       {
+        "behavior_id": "behavior-server-cost",
         "situation": "서버 비용 이상 발견",
         "pattern": [
           "비효율 감지",
@@ -178,6 +210,7 @@
         "evidence_level": "real_work"
       },
       {
+        "behavior_id": "behavior-tech-news-automation",
         "situation": "반복적인 기술 뉴스 확인",
         "pattern": [
           "반복 문제 인식",
@@ -191,6 +224,7 @@
         "evidence_level": "project"
       },
       {
+        "behavior_id": "behavior-root-cause-analysis",
         "situation": "낯선 오류 또는 문제 원인 탐색",
         "pattern": [
           "로그 확인",
@@ -305,26 +339,31 @@
     ],
     "target_roles": [
       {
+        "target_role_id": "role-ai-automation",
         "role": "AI Automation / Workflow Engineer",
         "priority": 1,
         "hypothesis": "실제 문제를 데이터, API, AI, 자동화로 연결하는 행동 패턴과 높은 일치 가능성"
       },
       {
+        "target_role_id": "role-ai-solutions",
         "role": "AI Solutions Engineer",
         "priority": 2,
         "hypothesis": "문제 정의, PoC, 구축, 결과 확인 과정과 연관 가능성"
       },
       {
+        "target_role_id": "role-enterprise-solution",
         "role": "Enterprise Solution / ITSM",
         "priority": 3,
         "hypothesis": "프로세스와 워크플로 개선 경험과 연결 가능성"
       },
       {
+        "target_role_id": "role-cloud-finops",
         "role": "Cloud / FinOps Automation",
         "priority": 4,
         "hypothesis": "서버 비용 최적화 경험과 연결 가능하지만 현재 관심도와 데이터 접근성은 추가 확인 필요"
       },
       {
+        "target_role_id": "role-data-analytics-automation",
         "role": "Data Analyst / Analytics Automation",
         "priority": "conditional",
         "hypothesis": "분석 결과를 자동화나 실제 행동으로 연결하는 역할일 경우 적합도 상승 가능성"

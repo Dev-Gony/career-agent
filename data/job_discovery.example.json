@@ -1,0 +1,64 @@
+{
+  "job_discovery": {
+    "identity": {
+      "discovery_id": "incruit-0000000000000",
+      "provider": "incruit",
+      "external_id": "0000000000000"
+    },
+    "source": {
+      "source_kind": "rss",
+      "feed_url": "https://www.incruit.com/rss/job.asp?occ1=150",
+      "source_url": "https://example.com/jobs/view?job=0000000000000",
+      "published_at": "2026-09-11T21:09:01+09:00",
+      "discovered_at": "2026-09-13T09:00:00+09:00",
+      "policy_checked_at": "2026-09-13"
+    },
+    "summary": {
+      "title": "비식별 예시 AI 자동화 엔지니어",
+      "company": "비식별 예시 기업",
+      "experience_text": "신입",
+      "education_text": "무관",
+      "location_text": "경기",
+      "deadline_text": "09/30"
+    },
+    "availability": {
+      "content_scope": "metadata_only",
+      "detail_status": "unavailable",
+      "match_ready": false,
+      "reason": "RSS에 주요 업무와 자격 요건 전문이 없음"
+    },
+    "profile_relevance": {
+      "profile_id": "sample-user-001",
+      "related_target_role_ids": [
+        "role-ai-automation"
+      ],
+      "positive_signals": [
+        "제목에 검색 확장어 'AI 자동화'가 포함됨"
+      ],
+      "low_preference_signals": [],
+      "location_assessment": "match",
+      "employment_assessment": "unknown",
+      "priority": "high",
+      "confidence": "medium",
+      "reason": "최우선 목표 직무 표현이 제목에 직접 나타나고 선호 지역과 일치함"
+    },
+    "deduplication": {
+      "key": "incruit:0000000000000",
+      "strategy": "provider_external_id"
+    },
+    "parse_notes": {
+      "warnings": [],
+      "unknowns": [
+        "고용 형태",
+        "주요 업무",
+        "필수 조건",
+        "우대 조건"
+      ]
+    },
+    "metadata": {
+      "schema_version": "1.0",
+      "is_example": true,
+      "contains_real_posting_content": false
+    }
+  }
+}

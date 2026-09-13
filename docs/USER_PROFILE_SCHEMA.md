@@ -94,14 +94,16 @@
 각 경력 항목은 다음 구조를 권장한다.
 
     career_history:
-      - organization_type: "비공개 또는 업종 수준"
+      - career_id: "career-001"
+        organization_type: "비공개 또는 업종 수준"
         role: "웹개발 및 유지보수"
         period: "YYYY-MM ~ YYYY-MM"
         responsibilities:
           - "웹 개발 및 유지보수"
           - "서버 운영 관련 업무"
         achievements:
-          - title: "서버 비용 최적화"
+          - achievement_id: "achievement-001"
+            title: "서버 비용 최적화"
             problem: "기존 서버 사양과 비용이 실제 사용량 대비 과도하다고 판단"
             actions:
               - "과거 사용량과 현재 서버 사양 비교"
@@ -121,7 +123,8 @@
 권장 필드:
 
     projects:
-      - name: "Tech News Automation"
+      - project_id: "project-tech-news"
+        name: "Tech News Automation"
         type: "personal"
         status: "completed"
         problem: "여러 기술 블로그의 새 글을 반복적으로 확인해야 하는 문제"
@@ -150,6 +153,8 @@
 
 권장 수준:
 
+- none: 직접 사용 경험이 없음을 확인함
+- exposure: 설치, 화면 확인 또는 개념 접촉만 했으며 과제를 완료한 경험은 없음
 - learning: 학습 중
 - basic: 기본 사용 가능
 - project: 프로젝트 사용 경험
@@ -158,23 +163,28 @@
 예:
 
     skills:
-      - name: "Python"
+      - skill_id: "skill-python"
+        name: "Python"
         level: "project"
         evidence:
           - "Tech News Automation"
         notes: "자동화 스크립트 및 API 연동 경험"
 
-      - name: "SQL"
+      - skill_id: "skill-sql"
+        name: "SQL"
         level: "learning"
         evidence:
           - "STA 교육 과정"
 
-      - name: "GitHub Actions"
+      - skill_id: "skill-github-actions"
+        name: "GitHub Actions"
         level: "project"
         evidence:
           - "Tech News Automation 정기 실행"
 
 기술 수준은 Agent가 임의로 과장하지 않는다.
+
+`none`과 `exposure`는 보유 기술을 강조하기 위한 값이 아니라 확인된 부족과 정보 부족을 구분하기 위한 값이다. 설치만 했거나 도구 화면만 확인한 경험을 `basic` 또는 `learning`으로 올리지 않는다.
 
 ## 9. behavior_evidence
 
@@ -183,7 +193,8 @@
 예:
 
     behavior_evidence:
-      - situation: "서버 비용 이상"
+      - behavior_id: "behavior-server-cost"
+        situation: "서버 비용 이상"
         pattern:
           - "비효율 감지"
           - "사용량과 사양 비교"
@@ -192,7 +203,8 @@
           - "정상 운영 확인"
         interpretation: "비효율 탐지와 구조적 개선"
 
-      - situation: "반복 확인 업무"
+      - behavior_id: "behavior-repetitive-check"
+        situation: "반복 확인 업무"
         pattern:
           - "반복 문제 인식"
           - "데이터와 규칙 정리"
@@ -307,23 +319,28 @@
 초기 예시:
 
     target_roles:
-      - role: "AI Automation / Workflow Engineer"
+      - target_role_id: "role-ai-automation"
+        role: "AI Automation / Workflow Engineer"
         priority: 1
         hypothesis: "실제 문제를 데이터, API, AI, 자동화로 연결하는 패턴과 높은 일치"
 
-      - role: "AI Solutions Engineer"
+      - target_role_id: "role-ai-solutions"
+        role: "AI Solutions Engineer"
         priority: 2
         hypothesis: "문제 정의, PoC, 구축, 효과 확인 과정과 연관"
 
-      - role: "Enterprise Solution / ITSM"
+      - target_role_id: "role-enterprise-solution"
+        role: "Enterprise Solution / ITSM"
         priority: 3
         hypothesis: "프로세스와 워크플로 개선 경험과 연결"
 
-      - role: "Cloud / FinOps Automation"
+      - target_role_id: "role-cloud-finops"
+        role: "Cloud / FinOps Automation"
         priority: 4
         hypothesis: "서버 비용 최적화 경험과 연결 가능"
 
-      - role: "Data Analyst / Analytics Automation"
+      - target_role_id: "role-data-analytics-automation"
+        role: "Data Analyst / Analytics Automation"
         priority: "conditional"
         hypothesis: "분석 결과를 자동화나 행동으로 연결할 경우 적합도 상승 가능"
 
@@ -349,7 +366,23 @@
 
 원본 개인정보 문서는 공개 저장소에 올리지 않는다.
 
-## 17. 분석 시 우선순위 규칙
+## 17. 항목 식별자
+
+결과 데이터에서 배열 위치가 아니라 항목을 안정적으로 참조할 수 있도록 주요 항목에 ID를 둔다.
+
+권장 필드:
+
+- `career_id`: 경력 항목
+- `achievement_id`: 경력 성과
+- `project_id`: 프로젝트
+- `skill_id`: 기술
+- `behavior_id`: 행동 사례
+- `target_role_id`: 목표 직무
+- `evidence_sources[].id`: 외부 또는 원본 근거
+
+ID는 프로파일 안에서 중복되지 않아야 하며 항목 순서가 바뀌어도 변경하지 않는다. 이름이 수정되더라도 같은 대상을 의미하면 기존 ID를 유지한다.
+
+## 18. 분석 시 우선순위 규칙
 
 Career Agent는 직무 또는 채용공고와 사용자를 비교할 때 다음 순서로 근거를 사용한다.
 
@@ -362,7 +395,7 @@ Career Agent는 직무 또는 채용공고와 사용자를 비교할 때 다음 
 
 검사 결과가 실제 행동 근거와 충돌할 경우 실제 행동 근거를 우선한다.
 
-## 18. 적합도 분석을 위한 기본 분류
+## 19. 적합도 분석을 위한 기본 분류
 
 각 채용 요구사항은 사용자 프로파일과 비교하여 다음 중 하나로 분류한다.
 
@@ -374,7 +407,7 @@ Career Agent는 직무 또는 채용공고와 사용자를 비교할 때 다음 
 
 `unknown`을 자동으로 `gap`으로 처리하지 않는다.
 
-## 19. 공개 저장소와 개인 데이터 분리
+## 20. 공개 저장소와 개인 데이터 분리
 
 이 프로젝트는 Public 저장소이므로 실제 사용자 프로파일 원본은 저장소에 직접 커밋하지 않는다.
 
@@ -392,7 +425,7 @@ Career Agent는 직무 또는 채용공고와 사용자를 비교할 때 다음 
 
 공개 저장소에는 가상의 예제 데이터 또는 비식별 샘플만 저장한다.
 
-## 20. 다음 단계
+## 21. 다음 단계
 
 1. 이 스키마를 기준으로 `user_profile.example.json`을 만든다.
 2. 실제 개인 프로파일은 로컬 전용 파일로 작성한다.

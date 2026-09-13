@@ -1,0 +1,301 @@
+{
+  "job_search_plan": {
+    "identity": {
+      "plan_id": "search-plan-sample-user-001-v1",
+      "profile_id": "sample-user-001",
+      "version": 1,
+      "generated_at": "2026-09-13T10:00:00+09:00"
+    },
+    "source_profile": {
+      "target_role_ids": [
+        "role-ai-automation",
+        "role-ai-solutions",
+        "role-enterprise-solution",
+        "role-cloud-finops",
+        "role-data-analytics-automation"
+      ],
+      "evidence_ids": [
+        "career-001",
+        "achievement-001",
+        "project-tech-news",
+        "project-career-agent",
+        "skill-python",
+        "skill-rest-api",
+        "skill-llm-api",
+        "skill-github-actions"
+      ],
+      "preference_fields": [
+        "basic.location_preference",
+        "basic.employment_type_preference",
+        "career_goals.avoid_if_possible",
+        "work_preferences.less_preferred"
+      ]
+    },
+    "role_axes": [
+      {
+        "target_role_id": "role-ai-automation",
+        "priority": 1,
+        "canonical_role": "AI Automation / Workflow Engineer",
+        "discovery_terms": [
+          "AI 자동화",
+          "업무 자동화",
+          "워크플로 자동화",
+          "Automation Engineer"
+        ],
+        "supporting_terms": [
+          "Python",
+          "API",
+          "LLM",
+          "GitHub Actions"
+        ],
+        "rationale": "프로젝트에서 데이터 수집, API 연동, LLM 요약과 예약 실행을 구현한 증거가 있음"
+      },
+      {
+        "target_role_id": "role-ai-solutions",
+        "priority": 2,
+        "canonical_role": "AI Solutions Engineer",
+        "discovery_terms": [
+          "AI 솔루션",
+          "AI Solutions Engineer",
+          "Solutions Engineer",
+          "AI 엔지니어",
+          "LLM 응용"
+        ],
+        "supporting_terms": [
+          "PoC",
+          "API 연동",
+          "문제 정의",
+          "구축"
+        ],
+        "rationale": "문제 정의부터 구현과 결과 확인까지 연결하는 프로젝트 및 행동 증거가 있음"
+      },
+      {
+        "target_role_id": "role-enterprise-solution",
+        "priority": 3,
+        "canonical_role": "Enterprise Solution / ITSM",
+        "discovery_terms": [
+          "엔터프라이즈 솔루션",
+          "ITSM",
+          "솔루션 엔지니어",
+          "기술 컨설턴트"
+        ],
+        "supporting_terms": [
+          "프로세스 개선",
+          "워크플로",
+          "시스템 연동",
+          "운영 자동화"
+        ],
+        "rationale": "웹 유지보수와 프로세스 및 워크플로 개선 경험을 연결할 수 있음"
+      },
+      {
+        "target_role_id": "role-cloud-finops",
+        "priority": 4,
+        "canonical_role": "Cloud / FinOps Automation",
+        "discovery_terms": [
+          "FinOps",
+          "클라우드 자동화",
+          "클라우드 비용 최적화",
+          "Cloud Automation"
+        ],
+        "supporting_terms": [
+          "비용 최적화",
+          "사용량 분석",
+          "운영 개선"
+        ],
+        "rationale": "실무 서버 비용 최적화 증거는 있으나 AWS 직접 사용 경험은 없음"
+      },
+      {
+        "target_role_id": "role-data-analytics-automation",
+        "priority": "conditional",
+        "canonical_role": "Data Analyst / Analytics Automation",
+        "discovery_terms": [
+          "데이터 자동화",
+          "분석 자동화",
+          "Analytics Engineer",
+          "BI 자동화"
+        ],
+        "supporting_terms": [
+          "SQL",
+          "Python",
+          "API",
+          "업무 개선"
+        ],
+        "rationale": "분석 결과가 실제 자동화나 행동으로 이어지는 역할일 때만 우선순위를 높임"
+      }
+    ],
+    "capability_signals": [
+      {
+        "signal": "업무 자동화 구현",
+        "importance": "high",
+        "evidence_ids": [
+          "project-tech-news",
+          "project-career-agent"
+        ]
+      },
+      {
+        "signal": "REST API 연동",
+        "importance": "high",
+        "evidence_ids": [
+          "skill-rest-api",
+          "project-tech-news"
+        ]
+      },
+      {
+        "signal": "LLM API 활용",
+        "importance": "high",
+        "evidence_ids": [
+          "skill-llm-api",
+          "project-tech-news"
+        ]
+      },
+      {
+        "signal": "Python 구현",
+        "importance": "high",
+        "evidence_ids": [
+          "skill-python",
+          "project-tech-news"
+        ]
+      },
+      {
+        "signal": "예약 실행과 실행 로그 확인",
+        "importance": "medium",
+        "evidence_ids": [
+          "skill-github-actions",
+          "project-tech-news"
+        ]
+      },
+      {
+        "signal": "웹개발 및 유지보수",
+        "importance": "medium",
+        "evidence_ids": [
+          "career-001"
+        ]
+      },
+      {
+        "signal": "서버 비용 최적화",
+        "importance": "medium",
+        "evidence_ids": [
+          "achievement-001"
+        ]
+      }
+    ],
+    "preference_signals": {
+      "positive": [
+        {
+          "signal": "문제가 명확하고 결과를 직접 확인할 수 있는 업무",
+          "source_field": "work_preferences.preferred"
+        },
+        {
+          "signal": "비효율을 개선하거나 자동화하는 업무",
+          "source_field": "work_preferences.preferred"
+        },
+        {
+          "signal": "낯선 문제를 탐색하고 해결하는 업무",
+          "source_field": "work_preferences.preferred"
+        }
+      ],
+      "rank_down": [
+        {
+          "signal": "반복 수작업 중심",
+          "source_field": "career_goals.avoid_if_possible",
+          "action": "rank_down_only"
+        },
+        {
+          "signal": "정기 보고서 작성으로만 끝나는 분석",
+          "source_field": "work_preferences.less_preferred",
+          "action": "rank_down_only"
+        },
+        {
+          "signal": "변화가 거의 없는 반복 운영",
+          "source_field": "work_preferences.less_preferred",
+          "action": "rank_down_only"
+        }
+      ]
+    },
+    "objective_preferences": {
+      "locations": {
+        "values": [
+          "수도권"
+        ],
+        "normalized_values": [
+          "서울",
+          "경기",
+          "인천"
+        ],
+        "handling": "soft_preference",
+        "unknown_policy": "keep"
+      },
+      "employment_types": {
+        "values": [
+          "정규직"
+        ],
+        "handling": "soft_preference",
+        "unknown_policy": "keep"
+      }
+    },
+    "unknown_constraints": [
+      {
+        "field": "career_years",
+        "reason": "공개 예제에 경력 기간이 비공개로 처리됨",
+        "action": "do_not_filter"
+      },
+      {
+        "field": "remote_preference",
+        "reason": "프로필에 확정된 선호가 없음",
+        "action": "ignore_for_discovery"
+      }
+    ],
+    "discovery_sources": [
+      {
+        "provider": "incruit",
+        "source_kind": "rss",
+        "status": "first_candidate",
+        "usage": "broad_discovery_and_metadata_ranking",
+        "detail_strategy": "official_or_employer_source_only"
+      },
+      {
+        "provider": "saramin",
+        "source_kind": "official_api",
+        "status": "approval_required",
+        "usage": "structured_discovery_and_detail_if_approved",
+        "detail_strategy": "official_api_only"
+      },
+      {
+        "provider": "employer_ats",
+        "source_kind": "ats_api",
+        "status": "planned",
+        "usage": "target_company_discovery_and_detail",
+        "detail_strategy": "documented_public_api_only"
+      }
+    ],
+    "ranking_policy": {
+      "retrieval_mode": "broad_then_rank",
+      "hard_exclusions": [
+        "이미 본 동일 provider/external_id"
+      ],
+      "rank_up_order": [
+        "우선순위가 높은 목표 직무 축과 관련됨",
+        "실제 프로젝트로 증명된 역량 신호가 있음",
+        "수도권 또는 정규직 선호와 일치함"
+      ],
+      "rank_down_order": [
+        "낮은 선호 업무 방식이 상세 공고에 명시됨",
+        "수도권 밖 또는 비정규 고용형태로 명시됨"
+      ],
+      "keep_when_unknown": [
+        "지역",
+        "고용형태",
+        "경력 연차",
+        "재택 여부"
+      ]
+    },
+    "metadata": {
+      "schema_version": "1.0",
+      "generated_by": "profile_derived_rule",
+      "requires_manual_keywords": false,
+      "requires_manual_exclusions": false,
+      "requires_remote_preference": false,
+      "is_example": true
+    }
+  }
+}

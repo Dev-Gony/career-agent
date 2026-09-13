@@ -1,0 +1,12 @@
+# Local personal data
+private-data/
+
+# Secrets and local environment files
+.env
+.env.*
+!.env.example
+*.local.json
+
+# Python generated files
+__pycache__/
+*.py[cod]
