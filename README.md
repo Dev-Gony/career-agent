@@ -52,10 +52,11 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
 - 실제 RSS 20개를 로컬 저장하고 다음 실행에서 중복 20개로 판정하는 실행 명령 구현
 - 저장된 후보를 우선순위, 회사, 제목, 지역과 원문 링크로 확인하는 로컬 목록 구현
 - 구조화된 공고의 기술 요구사항을 사용자 프로필 증거와 비교하는 최소 매처 구현
+- REST API 연동과 자동화 프로젝트 요구사항을 프로젝트·행동 증거와 비교하는 경험 매처 구현
 
 다음 단계:
 
-1. REST API 연동과 자동화 프로젝트 같은 경험 요구사항 매칭
+1. 기술·경험 판정을 하나의 매칭 결과로 조합
 2. 지원 가능 조건과 근거 기반 지원 추천 생성
 3. 관심 기업 1곳의 공식 ATS 상세 공고를 매칭 기능에 연결
 4. 실제 상세 공고 1건으로 전체 판정 검증
@@ -93,10 +94,12 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
     |       |   |-- service.py
     |       |   `-- store.py
     |       `-- matching/
+    |           |-- experience.py
     |           `-- technology.py
     |-- scripts/
     |   |-- discover_incruit.py
     |   |-- list_discoveries.py
+    |   |-- match_job_experiences.py
     |   `-- match_job_technologies.py
     |-- tests/
     |   |-- test_discovery_report.py
@@ -104,6 +107,7 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
     |   |-- test_incruit_rss.py
     |   |-- test_incruit_feed.py
     |   |-- test_discovery_store.py
+    |   |-- test_experience_matching.py
     |   `-- test_technology_matching.py
     `-- 작업일지.md
 
@@ -173,6 +177,12 @@ RSS나 공식 API에서 발견한 후보를 상세 분석 전 단계에서 저�
 
 다른 구조화된 입력 파일은 `--profile`과 `--posting`으로 지정할 수 있습니다. 현재 이 명령은 `skill`과 `cloud` 유형만 평가하며 업무 경험, 지원 조건과 최종 지원 추천은 아직 만들지 않습니다.
 
+예제 공고의 경험 요구사항을 프로젝트와 행동 증거에 연결합니다.
+
+    python scripts/match_job_experiences.py
+
+이 명령은 현재 REST API 연동과 자동화 프로젝트 경험을 판정합니다. 해석 규칙이 없는 경험은 부족으로 단정하지 않고 `unknown`으로 남깁니다.
+
 현재 테스트 범위:
 
 - 합성 RSS 항목을 기대 발견 레코드로 변환
@@ -186,8 +196,11 @@ RSS나 공식 API에서 발견한 후보를 상세 분석 전 단계에서 저�
 - 한글과 지역 구분자를 정리한 로컬 후보 목록 출력
 - 프로젝트 수준 기술의 강한 일치와 학습 수준 기술의 부분 일치 판정
 - 실제 사용이 없다고 확인된 노출 경험과 프로필 정보 부재의 `gap`/`unknown` 구분
+- REST API 연동 요구와 기술·완료 프로젝트 증거 연결
+- 자동화 프로젝트 요구와 완료 프로젝트·행동 증거 연결
+- 계획 중 프로젝트와 근거가 없는 경험의 `partial`/`unknown` 구분
 
-현재 구현은 공식 인크루트 RSS를 읽고 로컬 JSON에 신규 후보를 저장하며, 구조화된 예제 공고의 기술 요구사항을 규칙 기반으로 비교합니다. 아직 LLM 호출, 상세 공고 수집, 전체 매칭 분석 또는 Slack 연동은 하지 않습니다.
+현재 구현은 공식 인크루트 RSS를 읽고 로컬 JSON에 신규 후보를 저장하며, 구조화된 예제 공고의 기술 및 경험 요구사항을 규칙 기반으로 비교합니다. 아직 LLM 호출, 상세 공고 수집, 통합 매칭 결과 또는 Slack 연동은 하지 않습니다.
 
 ## 예상 MVP 흐름
 
@@ -252,6 +265,6 @@ MVP가 실제로 유용하다고 판단되면 다음 기능을 검토합니다.
 
 ## 프로젝트 상태
 
-현재 상태: 자동 공고 발견 및 최소 기술 매칭 기능 구현
+현재 상태: 자동 공고 발견 및 기술·경험 매칭 기능 구현
 
-공식 인크루트 RSS를 읽어 프로필 기반 발견 레코드로 변환하고 실행 간 중복을 제거해 로컬에 저장하는 첫 동작 가능한 기능을 구현했습니다. 실제 첫 실행은 신규 20건, 두 번째 실행은 신규 0건과 중복 20건으로 확인했습니다. 구조화된 예제 공고에서는 Python과 LLM API의 프로젝트 증거, Docker와 AWS의 노출 경험을 구분할 수 있습니다. 다음에는 REST API 연동과 자동화 프로젝트 같은 경험 요구사항을 근거에 연결합니다.
+공식 인크루트 RSS를 읽어 프로필 기반 발견 레코드로 변환하고 실행 간 중복을 제거해 로컬에 저장하는 첫 동작 가능한 기능을 구현했습니다. 실제 첫 실행은 신규 20건, 두 번째 실행은 신규 0건과 중복 20건으로 확인했습니다. 구조화된 예제 공고에서는 Python과 LLM API의 프로젝트 증거, Docker와 AWS의 노출 경험을 구분하고, REST API 연동과 자동화 프로젝트 요구를 실제 프로젝트·행동 근거에 연결할 수 있습니다. 다음에는 분리된 기술·경험 판정을 하나의 매칭 결과로 조합합니다.
