@@ -42,7 +42,7 @@ class ExperienceMatchingTest(unittest.TestCase):
         self.assertEqual(
             "strong_match", matches["automation project"]["assessment"]["result"]
         )
-        self.assertEqual(2, result["summary"]["strong_match"])
+        self.assertEqual(2, result["summary"]["required"]["strong_match"])
         self.assertEqual(
             {"skill", "project"},
             {
@@ -76,6 +76,25 @@ class ExperienceMatchingTest(unittest.TestCase):
         self.assertEqual("unknown", match["assessment"]["result"])
         self.assertEqual([], match["user_evidence"])
         self.assertEqual(["enterprise sales의 실제 수행 경험"], match["unknowns"])
+
+    def test_matches_preferred_experience(self) -> None:
+        posting = deepcopy(self.posting)
+        posting["job_posting"]["preferred_qualifications"].append(
+            {
+                "qualification_id": "qualification-automation-project",
+                "type": "experience",
+                "name": "automation project",
+                "evidence_text": "자동화 프로젝트 경험 우대",
+            }
+        )
+
+        result = match_experience_requirements(self.profile, posting)
+        match = result["preferred_matches"][0]
+
+        self.assertEqual("strong_match", match["assessment"]["result"])
+        self.assertEqual(
+            "preferred_qualifications", match["requirement"]["source_section"]
+        )
 
     def test_planned_project_is_partial_without_completed_evidence(self) -> None:
         profile = deepcopy(self.profile)

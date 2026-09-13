@@ -306,6 +306,61 @@ def _confidence_for(result: str) -> str:
     return "low"
 
 
+def _assess_items(
+    items: list[Any],
+    *,
+    source_section: str,
+    id_field: str,
+    skills: list[dict[str, Any]],
+    projects: list[dict[str, Any]],
+    behaviors: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    matches: list[dict[str, Any]] = []
+    for position, raw_item in enumerate(items):
+        if not isinstance(raw_item, dict):
+            raise ExperienceMatchError(
+                f"job_posting.{source_section}[{position}]는 객체여야 합니다."
+            )
+        if raw_item.get("type") != "experience":
+            continue
+
+        source_id = _required_text(raw_item, id_field)
+        name = _required_text(raw_item, "name")
+        evidence_text = _required_text(raw_item, "evidence_text")
+        result, directness, reason, user_evidence = _assess_experience(
+            _experience_concept(raw_item), skills, projects, behaviors
+        )
+        unknowns = []
+        next_action = None
+        if result == "unknown":
+            unknowns.append(f"{name}의 실제 수행 경험")
+            next_action = f"프로필 자료에서 {name} 수행 경험을 추가 확인"
+        elif result in {"partial", "gap"}:
+            next_action = f"기존 프로젝트에서 {name}의 동작 결과와 증거를 보강"
+
+        matches.append(
+            {
+                "requirement": {
+                    "source_section": source_section,
+                    "source_id": source_id,
+                    "type": "experience",
+                    "name": name,
+                    "evidence_text": evidence_text,
+                },
+                "assessment": {
+                    "result": result,
+                    "directness": directness,
+                    "confidence": _confidence_for(result),
+                    "reason": reason,
+                },
+                "user_evidence": user_evidence,
+                "unknowns": unknowns,
+                "next_action": next_action,
+            }
+        )
+    return matches
+
+
 def match_experience_requirements(
     profile_document: dict[str, Any],
     posting_document: dict[str, Any],
@@ -332,52 +387,29 @@ def match_experience_requirements(
         )
     ]
 
-    matches: list[dict[str, Any]] = []
-    for position, raw_item in enumerate(_required_list(posting, "requirements")):
-        if not isinstance(raw_item, dict):
-            raise ExperienceMatchError(
-                f"job_posting.requirements[{position}]는 객체여야 합니다."
-            )
-        if raw_item.get("type") != "experience":
-            continue
-
-        source_id = _required_text(raw_item, "requirement_id")
-        name = _required_text(raw_item, "name")
-        evidence_text = _required_text(raw_item, "evidence_text")
-        result, directness, reason, user_evidence = _assess_experience(
-            _experience_concept(raw_item), skills, projects, behaviors
-        )
-        unknowns = []
-        next_action = None
-        if result == "unknown":
-            unknowns.append(f"{name}의 실제 수행 경험")
-            next_action = f"프로필 자료에서 {name} 수행 경험을 추가 확인"
-        elif result in {"partial", "gap"}:
-            next_action = f"기존 프로젝트에서 {name}의 동작 결과와 증거를 보강"
-
-        matches.append(
-            {
-                "requirement": {
-                    "source_section": "requirements",
-                    "source_id": source_id,
-                    "type": "experience",
-                    "name": name,
-                    "evidence_text": evidence_text,
-                },
-                "assessment": {
-                    "result": result,
-                    "directness": directness,
-                    "confidence": _confidence_for(result),
-                    "reason": reason,
-                },
-                "user_evidence": user_evidence,
-                "unknowns": unknowns,
-                "next_action": next_action,
-            }
-        )
+    required_matches = _assess_items(
+        _required_list(posting, "requirements"),
+        source_section="requirements",
+        id_field="requirement_id",
+        skills=skills,
+        projects=projects,
+        behaviors=behaviors,
+    )
+    preferred_matches = _assess_items(
+        _required_list(posting, "preferred_qualifications"),
+        source_section="preferred_qualifications",
+        id_field="qualification_id",
+        skills=skills,
+        projects=projects,
+        behaviors=behaviors,
+    )
 
     return {
         "scope": "experience_requirements_only",
-        "summary": _summarize(matches),
-        "required_matches": matches,
+        "summary": {
+            "required": _summarize(required_matches),
+            "preferred": _summarize(preferred_matches),
+        },
+        "required_matches": required_matches,
+        "preferred_matches": preferred_matches,
     }

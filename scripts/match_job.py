@@ -9,25 +9,22 @@ import sys
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
-from career_agent.matching import (  # noqa: E402
-    ExperienceMatchError,
-    match_experience_requirements,
-)
+from career_agent.matching import RequirementMatchError, match_job_requirements  # noqa: E402
 
 
 def _load_json(path: Path) -> dict:
     try:
         document = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise ExperienceMatchError(f"JSON 파일을 읽을 수 없습니다: {path}: {error}") from error
+        raise RequirementMatchError(f"JSON 파일을 읽을 수 없습니다: {path}: {error}") from error
     if not isinstance(document, dict):
-        raise ExperienceMatchError(f"최상위 JSON은 객체여야 합니다: {path}")
+        raise RequirementMatchError(f"최상위 JSON은 객체여야 합니다: {path}")
     return document
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="사용자 프로필과 채용공고의 경험 요구사항만 비교합니다."
+        description="사용자 프로필과 채용공고의 필수·우대 조건을 비교합니다."
     )
     parser.add_argument(
         "--profile",
@@ -44,17 +41,14 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _print_section(title: str, matches: list[dict]) -> None:
     print(title)
-    if not matches:
-        print("- 평가할 경험 항목 없음")
-        return
     for item in matches:
         requirement = item["requirement"]
         assessment = item["assessment"]
         print(f"- {requirement['name']}: {assessment['result']}")
         print(f"  공고 근거: {requirement['evidence_text']}")
         print(f"  판단: {assessment['reason']}")
-        for evidence in item["user_evidence"]:
-            print(f"  사용자 근거: {evidence['source_name']} - {evidence['detail']}")
+    if not matches:
+        print("- 평가할 조건 없음")
 
 
 def main() -> int:
@@ -64,18 +58,18 @@ def main() -> int:
 
     args = _build_parser().parse_args()
     try:
-        result = match_experience_requirements(
+        result = match_job_requirements(
             _load_json(args.profile),
             _load_json(args.posting),
         )
-    except ExperienceMatchError as error:
-        print(f"경험 요구사항 비교 실패: {error}", file=sys.stderr)
+    except RequirementMatchError as error:
+        print(f"통합 요구사항 비교 실패: {error}", file=sys.stderr)
         return 1
 
-    print("경험 요구사항 비교 결과")
-    print("주의: 지원 조건과 최종 지원 추천은 아직 평가하지 않습니다.")
-    _print_section("필수 경험", result["required_matches"])
-    _print_section("우대 경험", result["preferred_matches"])
+    print("통합 요구사항 비교 결과")
+    print("주의: 지원 가능 조건, 주요 업무와 최종 지원 추천은 아직 평가하지 않습니다.")
+    _print_section("필수 조건", result["required_matches"])
+    _print_section("우대 조건", result["preferred_matches"])
     return 0
 
 
