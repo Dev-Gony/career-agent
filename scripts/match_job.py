@@ -72,6 +72,31 @@ def _print_recommendation(recommendation: dict) -> None:
     print(f"- 해석: {recommendation['interpretation']}")
 
 
+def _print_insights(result: dict) -> None:
+    print("지원 시 강조할 강점")
+    for strength in result["strengths"]:
+        print(f"- {strength['title']}")
+        print(f"  연결 조건: {', '.join(strength['related_requirements'])}")
+        print(f"  판단: {strength['reason']}")
+    if not result["strengths"]:
+        print("- 확인된 강점 없음")
+
+    print("확인된 부족")
+    for gap in result["gaps"]:
+        print(f"- {gap['name']} [{gap['priority']}]")
+        print(f"  판단: {gap['reason']}")
+        print(f"  다음 행동: {gap['recommended_action']}")
+    if not result["gaps"]:
+        print("- 확인된 부족 없음")
+
+    print("추가 확인 필요")
+    for unknown in result["unknowns"]:
+        print(f"- {unknown['subject']} [{unknown['impact']}]")
+        print(f"  확인: {unknown['question']}")
+    if not result["unknowns"]:
+        print("- 추가 확인 항목 없음")
+
+
 def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -93,6 +118,7 @@ def main() -> int:
     _print_section("우대 조건", result["preferred_matches"])
     _print_section("주요 업무", result["responsibility_matches"])
     _print_eligibility(result["eligibility"])
+    _print_insights(result)
     _print_recommendation(result["application_recommendation"])
     return 0
 

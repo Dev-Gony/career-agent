@@ -165,7 +165,7 @@ def _assess_items(
             unknowns.append(f"{name}의 실제 사용 경험")
             next_action = f"프로필 자료에서 {name} 사용 경험을 추가 확인"
         elif result == "gap":
-            next_action = f"기존 프로젝트에서 {name}을 실제로 사용해 증거 확보"
+            next_action = f"기존 프로젝트에 {name} 적용 후 동작 증거 확보"
 
         matches.append(
             {

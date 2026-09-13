@@ -60,7 +60,7 @@ class RequirementMatchingServiceTest(unittest.TestCase):
         )
         self.assertEqual(4, result["summary"]["responsibilities"]["total"])
         self.assertEqual(
-            ["strengths", "gaps", "unknowns"],
+            ["identity", "analysis_notes"],
             result["metadata"]["incomplete_sections"],
         )
 

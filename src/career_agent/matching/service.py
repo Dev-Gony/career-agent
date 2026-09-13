@@ -7,6 +7,7 @@ from typing import Any
 
 from .eligibility import EligibilityMatchError, assess_eligibility
 from .experience import ExperienceMatchError, match_experience_requirements
+from .insights import MatchInsightsError, build_match_insights
 from .recommendation import RecommendationError, build_application_recommendation
 from .responsibility import ResponsibilityMatchError, match_responsibilities
 from .technology import TechnologyMatchError, match_technology_requirements
@@ -179,6 +180,12 @@ def match_job_requirements(
         seen_source_ids=seen_source_ids,
     )
     try:
+        insights = build_match_insights(
+            required_matches,
+            preferred_matches,
+            responsibility["responsibility_matches"],
+            eligibility,
+        )
         application_recommendation = build_application_recommendation(
             required_matches,
             preferred_matches,
@@ -186,7 +193,7 @@ def match_job_requirements(
             responsibility_matches=responsibility["responsibility_matches"],
             responsibilities_evaluated=True,
         )
-    except RecommendationError as error:
+    except (MatchInsightsError, RecommendationError) as error:
         raise RequirementMatchError(str(error)) from error
 
     return {
@@ -204,14 +211,16 @@ def match_job_requirements(
         "required_matches": required_matches,
         "preferred_matches": preferred_matches,
         "responsibility_matches": responsibility["responsibility_matches"],
+        "strengths": insights["strengths"],
+        "gaps": insights["gaps"],
+        "unknowns": insights["unknowns"],
         "application_recommendation": application_recommendation,
         "metadata": {
             "matching_rules_version": "0.1",
             "analysis_mode": "mvp_rule_based",
             "incomplete_sections": [
-                "strengths",
-                "gaps",
-                "unknowns",
+                "identity",
+                "analysis_notes",
             ],
         },
     }
