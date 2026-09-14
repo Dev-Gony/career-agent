@@ -72,11 +72,12 @@
     inputs:
       profile_id: "sample-user-001"
       profile_schema_version: "0.1"
+      profile_content_sha256: "비공개 실행에서 계산한 64자리 SHA-256"
       posting_id: "job-001"
       posting_source_url: "https://example.com/jobs/ai-automation-engineer"
       posting_collected_at: "2026-09-13"
 
-향후 실제 자동 수집을 구현하면 입력 파일의 해시 또는 공고의 `content_hash`를 추가한다.
+`profile_content_sha256`은 프로필 원문을 결과에 복제하지 않고 이전 분석과 입력 내용이 같은지 비교하기 위한 로컬 지문이다. 이 값만으로 프로필 내용을 복원하거나 사용자 적합도를 판단하지 않는다.
 
 ## 6. summary
 
@@ -335,6 +336,7 @@
     metadata:
       schema_version: "0.1"
       matching_rules_version: "0.1"
+      analysis_pipeline_version: "0.1"
       analysis_mode: "mvp_rule_based"
       generated_by: "career-agent"
       human_review_status: "not_reviewed"
@@ -347,6 +349,8 @@
 - accepted
 
 사용자가 직접 검토하지 않은 결과는 `reviewed` 또는 `accepted`로 기록하지 않는다.
+
+매칭 규칙이나 공고 구조화 절차가 바뀌면 각각 `matching_rules_version` 또는 `analysis_pipeline_version`을 올린다. 자동 재사용은 두 버전이 현재 코드와 모두 같을 때만 허용한다.
 
 ## 19. 첫 MVP 필수 필드
 

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import datetime
+import hashlib
+import json
 from typing import Any
 
 from career_agent.ingestion import (
@@ -16,6 +18,9 @@ from career_agent.matching import RequirementMatchError, match_job_requirements
 
 class GreenhouseAnalysisError(RuntimeError):
     """Raised when the end-to-end Greenhouse analysis cannot be completed."""
+
+
+ANALYSIS_PIPELINE_VERSION = "0.1"
 
 
 def analyze_greenhouse_job(
@@ -91,6 +96,7 @@ def build_persistable_match_result(
         {
             "profile_id": profile_id,
             "profile_schema_version": _schema_version(profile_document),
+            "profile_content_sha256": profile_content_sha256(profile_document),
             "posting_id": posting_id,
             "posting_source_url": source_url,
             "posting_collected_at": collected_at,
@@ -128,6 +134,7 @@ def build_persistable_match_result(
         {
             "schema_version": "0.1",
             "generated_by": "career-agent",
+            "analysis_pipeline_version": ANALYSIS_PIPELINE_VERSION,
             "human_review_status": "not_reviewed",
         }
     )
@@ -137,6 +144,21 @@ def build_persistable_match_result(
         if section not in {"identity", "analysis_notes"}
     ]
     return result
+
+
+def profile_content_sha256(profile_document: dict[str, Any]) -> str:
+    """Return a deterministic local comparison fingerprint for profile content."""
+
+    try:
+        serialized = json.dumps(
+            profile_document,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    except (TypeError, ValueError) as error:
+        raise GreenhouseAnalysisError("프로필을 비교용 지문으로 변환할 수 없음") from error
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
 def _required_mapping(document: dict[str, Any], key: str) -> dict[str, Any]:

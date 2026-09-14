@@ -56,6 +56,7 @@
       feed_url: "https://www.incruit.com/rss/job.asp?occ1=150"
       source_url: "https://example.com/jobs/0000000000000"
       published_at: "2026-09-11T21:09:01+09:00"
+      updated_at: null
       discovered_at: "2026-09-13T09:00:00+09:00"
       policy_checked_at: "2026-09-13"
 
@@ -70,6 +71,8 @@
 - permitted_html
 
 `permitted_html`은 이용약관과 robots 정책을 모두 확인해 자동 접근이 허용된 경우에만 사용한다.
+
+`updated_at`은 공급자가 명시적으로 제공할 때만 기록한다. Greenhouse Agent는 이 값이 없으면 공고가 그대로라고 추정하지 않고 기존 상세 분석을 재사용하지 않는다.
 
 ## 6. summary
 

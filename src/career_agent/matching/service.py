@@ -13,6 +13,9 @@ from .responsibility import ResponsibilityMatchError, match_responsibilities
 from .technology import TechnologyMatchError, match_technology_requirements
 
 
+MATCHING_RULES_VERSION = "0.1"
+
+
 class RequirementMatchError(ValueError):
     """Raised when a combined requirement result cannot be built safely."""
 
@@ -216,7 +219,7 @@ def match_job_requirements(
         "unknowns": insights["unknowns"],
         "application_recommendation": application_recommendation,
         "metadata": {
-            "matching_rules_version": "0.1",
+            "matching_rules_version": MATCHING_RULES_VERSION,
             "analysis_mode": "mvp_rule_based",
             "incomplete_sections": [
                 "identity",

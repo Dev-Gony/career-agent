@@ -82,6 +82,7 @@ def run_greenhouse_discovery(
             record["identity"]["external_id"]
             for record in batch_result["records"]
         ],
+        "current_records": batch_result["records"],
         "item_errors": batch_result["errors"],
         "new_records": len(store_result["new_records"]),
         "duplicate_records": len(store_result["duplicate_keys"]),

@@ -8,6 +8,7 @@
     "inputs": {
       "profile_id": "sample-user-001",
       "profile_schema_version": "0.1",
+      "profile_content_sha256": "931478a0604874fd54b89dd3f0407c27c04b50d659397f54976eb2d355dedb8a",
       "posting_id": "job-001",
       "posting_source_url": "https://example.com/jobs/ai-automation-engineer",
       "posting_collected_at": "2026-09-13"
@@ -468,6 +469,7 @@
     "metadata": {
       "schema_version": "0.1",
       "matching_rules_version": "0.1",
+      "analysis_pipeline_version": "0.1",
       "analysis_mode": "expected_example",
       "generated_by": "career-agent-design",
       "human_review_status": "not_reviewed",

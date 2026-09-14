@@ -53,6 +53,8 @@ class GreenhouseAnalysisWorkflowTest(unittest.TestCase):
             result["inputs"]["posting_source_url"],
         )
         self.assertEqual("not_reviewed", result["metadata"]["human_review_status"])
+        self.assertEqual("0.1", result["metadata"]["analysis_pipeline_version"])
+        self.assertEqual(64, len(result["inputs"]["profile_content_sha256"]))
         self.assertEqual([], result["metadata"]["incomplete_sections"])
         self.assertIn("facts", result["analysis_notes"])
         self.assertNotIn("profile", actual)

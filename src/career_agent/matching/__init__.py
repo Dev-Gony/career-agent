@@ -5,7 +5,11 @@ from .experience import ExperienceMatchError, match_experience_requirements
 from .insights import MatchInsightsError, build_match_insights
 from .recommendation import RecommendationError, build_application_recommendation
 from .responsibility import ResponsibilityMatchError, match_responsibilities
-from .service import RequirementMatchError, match_job_requirements
+from .service import (
+    MATCHING_RULES_VERSION,
+    RequirementMatchError,
+    match_job_requirements,
+)
 from .technology import TechnologyMatchError, match_technology_requirements
 
 __all__ = [
@@ -20,6 +24,7 @@ __all__ = [
     "ResponsibilityMatchError",
     "match_responsibilities",
     "RequirementMatchError",
+    "MATCHING_RULES_VERSION",
     "match_job_requirements",
     "TechnologyMatchError",
     "match_technology_requirements",

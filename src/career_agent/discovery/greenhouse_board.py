@@ -77,6 +77,7 @@ def _build_record(
     location_text = _required_text(location, "name")
     employment_text = _employment_from_title(title)
     published_at = _optional_text(job.get("first_published"))
+    updated_at = _optional_text(job.get("updated_at"))
     deadline_text = _optional_text(job.get("application_deadline"))
 
     summary = {
@@ -105,6 +106,7 @@ def _build_record(
             "board_token": board_token,
             "source_url": source_url,
             "published_at": published_at,
+            "updated_at": updated_at,
             "discovered_at": discovered_at.isoformat(timespec="seconds"),
             "policy_checked_at": policy_checked_at.isoformat(),
         },

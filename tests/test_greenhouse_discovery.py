@@ -67,6 +67,9 @@ class GreenhouseDiscoveryTest(unittest.TestCase):
         )
         self.assertEqual("available", records[0]["availability"]["detail_status"])
         self.assertFalse(records[0]["availability"]["match_ready"])
+        self.assertEqual(
+            "2026-09-14T10:00:00+09:00", records[0]["source"]["updated_at"]
+        )
         self.assertNotIn("content", records[0])
 
     def test_keeps_valid_job_and_reports_invalid_job(self) -> None:
@@ -106,6 +109,7 @@ class GreenhouseDiscoveryTest(unittest.TestCase):
                 )
 
         self.assertEqual(1, first["new_records"])
+        self.assertEqual("100", first["current_records"][0]["identity"]["external_id"])
         self.assertEqual({"high": 1}, first["new_record_priorities"])
         self.assertEqual(0, second["new_records"])
         self.assertEqual(1, second["duplicate_records"])

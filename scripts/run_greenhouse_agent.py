@@ -20,6 +20,7 @@ DEFAULT_BOARD = "sendbird"
 DEFAULT_PROFILE = REPOSITORY_ROOT / "data/user_profile.example.json"
 DEFAULT_SEARCH_PLAN = REPOSITORY_ROOT / "data/job_search_plan.example.json"
 DEFAULT_STORE_PATH = REPOSITORY_ROOT / "private-data/discoveries.json"
+DEFAULT_RUN_DIRECTORY = REPOSITORY_ROOT / "private-data/agent-runs"
 POLICY_CHECKED_AT = date(2026, 9, 14)
 
 
@@ -41,8 +42,35 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--profile", type=Path, default=DEFAULT_PROFILE)
     parser.add_argument("--search-plan", type=Path, default=DEFAULT_SEARCH_PLAN)
     parser.add_argument("--store", type=Path, default=DEFAULT_STORE_PATH)
+    parser.add_argument("--run-directory", type=Path, default=DEFAULT_RUN_DIRECTORY)
     parser.add_argument("--output", type=Path)
     return parser
+
+
+def _load_previous_runs(directory: Path) -> tuple[list[dict], dict[str, Path]]:
+    if not directory.exists():
+        return [], {}
+    if not directory.is_dir():
+        raise GreenhouseAgentError(f"분석 실행 저장 경로가 디렉터리가 아님: {directory}")
+
+    runs: list[dict] = []
+    paths_by_analysis_id: dict[str, Path] = {}
+    for path in sorted(directory.glob("*.json")):
+        document = _load_json(path)
+        runs.append(document)
+        analysis_id = _analysis_id(document)
+        if isinstance(analysis_id, str) and analysis_id:
+            paths_by_analysis_id[analysis_id] = path
+    return runs, paths_by_analysis_id
+
+
+def _analysis_id(document: dict) -> str | None:
+    value: object = document
+    for key in ("analysis", "match_result", "identity", "analysis_id"):
+        if not isinstance(value, dict):
+            return None
+        value = value.get(key)
+    return value if isinstance(value, str) and value else None
 
 
 def main() -> int:
@@ -51,33 +79,42 @@ def main() -> int:
         sys.stderr.reconfigure(encoding="utf-8")
     args = _build_parser().parse_args()
     try:
+        previous_runs, previous_paths = _load_previous_runs(args.run_directory)
         result = run_greenhouse_agent(
             _load_json(args.profile),
             _load_json(args.search_plan),
             args.store,
             board_token=args.board,
             policy_checked_at=POLICY_CHECKED_AT,
+            previous_runs=previous_runs,
         )
         if result["status"] == "no_high_candidate":
             print("현재 Greenhouse 보드에 high 후보가 없어 상세 분석을 실행하지 않았습니다.")
             return 0
 
         analysis_id = result["analysis"]["match_result"]["identity"]["analysis_id"]
-        output_path = args.output or (
-            REPOSITORY_ROOT / "private-data" / "agent-runs" / f"{analysis_id}.json"
-        )
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(
-            json.dumps(result, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
+        if result["status"] == "reused":
+            output_path = previous_paths.get(analysis_id)
+            if output_path is None:
+                raise GreenhouseAgentError("재사용할 기존 분석 파일 경로를 찾을 수 없음")
+        else:
+            output_path = args.output or args.run_directory / f"{analysis_id}.json"
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(
+                json.dumps(result, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
     except (GreenhouseAgentError, OSError, UnicodeError) as error:
         print(f"Greenhouse Agent 실행 실패: {error}", file=sys.stderr)
         return 1
 
     selection = result["selection"]
     match_result = result["analysis"]["match_result"]
-    print("Greenhouse 자동 발견·분석 완료")
+    if result["status"] == "reused":
+        print("Greenhouse 자동 발견 완료, 기존 상세 분석 재사용")
+        print(f"- 재사용 이유: {result['reuse']['reason']}")
+    else:
+        print("Greenhouse 자동 발견·분석 완료")
     print(f"- 선택: {selection['company']} / {selection['title']}")
     print(f"- 선택 이유: {selection['reason']}")
     print(f"- 지원 판단: {match_result['application_recommendation']['decision']}")
