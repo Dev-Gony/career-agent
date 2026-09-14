@@ -109,6 +109,18 @@ def _print_learning_recommendations(recommendations: list[dict]) -> None:
         print("- 확인된 부족에 근거한 즉시 학습 과제 없음")
 
 
+def _print_portfolio_recommendations(recommendations: list[dict]) -> None:
+    print("포트폴리오 개선 과제")
+    for recommendation in recommendations:
+        print(f"- {recommendation['target_project']}")
+        print(f"  연결 근거: {recommendation['related_gap']}")
+        print(f"  변경: {recommendation['change']}")
+        print(f"  이유: {recommendation['reason']}")
+        print(f"  기대 증거: {recommendation['expected_evidence']}")
+    if not recommendations:
+        print("- 현재 근거로 제안할 기존 프로젝트 개선 없음")
+
+
 def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -132,6 +144,7 @@ def main() -> int:
     _print_eligibility(result["eligibility"])
     _print_insights(result)
     _print_learning_recommendations(result["learning_recommendations"])
+    _print_portfolio_recommendations(result["portfolio_recommendations"])
     _print_recommendation(result["application_recommendation"])
     return 0
 
