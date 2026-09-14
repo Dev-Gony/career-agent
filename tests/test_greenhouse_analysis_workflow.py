@@ -11,7 +11,10 @@ from unittest.mock import patch
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
-from career_agent.workflows import analyze_greenhouse_job  # noqa: E402
+from career_agent.workflows import (  # noqa: E402
+    ANALYSIS_PIPELINE_VERSION,
+    analyze_greenhouse_job,
+)
 
 
 class GreenhouseAnalysisWorkflowTest(unittest.TestCase):
@@ -53,7 +56,10 @@ class GreenhouseAnalysisWorkflowTest(unittest.TestCase):
             result["inputs"]["posting_source_url"],
         )
         self.assertEqual("not_reviewed", result["metadata"]["human_review_status"])
-        self.assertEqual("0.1", result["metadata"]["analysis_pipeline_version"])
+        self.assertEqual(
+            ANALYSIS_PIPELINE_VERSION,
+            result["metadata"]["analysis_pipeline_version"],
+        )
         self.assertEqual(64, len(result["inputs"]["profile_content_sha256"]))
         self.assertEqual([], result["metadata"]["incomplete_sections"])
         self.assertIn("facts", result["analysis_notes"])

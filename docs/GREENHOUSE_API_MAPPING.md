@@ -50,10 +50,12 @@ API 응답의 직접 필드:
 
 본문은 명시적인 섹션 제목이 인식될 때만 다음처럼 분류한다.
 
-- `What you'll actually do`, `Responsibilities`, `주요 업무`: `responsibilities`
+- `What you'll actually do`, `What You Will Do`, `Responsibilities`, `주요 업무`: `responsibilities`
 - `You need to have`, `Requirements`, `자격 요건`: `requirements`
 - `Added Value`, `Preferred Qualifications`, `우대 사항`: `preferred_qualifications`
 - `The Role`, `About the Role`, `직무 소개`: `role.summary`
+
+`Basic Qualifications (N Titles)`처럼 여러 직급의 필수 조건이 한 섹션에 묶인 경우에는 원문에 나온 첫 번째 직급 그룹만 구조화한다. 선택한 직급 이름은 `analysis_notes.facts`에 기록하고, 나머지 직급 조건을 비교하지 않았다는 제한은 `analysis_notes.unknowns`에 남긴다. 현재 구조에서 여러 직급의 서로 다른 경력 조건을 동시에 필수 조건으로 합치지 않기 위한 보수적인 MVP 규칙이다.
 
 기술명은 Python, LLM API, REST API, LangChain/LangGraph, AWS, GCP처럼 명시된 경우만 표준 이름으로 바꾼다. 하나의 문장에 복합 조건이 있으면 임의로 쪼개지 않고 원문 조건을 유지한다.
 
@@ -77,6 +79,7 @@ API 응답의 직접 필드:
 ## 7. 현재 한계
 
 - 회사마다 다른 자유 형식 섹션 제목을 모두 인식하지 못한다.
+- 여러 직급이 묶인 공고는 첫 번째 직급 그룹만 분석하며 사용자에게 맞는 직급을 자동 선택하지 않는다.
 - 한 문장에 여러 조건이 결합된 경우 세부 조건별 판정이 제한된다.
 - 영어, 시스템 설계, 멘토링 같은 조건은 현재 매처에서 `unknown`이 될 수 있다.
 - Greenhouse를 사용하지 않는 기업에는 이 연동을 적용할 수 없다.

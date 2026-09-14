@@ -23,11 +23,16 @@ USER_AGENT = "career-agent-personal-mvp/0.1"
 _BOARD_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,100}$")
 _JOB_ID_PATTERN = re.compile(r"^[0-9]{1,20}$")
 _YEAR_PATTERN = re.compile(r"\b(\d{1,2})\s*\+\s*years?\b", re.I)
+_GROUPED_QUALIFICATIONS_PATTERN = re.compile(
+    r"\bbasic qualifications\s*\(\s*\d+\s+titles?\s*\)",
+    re.I,
+)
 
 _RESPONSIBILITY_HEADINGS = (
     "what you'll actually do",
     "what you will actually do",
     "responsibilities",
+    "what you will do",
     "what you'll do",
     "이런 일을 하실 수 있어요",
     "주요 업무",
@@ -259,6 +264,17 @@ def build_greenhouse_job_posting(
         extraction_unknowns.append("인식 가능한 주요 업무 섹션을 찾지 못함")
     if not sections["requirements"]:
         extraction_unknowns.append("인식 가능한 필수 조건 섹션을 찾지 못함")
+    if sections["requirement_variant"]:
+        extraction_unknowns.append(
+            "직급별 필수 조건 중 선택한 첫 번째 직급 외 조건은 비교하지 않음"
+        )
+
+    variant_facts = []
+    if sections["requirement_variant"]:
+        variant_facts.append(
+            "직급별 필수 조건 중 원문 첫 그룹 "
+            f"'{sections['requirement_variant'][0]}'만 구조화함"
+        )
 
     collection_date = collected_at or date.today()
     return {
@@ -333,6 +349,7 @@ def build_greenhouse_job_posting(
                     "Greenhouse 공개 Job Board API에서 현재 공고 상세를 조회함",
                     f"근무지는 API에서 '{location_name}'로 제공됨",
                     "필수·우대·주요 업무는 인식된 원문 섹션의 항목만 구조화함",
+                    *variant_facts,
                 ],
                 "interpretations": [
                     "섹션 제목과 명시적 기술명에 한정한 규칙 기반 추출 결과",
@@ -449,12 +466,31 @@ def _extract_sections(events: list[tuple[str, str]]) -> dict[str, list[str]]:
         "requirements": [],
         "preferred": [],
         "role": [],
+        "requirement_variant": [],
     }
     active_section: str | None = None
     last_heading = ""
+    grouped_requirements = False
+    requirement_variant_started = False
     for event_type, text in events:
         if event_type == "heading":
-            active_section = _classify_heading(text)
+            classified = _classify_heading(text)
+            if classified is not None:
+                active_section = classified
+                grouped_requirements = (
+                    classified == "requirements"
+                    and _GROUPED_QUALIFICATIONS_PATTERN.search(text) is not None
+                )
+                requirement_variant_started = False
+            elif active_section == "requirements" and grouped_requirements:
+                if not requirement_variant_started:
+                    sections["requirement_variant"].append(text)
+                    requirement_variant_started = True
+                else:
+                    active_section = None
+                    grouped_requirements = False
+            else:
+                active_section = None
             last_heading = text
             continue
         if active_section is None:

@@ -20,7 +20,7 @@ class GreenhouseAnalysisError(RuntimeError):
     """Raised when the end-to-end Greenhouse analysis cannot be completed."""
 
 
-ANALYSIS_PIPELINE_VERSION = "0.1"
+ANALYSIS_PIPELINE_VERSION = "0.2"
 
 
 def analyze_greenhouse_job(

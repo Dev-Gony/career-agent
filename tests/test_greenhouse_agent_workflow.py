@@ -12,6 +12,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
 from career_agent.workflows import (  # noqa: E402
+    ANALYSIS_PIPELINE_VERSION,
     GreenhouseAgentError,
     profile_content_sha256,
     run_greenhouse_agent,
@@ -137,7 +138,7 @@ class GreenhouseAgentWorkflowTest(unittest.TestCase):
                 },
                 "metadata": {
                     "matching_rules_version": MATCHING_RULES_VERSION,
-                    "analysis_pipeline_version": "0.1",
+                    "analysis_pipeline_version": ANALYSIS_PIPELINE_VERSION,
                 },
             },
         }
@@ -192,7 +193,7 @@ class GreenhouseAgentWorkflowTest(unittest.TestCase):
                     "inputs": {"profile_content_sha256": "different"},
                     "metadata": {
                         "matching_rules_version": MATCHING_RULES_VERSION,
-                        "analysis_pipeline_version": "0.1",
+                        "analysis_pipeline_version": ANALYSIS_PIPELINE_VERSION,
                     },
                 },
             },

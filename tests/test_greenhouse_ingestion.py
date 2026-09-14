@@ -156,6 +156,51 @@ class GreenhouseIngestionTest(unittest.TestCase):
         self.assertEqual("internship", actual["employment"]["type"])
         self.assertEqual("intern", actual["role"]["seniority"])
 
+    def test_maps_first_title_group_without_combining_senior_requirements(
+        self,
+    ) -> None:
+        job = _example_job()
+        job["content"] = """
+        <h2>What You Will Do</h2>
+        <ul><li>Build and maintain machine learning pipelines.</li></ul>
+        <h2>Basic Qualifications (3 Titles)</h2>
+        <h3>Machine Learning Engineer II</h3>
+        <ul>
+          <li>2+ years of software engineering experience.</li>
+          <li>Python development experience.</li>
+        </ul>
+        <h3>Senior Machine Learning Engineer</h3>
+        <ul><li>5+ years of software engineering experience.</li></ul>
+        <h3>Staff Machine Learning Engineer</h3>
+        <ul><li>8+ years of software engineering experience.</li></ul>
+        <h2>Preferred Qualifications</h2>
+        <ul><li>Relevant experience in AdTech.</li></ul>
+        """
+
+        actual = build_greenhouse_job_posting(job, board_token="example")[
+            "job_posting"
+        ]
+
+        self.assertEqual(1, len(actual["responsibilities"]))
+        self.assertEqual(
+            ["software engineering experience", "Python"],
+            [item["name"] for item in actual["requirements"]],
+        )
+        self.assertEqual(2, actual["experience"]["minimum_years"])
+        self.assertEqual(1, len(actual["preferred_qualifications"]))
+        self.assertTrue(
+            any(
+                "Machine Learning Engineer II" in fact
+                for fact in actual["analysis_notes"]["facts"]
+            )
+        )
+        self.assertTrue(
+            any(
+                "첫 번째 직급 외" in unknown
+                for unknown in actual["analysis_notes"]["unknowns"]
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
