@@ -67,6 +67,8 @@ _SENSITIVE_LABEL_PATTERN = re.compile(
 )
 _MARKDOWN_HEADING_PATTERN = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$")
 _BULLET_PATTERN = re.compile(r"^\s*(?:[-*+] |\d+[.)]\s+)(.+)$")
+_EXTRACTION_ID_PATTERN = re.compile(r"^profile-text-extraction-[0-9a-f]{24}$")
+_CANDIDATE_ID_PATTERN = re.compile(r"^candidate-\d{3,6}$")
 
 
 def _mapping(value: Any, name: str) -> Mapping[str, Any]:
@@ -324,3 +326,74 @@ def save_profile_text_extraction(
         if temporary_path is not None and temporary_path.exists():
             temporary_path.unlink()
     return target_path, True
+
+
+def load_profile_text_extraction(
+    extraction_id: str,
+    directory: str | Path,
+) -> dict[str, Any]:
+    """Load and validate one private profile extraction result."""
+
+    normalized_id = _text(extraction_id, "extraction_id")
+    if _EXTRACTION_ID_PATTERN.fullmatch(normalized_id) is None:
+        raise ProfileDocumentError("extraction_id 형식이 올바르지 않음")
+    path = Path(directory) / f"{normalized_id}.json"
+    try:
+        extraction = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ProfileDocumentError(
+            f"프로필 추출 결과를 읽을 수 없음: {path}"
+        ) from error
+    root = _mapping(extraction.get("profile_extraction"), "profile_extraction")
+    source = _mapping(extraction.get("source_document"), "source_document")
+    metadata = _mapping(extraction.get("metadata"), "metadata")
+    if root.get("extraction_id") != normalized_id:
+        raise ProfileDocumentError("추출 결과의 extraction_id가 요청과 일치하지 않음")
+    if metadata.get("schema_version") != PROFILE_TEXT_EXTRACTION_SCHEMA_VERSION:
+        raise ProfileDocumentError("현재 버전의 프로필 추출 결과가 아님")
+    if metadata.get("git_tracking_allowed") is not False:
+        raise ProfileDocumentError("프로필 추출 결과에 Git 제외 표시가 없음")
+    if metadata.get("profile_updated") is not False:
+        raise ProfileDocumentError("검토 전 추출 결과는 프로필 갱신 상태일 수 없음")
+    document_id = _text(source.get("document_id"), "source_document.document_id")
+    candidates = extraction.get("candidates")
+    if not isinstance(candidates, list):
+        raise ProfileDocumentError("candidates 배열이 필요함")
+    candidate_ids: set[str] = set()
+    for position, raw_candidate in enumerate(candidates):
+        candidate = _mapping(raw_candidate, f"candidates[{position}]")
+        candidate_id = _text(
+            candidate.get("candidate_id"), f"candidates[{position}].candidate_id"
+        )
+        if _CANDIDATE_ID_PATTERN.fullmatch(candidate_id) is None:
+            raise ProfileDocumentError(
+                f"candidates[{position}].candidate_id 형식이 올바르지 않음"
+            )
+        if candidate_id in candidate_ids:
+            raise ProfileDocumentError(f"중복 candidate_id: {candidate_id}")
+        candidate_ids.add(candidate_id)
+        if candidate.get("status") != "needs_review":
+            raise ProfileDocumentError(
+                f"candidates[{position}].status는 needs_review여야 함"
+            )
+        _text(candidate.get("profile_section"), f"candidates[{position}].profile_section")
+        _text(candidate.get("text"), f"candidates[{position}].text")
+        evidence = _mapping(
+            candidate.get("source_evidence"),
+            f"candidates[{position}].source_evidence",
+        )
+        if evidence.get("document_id") != document_id:
+            raise ProfileDocumentError(
+                f"candidates[{position}]의 문서 근거가 source_document와 다름"
+            )
+        for field in ("line_start", "line_end"):
+            value = evidence.get(field)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                raise ProfileDocumentError(
+                    f"candidates[{position}].source_evidence.{field}가 올바르지 않음"
+                )
+        if evidence["line_end"] < evidence["line_start"]:
+            raise ProfileDocumentError(
+                f"candidates[{position}]의 원문 줄 범위가 올바르지 않음"
+            )
+    return extraction

@@ -86,13 +86,49 @@ PDF와 DOCX는 원본 저장만 지원하며 현재 텍스트 후보 추출에�
 
 동일 문서와 동일 규칙 버전의 추출은 기존 결과를 재사용한다. 콘솔에는 후보 수와 영역별 수만 표시하고 후보 문장 자체는 출력하지 않는다.
 
-## 7. 현재 한계
+## 7. 후보 승인 또는 거부
+
+`scripts/review_profile_candidate.py`는 추출 후보 한 건에 사용자가 명시한 결정을 기록한다.
+
+    python scripts/review_profile_candidate.py --extraction-id profile-text-extraction-example --candidate-id candidate-001 --decision approve
+
+허용 결정은 다음 두 가지다.
+
+- `approve`: 프로필 갱신안에 포함할 수 있도록 승인
+- `reject`: 프로필 갱신안에서 제외하도록 거부
+
+결과는 `private-data/profile-candidate-reviews/`에 불변 JSON으로 저장한다.
+
+    candidate_review:
+      review_id: "profile-candidate-review-example"
+      reviewed_at: "2026-09-14T16:00:00+09:00"
+      decision: "approve"
+      notes: null
+
+    source:
+      extraction_id: "profile-text-extraction-example"
+      candidate_id: "candidate-001"
+      profile_section: "skills"
+      document_id: "profile-document-resume-example"
+      line_start: 10
+      line_end: 10
+
+    metadata:
+      schema_version: "0.1"
+      contains_personal_data: true
+      contains_candidate_text: false
+      git_tracking_allowed: false
+      profile_updated: false
+
+검토 기록에는 후보 문장을 복제하지 않는다. 동일 후보를 다시 판단해도 이전 기록을 덮어쓰지 않으며 다음 프로필 갱신안 단계에서 가장 최근의 명시적 결정을 선택한다.
+
+## 8. 현재 한계
 
 - 제목 기반 분류이며 문장의 의미를 해석하지 않는다.
 - 한 줄 안의 기술 여러 개를 개별 기술로 분리하지 않는다.
 - 기간, 경력 연수, 숙련도와 성과를 구조화하지 않는다.
-- 후보 승인·거부와 기존 프로필 병합 기능은 아직 없다.
+- 후보 승인·거부 기록은 가능하지만 승인 후보를 프로필 구조로 변환하는 갱신안은 아직 없다.
 - PDF, DOCX와 이미지 OCR 추출은 아직 없다.
 - 외부 LLM을 호출하지 않는다.
 
-다음 단계에서는 후보 한 건씩 승인 또는 거부하는 불변 검토 기록을 만들고, 승인된 후보만 프로필 갱신안에 포함한다.
+다음 단계에서는 같은 후보의 가장 최근 결정을 선택하고 승인된 후보만 프로필 갱신안에 포함한다.
