@@ -48,6 +48,9 @@
       analysis_statuses:
         analyzed_current: 1
         needs_analysis: 9
+      human_review_statuses:
+        reviewed: 0
+        not_reviewed: 10
 
     items:
       - position: 1
@@ -74,9 +77,11 @@
           fit_assessment: null
           recommendation_useful: null
           notes: null
+          review_id: null
+          reviewed_at: null
 
     metadata:
-      schema_version: "0.2"
+      schema_version: "0.3"
       profile_content_sha256: "프로필 원문을 복제하지 않는 비교용 SHA-256"
 
 ## 5. 분석 상태
@@ -122,6 +127,8 @@
 
 결과는 `private-data/human-reviews/`에 원본 큐와 별도인 불변 JSON으로 저장한다. 레코드는 공고 식별자, 회사, 제목, 공식 URL, 분석 ID와 사용자 입력만 포함하며 프로필 원문이나 공고 본문을 복제하지 않는다. 이 저장 함수는 향후 Slack 메시지 또는 버튼이 호출할 수 있는 내부 경계다.
 
+새 검토 큐를 생성하거나 다음 후보를 분석할 때 저장된 피드백을 다시 읽는다. 같은 `candidate_key`와 현재 `analysis_id`에 연결된 기록 중 `reviewed_at`이 가장 최근인 한 건만 큐의 `human_review`에 병합한다. 과거 분석 ID의 판단은 현재 분석에 대한 판단으로 표시하지 않는다. 공고 식별자, 시간대, 허용값 또는 개인정보 제외 표시가 잘못된 피드백 파일은 조용히 무시하지 않고 큐 생성을 실패시킨다.
+
 ## 8. 저장 및 개인정보
 
 - 검토 큐 기본 저장 경로: `private-data/review-queues/`
@@ -136,4 +143,4 @@
 - 가장 최근 분석 실행에 포함된 목록 스냅샷을 사용하므로 먼저 일반 Agent를 실행해 현재 목록을 갱신해야 한다.
 - 큐 생성 자체는 새 공고 상세 본문을 조회하지 않는다.
 - 다음 후보 분석 명령은 필수 조건 또는 주요 업무가 0개로 추출되면 경고한다. 알려진 Moloco 직급 그룹 형식은 첫 번째 직급만 구조화하지만 새로운 형식을 자동으로 추론해 교정하지 않는다.
-- 별도 저장된 사용자 판단을 새 큐 생성과 후보 정렬에 다시 병합하지 않는다.
+- 사용자 판단은 후속 큐에 표시되지만 후보 검색 순위나 추천 규칙을 자동 변경하지 않는다.

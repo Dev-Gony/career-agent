@@ -9,11 +9,12 @@ from pathlib import Path
 import tempfile
 from typing import Any, Mapping
 
-from .queue import REVIEW_QUEUE_SCHEMA_VERSION, GreenhouseReviewQueueError
-
-
-HUMAN_REVIEW_SCHEMA_VERSION = "0.1"
-FIT_ASSESSMENTS = frozenset({"fit", "hold", "not_fit"})
+from .queue import (
+    FIT_ASSESSMENTS,
+    HUMAN_REVIEW_SCHEMA_VERSION,
+    REVIEW_QUEUE_SCHEMA_VERSION,
+    GreenhouseReviewQueueError,
+)
 
 
 def _mapping(value: Any, name: str) -> Mapping[str, Any]:

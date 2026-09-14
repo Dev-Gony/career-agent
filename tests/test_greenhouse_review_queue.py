@@ -13,6 +13,7 @@ sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
 from career_agent.matching import MATCHING_RULES_VERSION  # noqa: E402
 from career_agent.review import (  # noqa: E402
+    HUMAN_REVIEW_SCHEMA_VERSION,
     GreenhouseReviewQueueError,
     build_greenhouse_review_queue,
     save_greenhouse_review_queue,
@@ -46,6 +47,36 @@ def _record(
         "profile_relevance": {
             "priority": priority,
             "reason": f"{priority} 테스트 근거",
+        },
+    }
+
+
+def _human_review(
+    *,
+    reviewed_at: str,
+    review_id: str,
+    fit_assessment: str,
+    analysis_id: str = "analysis-current",
+) -> dict:
+    return {
+        "human_review": {
+            "review_id": review_id,
+            "reviewed_at": reviewed_at,
+            "status": "reviewed",
+            "fit_assessment": fit_assessment,
+            "recommendation_useful": True,
+            "notes": "사용자 판단",
+        },
+        "candidate": {
+            "candidate_key": "greenhouse:example:100",
+            "board_token": "example",
+            "external_job_id": "100",
+        },
+        "source": {"analysis_id": analysis_id},
+        "metadata": {
+            "schema_version": HUMAN_REVIEW_SCHEMA_VERSION,
+            "contains_profile_content": False,
+            "contains_job_description_content": False,
         },
     }
 
@@ -226,6 +257,77 @@ class GreenhouseReviewQueueTest(unittest.TestCase):
 
         self.assertEqual("needs_analysis", queue["items"][0]["analysis_status"])
         self.assertIsNone(queue["items"][0]["analysis_id"])
+
+    def test_merges_latest_review_for_current_analysis(self) -> None:
+        older = _human_review(
+            reviewed_at="2026-09-14T12:00:00+09:00",
+            review_id="review-older",
+            fit_assessment="hold",
+        )
+        newer = _human_review(
+            reviewed_at="2026-09-14T13:00:00+09:00",
+            review_id="review-newer",
+            fit_assessment="fit",
+        )
+
+        queue = build_greenhouse_review_queue(
+            self.discovery,
+            [self._previous_run()],
+            self.profile,
+            self.search_plan,
+            created_at=datetime(2026, 9, 14, 12, tzinfo=timezone.utc),
+            source_run_filename="source.json",
+            limit=1,
+            human_reviews=[newer, older],
+        )
+
+        self.assertEqual("reviewed", queue["items"][0]["human_review"]["status"])
+        self.assertEqual("fit", queue["items"][0]["human_review"]["fit_assessment"])
+        self.assertEqual("review-newer", queue["items"][0]["human_review"]["review_id"])
+        self.assertEqual(1, queue["summary"]["human_review_statuses"]["reviewed"])
+
+    def test_does_not_merge_review_for_stale_analysis(self) -> None:
+        stale = _human_review(
+            reviewed_at="2026-09-14T13:00:00+09:00",
+            review_id="review-stale",
+            fit_assessment="not_fit",
+            analysis_id="analysis-stale",
+        )
+
+        queue = build_greenhouse_review_queue(
+            self.discovery,
+            [self._previous_run()],
+            self.profile,
+            self.search_plan,
+            created_at=datetime(2026, 9, 14, 12, tzinfo=timezone.utc),
+            source_run_filename="source.json",
+            limit=1,
+            human_reviews=[stale],
+        )
+
+        self.assertEqual(
+            "not_reviewed", queue["items"][0]["human_review"]["status"]
+        )
+        self.assertIsNone(queue["items"][0]["human_review"]["review_id"])
+
+    def test_rejects_review_with_inconsistent_candidate_key(self) -> None:
+        invalid = _human_review(
+            reviewed_at="2026-09-14T13:00:00+09:00",
+            review_id="review-invalid",
+            fit_assessment="fit",
+        )
+        invalid["candidate"]["candidate_key"] = "greenhouse:other:100"
+
+        with self.assertRaisesRegex(GreenhouseReviewQueueError, "식별자"):
+            build_greenhouse_review_queue(
+                self.discovery,
+                [self._previous_run()],
+                self.profile,
+                self.search_plan,
+                created_at=datetime(2026, 9, 14, 12, tzinfo=timezone.utc),
+                source_run_filename="source.json",
+                human_reviews=[invalid],
+            )
 
     def test_saves_immutable_metadata_only_snapshot(self) -> None:
         queue = build_greenhouse_review_queue(

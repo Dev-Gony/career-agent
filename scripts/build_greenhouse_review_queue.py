@@ -21,6 +21,7 @@ DEFAULT_PROFILE = REPOSITORY_ROOT / "data/user_profile.example.json"
 DEFAULT_SEARCH_PLAN = REPOSITORY_ROOT / "data/job_search_plan.example.json"
 DEFAULT_RUN_DIRECTORY = REPOSITORY_ROOT / "private-data/agent-runs"
 DEFAULT_QUEUE_DIRECTORY = REPOSITORY_ROOT / "private-data/review-queues"
+DEFAULT_REVIEW_DIRECTORY = REPOSITORY_ROOT / "private-data/human-reviews"
 
 
 def _load_json(path: Path) -> dict:
@@ -40,6 +41,14 @@ def _load_runs(directory: Path) -> list[tuple[Path, dict]]:
         raise GreenhouseReviewQueueError(
             f"분석 실행 저장 경로가 디렉터리가 아님: {directory}"
         )
+    return [(path, _load_json(path)) for path in sorted(directory.glob("*.json"))]
+
+
+def _load_optional_documents(directory: Path) -> list[tuple[Path, dict]]:
+    if not directory.exists():
+        return []
+    if not directory.is_dir():
+        raise GreenhouseReviewQueueError(f"디렉터리가 아님: {directory}")
     return [(path, _load_json(path)) for path in sorted(directory.glob("*.json"))]
 
 
@@ -78,6 +87,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--search-plan", type=Path, default=DEFAULT_SEARCH_PLAN)
     parser.add_argument("--run-directory", type=Path, default=DEFAULT_RUN_DIRECTORY)
     parser.add_argument("--queue-directory", type=Path, default=DEFAULT_QUEUE_DIRECTORY)
+    parser.add_argument(
+        "--review-directory", type=Path, default=DEFAULT_REVIEW_DIRECTORY
+    )
     parser.add_argument("--limit", type=int, default=10)
     return parser
 
@@ -89,6 +101,7 @@ def main() -> int:
     args = _build_parser().parse_args()
     try:
         runs_with_paths = _load_runs(args.run_directory)
+        reviews_with_paths = _load_optional_documents(args.review_directory)
         source_path, source_run = _latest_discovery_run(runs_with_paths)
         queue = build_greenhouse_review_queue(
             source_run["discovery"],
@@ -98,6 +111,7 @@ def main() -> int:
             created_at=datetime.now().astimezone(),
             source_run_filename=source_path.name,
             limit=args.limit,
+            human_reviews=[review for _, review in reviews_with_paths],
         )
         output_path = save_greenhouse_review_queue(queue, args.queue_directory)
     except GreenhouseReviewQueueError as error:
@@ -116,6 +130,10 @@ def main() -> int:
     print(
         "- 상세 분석 필요: "
         f"{summary['analysis_statuses'].get('needs_analysis', 0)}개"
+    )
+    print(
+        "- 사용자 검토 완료: "
+        f"{summary['human_review_statuses'].get('reviewed', 0)}개"
     )
     print(f"- 저장: {output_path}")
     print("주의: 이 큐는 목록 메타데이터만 사용하며 추가 상세 조회를 하지 않습니다.")

@@ -34,6 +34,7 @@ DEFAULT_SEARCH_PLAN = REPOSITORY_ROOT / "data/job_search_plan.example.json"
 DEFAULT_RUN_DIRECTORY = REPOSITORY_ROOT / "private-data/agent-runs"
 DEFAULT_QUEUE_DIRECTORY = REPOSITORY_ROOT / "private-data/review-queues"
 DEFAULT_EXECUTION_DIRECTORY = REPOSITORY_ROOT / "private-data/execution-runs"
+DEFAULT_REVIEW_DIRECTORY = REPOSITORY_ROOT / "private-data/human-reviews"
 
 
 def _load_json(path: Path) -> dict:
@@ -52,6 +53,12 @@ def _load_documents(directory: Path) -> list[tuple[Path, dict]]:
     if not directory.is_dir():
         raise GreenhouseReviewQueueError(f"디렉터리가 아님: {directory}")
     return [(path, _load_json(path)) for path in sorted(directory.glob("*.json"))]
+
+
+def _load_optional_documents(directory: Path) -> list[tuple[Path, dict]]:
+    if not directory.exists():
+        return []
+    return _load_documents(directory)
 
 
 def _created_timestamp(document: dict) -> float:
@@ -102,6 +109,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--run-directory", type=Path, default=DEFAULT_RUN_DIRECTORY)
     parser.add_argument("--queue-directory", type=Path, default=DEFAULT_QUEUE_DIRECTORY)
     parser.add_argument(
+        "--review-directory", type=Path, default=DEFAULT_REVIEW_DIRECTORY
+    )
+    parser.add_argument(
         "--execution-directory",
         type=Path,
         default=DEFAULT_EXECUTION_DIRECTORY,
@@ -123,6 +133,7 @@ def main() -> int:
         candidate = select_next_greenhouse_review_candidate(queue, profile)
         source_path, source_run = _source_run(queue, args.run_directory)
         runs_with_paths = _load_documents(args.run_directory)
+        reviews_with_paths = _load_optional_documents(args.review_directory)
 
         analysis = analyze_greenhouse_job(
             profile,
@@ -144,6 +155,7 @@ def main() -> int:
             created_at=execution_time,
             source_run_filename=source_path.name,
             limit=queue["review_queue"]["limit"],
+            human_reviews=[review for _, review in reviews_with_paths],
         )
 
         analysis_path = save_greenhouse_review_analysis_run(
@@ -208,6 +220,10 @@ def main() -> int:
     print(f"- 포트폴리오 과제: {len(result['portfolio_recommendations'])}개")
     print(f"- 현재 큐 분석 완료: {summary.get('analyzed_current', 0)}개")
     print(f"- 현재 큐 분석 필요: {summary.get('needs_analysis', 0)}개")
+    print(
+        "- 사용자 검토 완료: "
+        f"{updated_queue['summary']['human_review_statuses'].get('reviewed', 0)}개"
+    )
     print(f"- 분석 저장: {analysis_path}")
     print(f"- 갱신 큐: {updated_queue_path}")
     print(f"- 실행 이력: {execution_path}")

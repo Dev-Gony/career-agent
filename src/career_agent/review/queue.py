@@ -16,7 +16,9 @@ from career_agent.matching import MATCHING_RULES_VERSION
 from career_agent.workflows import ANALYSIS_PIPELINE_VERSION, profile_content_sha256
 
 
-REVIEW_QUEUE_SCHEMA_VERSION = "0.2"
+REVIEW_QUEUE_SCHEMA_VERSION = "0.3"
+HUMAN_REVIEW_SCHEMA_VERSION = "0.1"
+FIT_ASSESSMENTS = frozenset({"fit", "hold", "not_fit"})
 _PRIORITY_ORDER = {"high": 0, "medium": 1, "review": 2}
 _ASSESSMENT_ORDER = {"match": 0, "unknown": 1, "mismatch": 2}
 _TOKEN_PATTERN = re.compile(r"[A-Za-z0-9]+|[가-힣]+")
@@ -235,12 +237,122 @@ def _current_analysis(
     return None, "not_reviewed"
 
 
+def _review_timestamp(value: Any, name: str) -> tuple[float, str]:
+    text = _text(value, name)
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError as error:
+        raise GreenhouseReviewQueueError(f"{name} 날짜 형식이 올바르지 않음") from error
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise GreenhouseReviewQueueError(f"{name}은 시간대가 포함되어야 함")
+    return parsed.timestamp(), text
+
+
+def _human_review_index(
+    human_reviews: Iterable[Mapping[str, Any]],
+) -> dict[tuple[str, str], dict[str, Any]]:
+    latest: dict[tuple[str, str], tuple[tuple[float, str], dict[str, Any]]] = {}
+    for position, raw_review in enumerate(human_reviews):
+        review = _mapping(raw_review, f"human_reviews[{position}]")
+        root = _mapping(
+            review.get("human_review"), f"human_reviews[{position}].human_review"
+        )
+        candidate = _mapping(
+            review.get("candidate"), f"human_reviews[{position}].candidate"
+        )
+        source = _mapping(review.get("source"), f"human_reviews[{position}].source")
+        metadata = _mapping(
+            review.get("metadata"), f"human_reviews[{position}].metadata"
+        )
+        if metadata.get("schema_version") != HUMAN_REVIEW_SCHEMA_VERSION:
+            raise GreenhouseReviewQueueError(
+                f"human_reviews[{position}]의 스키마 버전이 올바르지 않음"
+            )
+        if metadata.get("contains_profile_content") is not False:
+            raise GreenhouseReviewQueueError(
+                f"human_reviews[{position}]에 프로필 내용 제외 표시가 없음"
+            )
+        if metadata.get("contains_job_description_content") is not False:
+            raise GreenhouseReviewQueueError(
+                f"human_reviews[{position}]에 공고 본문 제외 표시가 없음"
+            )
+
+        review_id = _text(
+            root.get("review_id"),
+            f"human_reviews[{position}].human_review.review_id",
+        )
+        reviewed_order = _review_timestamp(
+            root.get("reviewed_at"),
+            f"human_reviews[{position}].human_review.reviewed_at",
+        )
+        if root.get("status") != "reviewed":
+            raise GreenhouseReviewQueueError(
+                f"human_reviews[{position}].human_review.status는 reviewed여야 함"
+            )
+        fit_assessment = root.get("fit_assessment")
+        if fit_assessment not in FIT_ASSESSMENTS:
+            raise GreenhouseReviewQueueError(
+                f"human_reviews[{position}].human_review.fit_assessment가 올바르지 않음"
+            )
+        recommendation_useful = root.get("recommendation_useful")
+        if recommendation_useful is not None and not isinstance(
+            recommendation_useful, bool
+        ):
+            raise GreenhouseReviewQueueError(
+                f"human_reviews[{position}].human_review.recommendation_useful이 올바르지 않음"
+            )
+        notes = root.get("notes")
+        if notes is not None and (
+            not isinstance(notes, str) or not notes.strip() or len(notes) > 1000
+        ):
+            raise GreenhouseReviewQueueError(
+                f"human_reviews[{position}].human_review.notes가 올바르지 않음"
+            )
+
+        board_token = _text(
+            candidate.get("board_token"),
+            f"human_reviews[{position}].candidate.board_token",
+        )
+        external_job_id = _text(
+            candidate.get("external_job_id"),
+            f"human_reviews[{position}].candidate.external_job_id",
+        )
+        candidate_key = _text(
+            candidate.get("candidate_key"),
+            f"human_reviews[{position}].candidate.candidate_key",
+        )
+        expected_key = f"greenhouse:{board_token}:{external_job_id}"
+        if candidate_key != expected_key:
+            raise GreenhouseReviewQueueError(
+                f"human_reviews[{position}]의 공고 식별자가 서로 일치하지 않음"
+            )
+        analysis_id = _text(
+            source.get("analysis_id"),
+            f"human_reviews[{position}].source.analysis_id",
+        )
+        key = (candidate_key, analysis_id)
+        review_value = {
+            "status": "reviewed",
+            "fit_assessment": fit_assessment,
+            "recommendation_useful": recommendation_useful,
+            "notes": notes,
+            "review_id": review_id,
+            "reviewed_at": reviewed_order[1],
+        }
+        existing = latest.get(key)
+        ordering = (reviewed_order[0], review_id)
+        if existing is None or ordering > existing[0]:
+            latest[key] = (ordering, review_value)
+    return {key: value for key, (_, value) in latest.items()}
+
+
 def _queue_item(
     record: Mapping[str, Any],
     *,
     position: int,
     analysis_id: str | None,
     review_status: str,
+    human_review: Mapping[str, Any] | None,
     token_weights: Mapping[str, int],
 ) -> dict[str, Any]:
     board_token, external_id = _candidate_key(record)
@@ -264,11 +376,15 @@ def _queue_item(
         "source_updated_at": source.get("updated_at"),
         "analysis_status": "analyzed_current" if analysis_id else "needs_analysis",
         "analysis_id": analysis_id,
-        "human_review": {
+        "human_review": dict(human_review)
+        if human_review is not None
+        else {
             "status": review_status,
             "fit_assessment": None,
             "recommendation_useful": None,
             "notes": None,
+            "review_id": None,
+            "reviewed_at": None,
         },
     }
 
@@ -282,6 +398,7 @@ def build_greenhouse_review_queue(
     created_at: datetime,
     source_run_filename: str,
     limit: int = 10,
+    human_reviews: Iterable[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
     """Build a ranked snapshot without fetching any additional job content."""
 
@@ -300,6 +417,7 @@ def build_greenhouse_review_queue(
     selected = candidates[:limit]
     profile_hash = profile_content_sha256(profile_document)
     runs = list(previous_runs)
+    review_index = _human_review_index(human_reviews)
     items: list[dict[str, Any]] = []
     for position, record in enumerate(selected, start=1):
         analysis_id, review_status = _current_analysis(
@@ -307,18 +425,25 @@ def build_greenhouse_review_queue(
             record=record,
             profile_hash=profile_hash,
         )
+        board_token, external_id = _candidate_key(record)
+        candidate_key = f"greenhouse:{board_token}:{external_id}"
+        current_human_review = (
+            review_index.get((candidate_key, analysis_id)) if analysis_id else None
+        )
         items.append(
             _queue_item(
                 record,
                 position=position,
                 analysis_id=analysis_id,
                 review_status=review_status,
+                human_review=current_human_review,
                 token_weights=token_weights,
             )
         )
 
     priorities = Counter(item["priority"] for item in items)
     statuses = Counter(item["analysis_status"] for item in items)
+    review_statuses = Counter(item["human_review"]["status"] for item in items)
     queue_id = "greenhouse-review-queue-" + created_at.strftime(
         "%Y%m%dT%H%M%S%f%z"
     )
@@ -335,6 +460,7 @@ def build_greenhouse_review_queue(
             "selected_candidates": len(items),
             "priorities": dict(priorities),
             "analysis_statuses": dict(statuses),
+            "human_review_statuses": dict(review_statuses),
         },
         "items": items,
         "metadata": {
