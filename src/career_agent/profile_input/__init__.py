@@ -20,6 +20,11 @@ from .text_extraction import (
     load_profile_text_extraction,
     save_profile_text_extraction,
 )
+from .update_proposal import (
+    PROFILE_UPDATE_PROPOSAL_SCHEMA_VERSION,
+    build_profile_update_proposal,
+    save_profile_update_proposal,
+)
 
 __all__ = [
     "DOCUMENT_KINDS",
@@ -36,4 +41,7 @@ __all__ = [
     "build_profile_text_extraction",
     "load_profile_text_extraction",
     "save_profile_text_extraction",
+    "PROFILE_UPDATE_PROPOSAL_SCHEMA_VERSION",
+    "build_profile_update_proposal",
+    "save_profile_update_proposal",
 ]

@@ -122,13 +122,53 @@ PDF와 DOCX는 원본 저장만 지원하며 현재 텍스트 후보 추출에�
 
 검토 기록에는 후보 문장을 복제하지 않는다. 동일 후보를 다시 판단해도 이전 기록을 덮어쓰지 않으며 다음 프로필 갱신안 단계에서 가장 최근의 명시적 결정을 선택한다.
 
-## 8. 현재 한계
+## 8. 프로필 갱신안
+
+`scripts/build_profile_update_proposal.py`는 추출 결과에 연결된 검토 기록을 모아 기존 프로필과 분리된 갱신안을 만든다.
+
+    python scripts/build_profile_update_proposal.py --extraction-id profile-text-extraction-example
+
+후보별로 시간대가 포함된 `reviewed_at`이 가장 늦은 결정을 사용한다. 최신 결정이 `approve`인 후보만 `proposed_additions`에 포함하고, `reject`와 미검토 후보는 개수만 요약한다.
+
+    profile_update_proposal:
+      proposal_id: "profile-update-proposal-example"
+      status: "needs_mapping"
+      base_profile_id: "sample-user-001"
+      base_profile_content_sha256: "기준 프로필 전체 SHA-256"
+      source_extraction_id: "profile-text-extraction-example"
+
+    proposed_additions:
+      - proposal_item_id: "proposal-item-001"
+        profile_section: "skills"
+        candidate_text: "Python"
+        mapping_status: "needs_mapping"
+        source_evidence:
+          extraction_id: "profile-text-extraction-example"
+          candidate_id: "candidate-001"
+          document_id: "profile-document-resume-example"
+          line_start: 10
+          line_end: 10
+        approval:
+          review_id: "profile-candidate-review-example"
+          reviewed_at: "2026-09-14T16:00:00+09:00"
+          decision: "approve"
+
+    metadata:
+      schema_version: "0.1"
+      git_tracking_allowed: false
+      profile_updated: false
+
+기준 프로필의 정규화된 JSON 전체에 SHA-256을 계산해 기록한다. 이후 실제 반영 단계에서는 이 지문이 달라졌으면 오래된 갱신안을 거부할 수 있다. 승인 문장은 아직 `USER_PROFILE_SCHEMA`의 중첩 객체로 임의 변환하지 않고 `needs_mapping`으로 남긴다.
+
+결과는 `private-data/profile-update-proposals/`에 저장한다. 같은 기준 프로필, 추출 결과와 최신 검토 집합은 같은 제안 ID를 사용하며 기존 내용이 동일할 때만 재사용한다. 이 명령은 기존 사용자 프로필 파일을 수정하지 않는다.
+
+## 9. 현재 한계
 
 - 제목 기반 분류이며 문장의 의미를 해석하지 않는다.
 - 한 줄 안의 기술 여러 개를 개별 기술로 분리하지 않는다.
 - 기간, 경력 연수, 숙련도와 성과를 구조화하지 않는다.
-- 후보 승인·거부 기록은 가능하지만 승인 후보를 프로필 구조로 변환하는 갱신안은 아직 없다.
+- 승인 후보를 안전한 중간 갱신안에 모을 수 있지만 `USER_PROFILE_SCHEMA`의 세부 객체로 변환하거나 실제 프로필에 적용하지 않는다.
 - PDF, DOCX와 이미지 OCR 추출은 아직 없다.
 - 외부 LLM을 호출하지 않는다.
 
-다음 단계에서는 같은 후보의 가장 최근 결정을 선택하고 승인된 후보만 프로필 갱신안에 포함한다.
+다음 단계에서는 단순한 기술과 목표 직무부터 타입이 있는 프로필 객체로 매핑하되, 사용자 확인 전에는 실제 프로필을 변경하지 않는다.
