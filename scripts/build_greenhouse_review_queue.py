@@ -96,6 +96,7 @@ def main() -> int:
             _load_json(args.profile),
             _load_json(args.search_plan),
             created_at=datetime.now().astimezone(),
+            source_run_filename=source_path.name,
             limit=args.limit,
         )
         output_path = save_greenhouse_review_queue(queue, args.queue_directory)

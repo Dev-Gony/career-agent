@@ -114,6 +114,7 @@ class GreenhouseReviewQueueTest(unittest.TestCase):
             self.profile,
             self.search_plan,
             created_at=datetime(2026, 9, 14, 12, tzinfo=timezone.utc),
+            source_run_filename="source.json",
         )
 
         self.assertEqual(
@@ -135,6 +136,7 @@ class GreenhouseReviewQueueTest(unittest.TestCase):
             self.profile,
             self.search_plan,
             created_at=datetime(2026, 9, 14, 12, tzinfo=timezone.utc),
+            source_run_filename="source.json",
             limit=2,
         )
 
@@ -170,10 +172,44 @@ class GreenhouseReviewQueueTest(unittest.TestCase):
             self.profile,
             self.search_plan,
             created_at=datetime(2026, 9, 14, 12, tzinfo=timezone.utc),
+            source_run_filename="source.json",
         )
 
         self.assertEqual("500", queue["items"][0]["external_job_id"])
         self.assertEqual(["engineer"], queue["items"][0]["broad_role_signals"])
+
+    def test_moves_explicit_preference_mismatch_after_review_candidate(self) -> None:
+        medium_mismatch = _record(
+            "700",
+            "medium",
+            "2026-09-16T10:00:00+09:00",
+            title="AI Agent Engineer, Intern",
+        )
+        medium_mismatch["profile_relevance"]["location_assessment"] = "match"
+        medium_mismatch["profile_relevance"]["employment_assessment"] = "mismatch"
+        review_match = _record(
+            "800",
+            "review",
+            "2026-09-10T10:00:00+09:00",
+            title="Software Engineer",
+        )
+        review_match["profile_relevance"]["location_assessment"] = "match"
+        review_match["profile_relevance"]["employment_assessment"] = "unknown"
+        self.discovery["board_results"][0]["current_records"] = [
+            medium_mismatch,
+            review_match,
+        ]
+
+        queue = build_greenhouse_review_queue(
+            self.discovery,
+            [],
+            self.profile,
+            self.search_plan,
+            created_at=datetime(2026, 9, 14, 12, tzinfo=timezone.utc),
+            source_run_filename="source.json",
+        )
+
+        self.assertEqual("800", queue["items"][0]["external_job_id"])
 
     def test_changed_profile_marks_previous_analysis_as_needing_analysis(self) -> None:
         changed_profile = {"profile": {"basic": {"profile_id": "changed"}}}
@@ -184,6 +220,7 @@ class GreenhouseReviewQueueTest(unittest.TestCase):
             changed_profile,
             self.search_plan,
             created_at=datetime(2026, 9, 14, 12, tzinfo=timezone.utc),
+            source_run_filename="source.json",
             limit=1,
         )
 
@@ -197,6 +234,7 @@ class GreenhouseReviewQueueTest(unittest.TestCase):
             self.profile,
             self.search_plan,
             created_at=datetime(2026, 9, 14, 12, tzinfo=timezone.utc),
+            source_run_filename="source.json",
             limit=1,
         )
 
@@ -220,6 +258,7 @@ class GreenhouseReviewQueueTest(unittest.TestCase):
                 self.profile,
                 self.search_plan,
                 created_at=datetime(2026, 9, 14, 12),
+                source_run_filename="source.json",
             )
 
 

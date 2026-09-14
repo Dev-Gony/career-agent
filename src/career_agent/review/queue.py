@@ -16,7 +16,7 @@ from career_agent.matching import MATCHING_RULES_VERSION
 from career_agent.workflows import ANALYSIS_PIPELINE_VERSION, profile_content_sha256
 
 
-REVIEW_QUEUE_SCHEMA_VERSION = "0.1"
+REVIEW_QUEUE_SCHEMA_VERSION = "0.2"
 _PRIORITY_ORDER = {"high": 0, "medium": 1, "review": 2}
 _ASSESSMENT_ORDER = {"match": 0, "unknown": 1, "mismatch": 2}
 _TOKEN_PATTERN = re.compile(r"[A-Za-z0-9]+|[가-힣]+")
@@ -99,6 +99,15 @@ def _assessment_rank(record: Mapping[str, Any], field: str) -> int:
     return _ASSESSMENT_ORDER.get(value, _ASSESSMENT_ORDER["unknown"])
 
 
+def _explicit_mismatch_rank(record: Mapping[str, Any]) -> int:
+    return int(
+        _assessment_rank(record, "location_assessment")
+        == _ASSESSMENT_ORDER["mismatch"]
+        or _assessment_rank(record, "employment_assessment")
+        == _ASSESSMENT_ORDER["mismatch"]
+    )
+
+
 def _target_token_weights(search_plan: Mapping[str, Any]) -> dict[str, int]:
     plan = search_plan.get("job_search_plan", search_plan)
     plan = _mapping(plan, "job_search_plan")
@@ -163,6 +172,7 @@ def _sorted_unique_candidates(
     return sorted(
         unique.values(),
         key=lambda record: (
+            _explicit_mismatch_rank(record),
             _PRIORITY_ORDER[_priority(record) or "review"],
             _assessment_rank(record, "location_assessment"),
             _assessment_rank(record, "employment_assessment"),
@@ -270,6 +280,7 @@ def build_greenhouse_review_queue(
     search_plan: Mapping[str, Any],
     *,
     created_at: datetime,
+    source_run_filename: str,
     limit: int = 10,
 ) -> dict[str, Any]:
     """Build a ranked snapshot without fetching any additional job content."""
@@ -280,6 +291,9 @@ def build_greenhouse_review_queue(
         raise GreenhouseReviewQueueError("limit은 1 이상 50 이하 정수여야 함")
     if not isinstance(profile_document, dict):
         raise GreenhouseReviewQueueError("프로필은 JSON 객체여야 함")
+    if Path(source_run_filename).name != source_run_filename:
+        raise GreenhouseReviewQueueError("source_run_filename은 파일명이어야 함")
+    _text(source_run_filename, "source_run_filename")
 
     token_weights = _target_token_weights(search_plan)
     candidates = _sorted_unique_candidates(_current_records(discovery), token_weights)
@@ -313,6 +327,7 @@ def build_greenhouse_review_queue(
             "queue_id": queue_id,
             "created_at": created_at.isoformat(timespec="microseconds"),
             "source_discovery_executed_at": discovery.get("executed_at"),
+            "source_run_filename": source_run_filename,
             "limit": limit,
         },
         "summary": {
@@ -326,6 +341,7 @@ def build_greenhouse_review_queue(
             "schema_version": REVIEW_QUEUE_SCHEMA_VERSION,
             "matching_rules_version": MATCHING_RULES_VERSION,
             "analysis_pipeline_version": ANALYSIS_PIPELINE_VERSION,
+            "profile_content_sha256": profile_hash,
             "contains_profile_content": False,
             "contains_job_description_content": False,
         },
