@@ -5,6 +5,12 @@ from .analysis import (
     save_greenhouse_review_analysis_run,
     select_next_greenhouse_review_candidate,
 )
+from .feedback import (
+    FIT_ASSESSMENTS,
+    HUMAN_REVIEW_SCHEMA_VERSION,
+    build_greenhouse_human_review,
+    save_greenhouse_human_review,
+)
 from .queue import (
     GreenhouseReviewQueueError,
     build_greenhouse_review_queue,
@@ -12,8 +18,12 @@ from .queue import (
 )
 
 __all__ = [
+    "FIT_ASSESSMENTS",
+    "HUMAN_REVIEW_SCHEMA_VERSION",
+    "build_greenhouse_human_review",
     "build_greenhouse_review_analysis_run",
     "save_greenhouse_review_analysis_run",
+    "save_greenhouse_human_review",
     "select_next_greenhouse_review_candidate",
     "GreenhouseReviewQueueError",
     "build_greenhouse_review_queue",
