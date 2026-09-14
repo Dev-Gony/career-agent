@@ -7,6 +7,7 @@ from hashlib import sha256
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 from typing import Any, Iterable, Mapping
 
@@ -28,6 +29,7 @@ from .update_proposal import profile_content_sha256
 
 PROFILE_SKILL_ADDITION_SCHEMA_VERSION = "0.1"
 PROFILE_SKILL_ADDITION_RULES_VERSION = "0.1"
+_SKILL_ADDITION_ID_PATTERN = re.compile(r"^profile-skill-addition-[0-9a-f]{24}$")
 _MAPPING_STATUSES = frozenset(
     {"no_skill_candidates", "duplicate_only", "needs_confirmation"}
 )
@@ -539,3 +541,32 @@ def save_profile_skill_addition_proposal(
         if temporary_path is not None and temporary_path.exists():
             temporary_path.unlink()
     return target_path, True
+
+
+def load_profile_skill_addition_proposal(
+    proposal_id: str,
+    directory: str | Path,
+) -> dict[str, Any]:
+    """Load one private skill addition proposal without path traversal."""
+
+    normalized_id = _text(proposal_id, "proposal_id")
+    if _SKILL_ADDITION_ID_PATTERN.fullmatch(normalized_id) is None:
+        raise ProfileDocumentError("skill addition proposal_id 형식이 올바르지 않음")
+    path = Path(directory) / f"{normalized_id}.json"
+    try:
+        proposal = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ProfileDocumentError(f"프로필 기술 추가안을 읽을 수 없음: {path}") from error
+    if not isinstance(proposal, dict):
+        raise ProfileDocumentError("프로필 기술 추가안 최상위 JSON은 객체여야 함")
+    root = _mapping(proposal.get("profile_skill_addition"), "profile_skill_addition")
+    metadata = _mapping(proposal.get("metadata"), "metadata")
+    if root.get("proposal_id") != normalized_id:
+        raise ProfileDocumentError("기술 추가안의 proposal_id가 요청과 일치하지 않음")
+    if metadata.get("schema_version") != PROFILE_SKILL_ADDITION_SCHEMA_VERSION:
+        raise ProfileDocumentError("현재 버전의 기술 추가안이 아님")
+    if metadata.get("git_tracking_allowed") is not False:
+        raise ProfileDocumentError("기술 추가안에 Git 제외 표시가 없음")
+    if metadata.get("profile_updated") is not False:
+        raise ProfileDocumentError("기술 추가안은 프로필 갱신 상태일 수 없음")
+    return proposal

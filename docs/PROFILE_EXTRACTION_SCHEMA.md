@@ -272,14 +272,45 @@ PDF와 DOCX는 원본 저장만 지원하며 현재 텍스트 후보 추출에�
 
 `skill_id`는 매핑 ID, 항목 ID와 정규화된 기술명으로 결정적으로 만든다. 현재 프로필 지문이 매핑 당시와 다르거나 기술명이 기존 프로필과 중복되면 추가안 생성을 거부한다. 결과는 `private-data/profile-skill-additions/`에 저장하며 실제 프로필에는 적용하지 않는다.
 
-## 12. 현재 한계
+## 12. 기술 추가안 최종 검토
+
+완성된 기술 추가안 한 건에 사용자가 명시한 최종 승인 또는 거부를 기록한다.
+
+    python scripts/review_profile_skill_addition.py --proposal-id profile-skill-addition-example --addition-item-id skill-addition-item-001 --decision approve
+
+허용 결정은 `approve`와 `reject`다. 선택 메모는 1000자 이하로 제한한다.
+
+    profile_skill_addition_review:
+      review_id: "profile-skill-addition-review-example"
+      reviewed_at: "2026-09-14T21:00:00+09:00"
+      review_source: "explicit_user_input"
+      decision: "approve"
+      notes: null
+
+    source:
+      addition_proposal_id: "profile-skill-addition-example"
+      addition_item_id: "skill-addition-item-001"
+      base_profile_id: "sample-user-001"
+      base_profile_content_sha256: "기준 프로필 전체 SHA-256"
+      source_mapping_id: "profile-skill-mapping-example"
+      confirmation_id: "profile-skill-confirmation-example"
+
+    metadata:
+      schema_version: "0.1"
+      contains_proposed_skill: false
+      git_tracking_allowed: false
+      profile_updated: false
+
+최종 검토 기록은 기술명, 숙련도와 사용 증거를 자동 복제하지 않고 추가안과 항목만 참조한다. 같은 항목을 다시 판단해도 기존 기록을 덮어쓰지 않는다. 결과는 `private-data/profile-skill-addition-reviews/`에 저장하며 실제 프로필을 변경하지 않는다.
+
+## 13. 현재 한계
 
 - 제목 기반 분류이며 문장의 의미를 해석하지 않는다.
 - 한 줄 안의 기술 여러 개를 개별 기술로 분리하지 않는다.
 - 기간, 경력 연수, 숙련도와 성과를 구조화하지 않는다.
-- 최신 확인을 사용해 완성된 기술 추가안을 만들 수 있지만 최종 승인 기록과 실제 프로필 적용은 아직 없다.
+- 완성된 기술 추가안의 최종 승인·거부는 기록할 수 있지만 후보별 최신 최종 판단 선택과 실제 프로필 적용은 아직 없다.
 - 목표 직무, 경력, 프로젝트와 다른 프로필 영역은 아직 타입 매핑하지 않는다.
 - PDF, DOCX와 이미지 OCR 추출은 아직 없다.
 - 외부 LLM을 호출하지 않는다.
 
-다음 단계에서는 완성된 기술 추가안의 최종 승인 또는 거부를 별도 불변 기록으로 저장하고, 승인 전에는 실제 프로필을 변경하지 않는다.
+다음 단계에서는 후보별 최신 최종 판단이 승인인 기술만 새 버전의 사용자 프로필 파일에 적용하고 기존 프로필 원본을 보존한다.

@@ -47,7 +47,15 @@ from .skill_addition import (
     PROFILE_SKILL_ADDITION_RULES_VERSION,
     PROFILE_SKILL_ADDITION_SCHEMA_VERSION,
     build_profile_skill_addition_proposal,
+    load_profile_skill_addition_proposal,
     save_profile_skill_addition_proposal,
+)
+from .skill_addition_review import (
+    MAX_SKILL_ADDITION_REVIEW_NOTES_CHARS,
+    PROFILE_SKILL_ADDITION_REVIEW_SCHEMA_VERSION,
+    SKILL_ADDITION_REVIEW_DECISIONS,
+    build_profile_skill_addition_review,
+    save_profile_skill_addition_review,
 )
 
 __all__ = [
@@ -80,7 +88,13 @@ __all__ = [
     "PROFILE_SKILL_ADDITION_RULES_VERSION",
     "PROFILE_SKILL_ADDITION_SCHEMA_VERSION",
     "build_profile_skill_addition_proposal",
+    "load_profile_skill_addition_proposal",
     "save_profile_skill_addition_proposal",
+    "MAX_SKILL_ADDITION_REVIEW_NOTES_CHARS",
+    "PROFILE_SKILL_ADDITION_REVIEW_SCHEMA_VERSION",
+    "SKILL_ADDITION_REVIEW_DECISIONS",
+    "build_profile_skill_addition_review",
+    "save_profile_skill_addition_review",
     "PROFILE_UPDATE_PROPOSAL_SCHEMA_VERSION",
     "build_profile_update_proposal",
     "load_profile_update_proposal",
