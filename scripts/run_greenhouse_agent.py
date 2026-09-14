@@ -11,11 +11,11 @@ sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
 from career_agent.config import (  # noqa: E402
     GreenhouseBoardConfigError,
-    load_enabled_greenhouse_board,
+    load_enabled_greenhouse_boards,
 )
 from career_agent.workflows import (  # noqa: E402
     GreenhouseAgentError,
-    run_greenhouse_agent,
+    run_greenhouse_portfolio_agent,
 )
 
 
@@ -81,18 +81,27 @@ def main() -> int:
         sys.stderr.reconfigure(encoding="utf-8")
     args = _build_parser().parse_args()
     try:
-        board = load_enabled_greenhouse_board(_load_json(args.board_config))
+        boards = load_enabled_greenhouse_boards(_load_json(args.board_config))
         previous_runs, previous_paths = _load_previous_runs(args.run_directory)
-        result = run_greenhouse_agent(
+        result = run_greenhouse_portfolio_agent(
             _load_json(args.profile),
             _load_json(args.search_plan),
             args.store,
-            board_token=board["board_token"],
-            policy_checked_at=board["policy_checked_at"],
+            boards=boards,
             previous_runs=previous_runs,
         )
+        discovery = result["discovery"]
+        print(
+            "Greenhouse 보드 조회: "
+            f"성공 {discovery['boards_succeeded']}개, 실패 {discovery['boards_failed']}개"
+        )
+        if discovery["board_errors"]:
+            failed_boards = ", ".join(
+                error["board_token"] for error in discovery["board_errors"]
+            )
+            print(f"- 목록 조회 실패 보드: {failed_boards}")
         if result["status"] == "no_high_candidate":
-            print("현재 Greenhouse 보드에 high 후보가 없어 상세 분석을 실행하지 않았습니다.")
+            print("현재 Greenhouse 보드들에 high 후보가 없어 상세 분석을 실행하지 않았습니다.")
             return 0
 
         analysis_id = result["analysis"]["match_result"]["identity"]["analysis_id"]

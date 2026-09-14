@@ -12,6 +12,7 @@ sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 from career_agent.config import (  # noqa: E402
     GreenhouseBoardConfigError,
     load_enabled_greenhouse_board,
+    load_enabled_greenhouse_boards,
 )
 
 
@@ -50,9 +51,28 @@ class GreenhouseBoardConfigTest(unittest.TestCase):
         self.assertEqual("enabled", actual["board_token"])
         self.assertEqual("2026-09-14", actual["policy_checked_at"].isoformat())
 
-    def test_rejects_multiple_enabled_boards_for_current_mvp(self) -> None:
+    def test_loads_multiple_enabled_boards_for_global_selection(self) -> None:
+        actual = load_enabled_greenhouse_boards(
+            _document(_board("one"), _board("two"))
+        )
+
+        self.assertEqual(["one", "two"], [board["board_token"] for board in actual])
+
+    def test_single_board_loader_rejects_multiple_enabled_boards(self) -> None:
         with self.assertRaisesRegex(GreenhouseBoardConfigError, "정확히 1개"):
             load_enabled_greenhouse_board(_document(_board("one"), _board("two")))
+
+    def test_rejects_registry_without_enabled_board(self) -> None:
+        with self.assertRaisesRegex(GreenhouseBoardConfigError, "1개 이상"):
+            load_enabled_greenhouse_boards(
+                _document(_board("disabled", enabled=False))
+            )
+
+    def test_rejects_more_than_ten_enabled_boards(self) -> None:
+        boards = [_board(f"board-{index}") for index in range(11)]
+
+        with self.assertRaisesRegex(GreenhouseBoardConfigError, "최대 10개"):
+            load_enabled_greenhouse_boards(_document(*boards))
 
     def test_rejects_duplicate_board_tokens(self) -> None:
         with self.assertRaisesRegex(GreenhouseBoardConfigError, "중복 board_token"):

@@ -7,7 +7,11 @@ from .greenhouse_analysis import (
     build_persistable_match_result,
     profile_content_sha256,
 )
-from .greenhouse_agent import GreenhouseAgentError, run_greenhouse_agent
+from .greenhouse_agent import (
+    GreenhouseAgentError,
+    run_greenhouse_agent,
+    run_greenhouse_portfolio_agent,
+)
 
 __all__ = [
     "ANALYSIS_PIPELINE_VERSION",
@@ -17,4 +21,5 @@ __all__ = [
     "profile_content_sha256",
     "GreenhouseAgentError",
     "run_greenhouse_agent",
+    "run_greenhouse_portfolio_agent",
 ]

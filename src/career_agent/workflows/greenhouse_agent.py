@@ -38,38 +38,109 @@ def run_greenhouse_agent(
     executed_at: datetime | None = None,
     previous_runs: Iterable[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
-    """Analyze the newest current high candidate, or stop without a candidate."""
+    """Run the global one-detail-analysis workflow for a single board."""
+
+    return run_greenhouse_portfolio_agent(
+        profile_document,
+        search_plan,
+        store_path,
+        boards=[
+            {
+                "board_token": board_token,
+                "policy_checked_at": policy_checked_at,
+            }
+        ],
+        executed_at=executed_at,
+        previous_runs=previous_runs,
+    )
+
+
+def run_greenhouse_portfolio_agent(
+    profile_document: dict[str, Any],
+    search_plan: Mapping[str, Any],
+    store_path: str | Path,
+    *,
+    boards: Iterable[Mapping[str, Any]],
+    executed_at: datetime | None = None,
+    previous_runs: Iterable[Mapping[str, Any]] = (),
+) -> dict[str, Any]:
+    """Discover many boards but analyze at most one current high candidate."""
 
     execution_time = executed_at or datetime.now().astimezone()
-    try:
-        discovery = run_greenhouse_discovery(
-            search_plan,
-            store_path,
-            board_token=board_token,
-            policy_checked_at=policy_checked_at,
-            discovered_at=execution_time,
-        )
-        current_records = discovery.get("current_records")
-        if not isinstance(current_records, list) or not all(
-            isinstance(item, dict) for item in current_records
+    board_list = list(boards)
+    if not board_list:
+        raise GreenhouseAgentError("실행할 Greenhouse 보드가 필요함")
+
+    board_results: list[dict[str, Any]] = []
+    board_errors: list[dict[str, str]] = []
+    current_records: list[dict[str, Any]] = []
+    for board in board_list:
+        if not isinstance(board, Mapping):
+            raise GreenhouseAgentError("Greenhouse 보드 설정은 객체여야 함")
+        board_token = board.get("board_token")
+        policy_checked_at = board.get("policy_checked_at")
+        if not isinstance(board_token, str) or not board_token.strip():
+            raise GreenhouseAgentError("board_token 문자열이 필요함")
+        if not isinstance(policy_checked_at, date):
+            raise GreenhouseAgentError("policy_checked_at 날짜가 필요함")
+        try:
+            discovery = run_greenhouse_discovery(
+                search_plan,
+                store_path,
+                board_token=board_token,
+                policy_checked_at=policy_checked_at,
+                discovered_at=execution_time,
+            )
+        except DiscoveryStoreError as error:
+            raise GreenhouseAgentError(str(error)) from error
+        except (GreenhouseBoardParseError, GreenhouseJobError) as error:
+            board_errors.append(
+                {"board_token": board_token, "error": str(error)}
+            )
+            continue
+
+        records = discovery.get("current_records")
+        if not isinstance(records, list) or not all(
+            isinstance(item, dict) for item in records
         ):
             raise GreenhouseAgentError("현재 Greenhouse 발견 레코드 목록이 필요함")
-        candidates = _current_high_candidates(
-            current_records,
-            board_token=board_token,
-        )
-        if not candidates:
-            return {
-                "status": "no_high_candidate",
-                "discovery": discovery,
-                "selection": None,
-                "analysis": None,
-                "reuse": None,
-            }
+        board_results.append(discovery)
+        current_records.extend(records)
 
+    discovery_summary = {
+        "boards_requested": len(board_list),
+        "boards_succeeded": len(board_results),
+        "boards_failed": len(board_errors),
+        "fetched_records": sum(
+            result.get("fetched_records", 0) for result in board_results
+        ),
+        "board_results": board_results,
+        "board_errors": board_errors,
+        "executed_at": execution_time.isoformat(timespec="seconds"),
+    }
+    if not board_results:
+        failed_tokens = ", ".join(
+            error["board_token"] for error in board_errors
+        )
+        raise GreenhouseAgentError(
+            f"모든 Greenhouse 보드 목록 조회가 실패함: {failed_tokens}"
+        )
+
+    candidates = _current_high_candidates(current_records)
+    if not candidates:
+        return {
+            "status": "no_high_candidate",
+            "discovery": discovery_summary,
+            "selection": None,
+            "analysis": None,
+            "reuse": None,
+        }
+
+    try:
         selected = candidates[0]
         identity = selected["identity"]
         job_id = identity["external_id"]
+        board_token = selected["source"]["board_token"]
         selection = _build_selection(selected, board_token=board_token)
         reusable = _find_reusable_analysis(
             previous_runs,
@@ -81,7 +152,7 @@ def run_greenhouse_agent(
             analysis_id = reusable["match_result"]["identity"]["analysis_id"]
             return {
                 "status": "reused",
-                "discovery": discovery,
+                "discovery": discovery_summary,
                 "selection": selection,
                 "analysis": reusable,
                 "reuse": {
@@ -108,7 +179,7 @@ def run_greenhouse_agent(
 
     return {
         "status": "analyzed",
-        "discovery": discovery,
+        "discovery": discovery_summary,
         "selection": selection,
         "analysis": analysis,
         "reuse": None,
@@ -117,21 +188,31 @@ def run_greenhouse_agent(
 
 def _current_high_candidates(
     records: list[dict[str, Any]],
-    *,
-    board_token: str,
 ) -> list[dict[str, Any]]:
     candidates = [
         record
         for record in records
         if record.get("identity", {}).get("provider") == "greenhouse"
-        and record.get("source", {}).get("board_token") == board_token
         and record.get("profile_relevance", {}).get("priority") == "high"
     ]
     candidates.sort(
-        key=lambda record: record.get("source", {}).get("published_at") or "",
+        key=_published_timestamp,
         reverse=True,
     )
     return candidates
+
+
+def _published_timestamp(record: Mapping[str, Any]) -> float:
+    value = record.get("source", {}).get("published_at")
+    if not isinstance(value, str) or not value.strip():
+        return float("-inf")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return float("-inf")
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return float("-inf")
+    return parsed.timestamp()
 
 
 def _build_selection(
@@ -150,7 +231,7 @@ def _build_selection(
         "source_updated_at": source.get("updated_at"),
         "priority": relevance.get("priority"),
         "reason": relevance.get("reason"),
-        "policy": "newest_current_high_only",
+        "policy": "newest_current_high_across_boards_only",
     }
 
 

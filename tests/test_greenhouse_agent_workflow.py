@@ -12,19 +12,28 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
 from career_agent.workflows import (  # noqa: E402
+    GreenhouseAgentError,
     profile_content_sha256,
     run_greenhouse_agent,
+    run_greenhouse_portfolio_agent,
 )
+from career_agent.ingestion import GreenhouseJobError  # noqa: E402
 
 
-def _record(job_id: str, priority: str, published_at: str) -> dict:
+def _record(
+    job_id: str,
+    priority: str,
+    published_at: str,
+    *,
+    board_token: str = "example",
+) -> dict:
     return {
         "identity": {
             "provider": "greenhouse",
             "external_id": job_id,
         },
         "source": {
-            "board_token": "example",
+            "board_token": board_token,
             "source_url": f"https://example.com/jobs/{job_id}",
             "published_at": published_at,
             "updated_at": "2026-09-14T10:00:00+09:00",
@@ -201,6 +210,137 @@ class GreenhouseAgentWorkflowTest(unittest.TestCase):
 
         self.assertEqual("analyzed", result["status"])
         mocked_analyze.assert_called_once()
+
+    @patch("career_agent.workflows.greenhouse_agent.analyze_greenhouse_job")
+    @patch("career_agent.workflows.greenhouse_agent.run_greenhouse_discovery")
+    def test_multiple_boards_analyze_only_newest_global_high_candidate(
+        self, mocked_discovery, mocked_analyze
+    ) -> None:
+        def discovery_result(*args, board_token: str, **kwargs) -> dict:
+            del args, kwargs
+            published_at = (
+                "2026-09-14T12:00:00+09:00"
+                if board_token == "one"
+                else "2026-09-14T04:00:00+00:00"
+            )
+            job_id = "100" if board_token == "one" else "200"
+            return {
+                "fetched_records": 1,
+                "current_records": [
+                    _record(
+                        job_id,
+                        "high",
+                        published_at,
+                        board_token=board_token,
+                    )
+                ],
+            }
+
+        mocked_discovery.side_effect = discovery_result
+        mocked_analyze.return_value = {
+            "match_result": {"identity": {"analysis_id": "analysis-new"}}
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            result = run_greenhouse_portfolio_agent(
+                {"profile": {}},
+                {"job_search_plan": {}},
+                Path(directory) / "discoveries.json",
+                boards=[
+                    {
+                        "board_token": "one",
+                        "policy_checked_at": date(2026, 9, 14),
+                    },
+                    {
+                        "board_token": "two",
+                        "policy_checked_at": date(2026, 9, 14),
+                    },
+                ],
+                executed_at=self.execution_time,
+            )
+
+        self.assertEqual("200", result["selection"]["external_job_id"])
+        self.assertEqual(2, result["discovery"]["boards_succeeded"])
+        mocked_analyze.assert_called_once_with(
+            {"profile": {}},
+            board_token="two",
+            job_id="200",
+            created_at=self.execution_time,
+        )
+
+    @patch("career_agent.workflows.greenhouse_agent.analyze_greenhouse_job")
+    @patch("career_agent.workflows.greenhouse_agent.run_greenhouse_discovery")
+    def test_one_board_failure_keeps_other_board_candidate(
+        self, mocked_discovery, mocked_analyze
+    ) -> None:
+        mocked_discovery.side_effect = [
+            GreenhouseJobError("합성 목록 조회 실패"),
+            {
+                "fetched_records": 1,
+                "current_records": [
+                    _record(
+                        "200",
+                        "high",
+                        "2026-09-14T12:00:00+09:00",
+                        board_token="two",
+                    )
+                ],
+            },
+        ]
+        mocked_analyze.return_value = {
+            "match_result": {"identity": {"analysis_id": "analysis-new"}}
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            result = run_greenhouse_portfolio_agent(
+                {"profile": {}},
+                {"job_search_plan": {}},
+                Path(directory) / "discoveries.json",
+                boards=[
+                    {
+                        "board_token": "one",
+                        "policy_checked_at": date(2026, 9, 14),
+                    },
+                    {
+                        "board_token": "two",
+                        "policy_checked_at": date(2026, 9, 14),
+                    },
+                ],
+                executed_at=self.execution_time,
+            )
+
+        self.assertEqual(1, result["discovery"]["boards_failed"])
+        self.assertEqual("one", result["discovery"]["board_errors"][0]["board_token"])
+        self.assertEqual("200", result["selection"]["external_job_id"])
+        mocked_analyze.assert_called_once()
+
+    @patch("career_agent.workflows.greenhouse_agent.analyze_greenhouse_job")
+    @patch("career_agent.workflows.greenhouse_agent.run_greenhouse_discovery")
+    def test_all_board_failures_stop_without_detail_analysis(
+        self, mocked_discovery, mocked_analyze
+    ) -> None:
+        mocked_discovery.side_effect = GreenhouseJobError("합성 목록 조회 실패")
+
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(GreenhouseAgentError, "모든 Greenhouse"):
+                run_greenhouse_portfolio_agent(
+                    {"profile": {}},
+                    {"job_search_plan": {}},
+                    Path(directory) / "discoveries.json",
+                    boards=[
+                        {
+                            "board_token": "one",
+                            "policy_checked_at": date(2026, 9, 14),
+                        },
+                        {
+                            "board_token": "two",
+                            "policy_checked_at": date(2026, 9, 14),
+                        },
+                    ],
+                    executed_at=self.execution_time,
+                )
+
+        mocked_analyze.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -9,14 +9,17 @@ from urllib.parse import urlsplit
 
 
 _BOARD_TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,100}$")
+MAX_ENABLED_BOARDS = 10
 
 
 class GreenhouseBoardConfigError(ValueError):
     """Raised when the Greenhouse board registry is unsafe or unsupported."""
 
 
-def load_enabled_greenhouse_board(document: Mapping[str, Any]) -> dict[str, Any]:
-    """Return the single enabled board allowed by the current MVP."""
+def load_enabled_greenhouse_boards(
+    document: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    """Return all enabled, validated Greenhouse boards."""
 
     if not isinstance(document, Mapping):
         raise GreenhouseBoardConfigError("Greenhouse 보드 설정은 JSON 객체여야 함")
@@ -72,10 +75,21 @@ def load_enabled_greenhouse_board(document: Mapping[str, Any]) -> dict[str, Any]
         )
 
     enabled_boards = [board for board in normalized if board["enabled"]]
-    if len(enabled_boards) != 1:
+    if not enabled_boards:
+        raise GreenhouseBoardConfigError("enabled Greenhouse 보드가 1개 이상 필요함")
+    if len(enabled_boards) > MAX_ENABLED_BOARDS:
         raise GreenhouseBoardConfigError(
-            "현재 개인용 MVP는 enabled 보드를 정확히 1개만 허용함"
+            f"enabled Greenhouse 보드는 최대 {MAX_ENABLED_BOARDS}개까지 허용함"
         )
+    return enabled_boards
+
+
+def load_enabled_greenhouse_board(document: Mapping[str, Any]) -> dict[str, Any]:
+    """Return one enabled board for callers that require a single source."""
+
+    enabled_boards = load_enabled_greenhouse_boards(document)
+    if len(enabled_boards) != 1:
+        raise GreenhouseBoardConfigError("enabled 보드가 정확히 1개여야 함")
     return enabled_boards[0]
 
 
