@@ -1,0 +1,18 @@
+{
+  "slack_interface": {
+    "team_id": "T01234567",
+    "api_app_id": "A01234567",
+    "bot_user_id": "U01234567",
+    "allowed_user_ids": [
+      "U76543210"
+    ],
+    "allowed_channel_ids": [
+      "C01234567"
+    ]
+  },
+  "metadata": {
+    "schema_version": "0.1",
+    "data_type": "synthetic_example",
+    "contains_secrets": false
+  }
+}

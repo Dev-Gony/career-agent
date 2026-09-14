@@ -1,0 +1,15 @@
+{
+  "type": "event_callback",
+  "team_id": "T01234567",
+  "api_app_id": "A01234567",
+  "event": {
+    "type": "app_mention",
+    "user": "U76543210",
+    "text": "<@U01234567> 다음 공고 찾아줘",
+    "ts": "1789372800.000100",
+    "channel": "C01234567",
+    "event_ts": "1789372800.000100"
+  },
+  "event_id": "Ev01234567",
+  "event_time": 1789372800
+}

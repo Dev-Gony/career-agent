@@ -28,7 +28,7 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
 
 ## 현재 개발 단계
 
-현재는 실제 ATS 공고 자동 입력 검증 단계입니다.
+현재는 기존 Career Agent 기능을 호출하는 첫 Slack 입력 경계 검증 단계입니다.
 
 완료:
 
@@ -75,12 +75,13 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
 - 최신 사용자 확인이 있는 새 기술 후보만 완성된 기술 추가안으로 만드는 기능 구현
 - 완성된 기술 추가안 한 건의 최종 승인·거부를 기술 내용과 분리해 기록하는 기능 구현
 - 최신 최종 승인이 있는 기술만 원본을 보존한 새 프로필 버전에 적용하는 기능 구현
+- Slack `app_mention` 합성 이벤트의 허용 사용자·채널 검증과 첫 명령 라우팅 구현
 
 다음 단계:
 
 1. 실제 관심 공고 10건의 상세 분석과 사용자 판정 검토
 2. Agent가 공식 기업 채용 URL에서 Greenhouse 소스를 발견해 등록부 후보로 제안하는 단계 설계
-3. 문서 입력과 대화가 가능한 첫 Slack 인터페이스 설계 및 구현
+3. Socket Mode로 실제 Slack 앱과 로컬 Career Agent 연결
 4. 하루 1회 예약 실행
 
 ## 저장소 구조
@@ -100,7 +101,8 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
     |   |-- GREENHOUSE_BOARD_CONFIG_SCHEMA.md
     |   |-- EXECUTION_LOG_SCHEMA.md
     |   |-- MATCHING_RULES.md
-    |   `-- MATCH_RESULT_SCHEMA.md
+    |   |-- MATCH_RESULT_SCHEMA.md
+    |   `-- SLACK_INTERFACE.md
     |-- data/
     |   |-- greenhouse_boards.example.json
     |   |-- user_profile.example.json
@@ -109,7 +111,9 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
     |   |-- job_search_plan.example.json
     |   |-- job_discovery_ranking_cases.example.json
     |   |-- incruit_rss_item.example.xml
-    |   `-- match_result.example.json
+    |   |-- match_result.example.json
+    |   |-- slack_interface.example.json
+    |   `-- slack_app_mention.example.json
     |-- src/
     |   `-- career_agent/
     |       |-- config/
@@ -124,6 +128,8 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
     |       |   `-- store.py
     |       |-- ingestion/
     |       |   `-- greenhouse.py
+    |       |-- interfaces/
+    |       |   `-- slack_events.py
     |       |-- matching/
     |       |   |-- eligibility.py
     |       |   |-- experience.py
@@ -146,6 +152,7 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
     |   |-- match_job.py
     |   |-- match_job_experiences.py
     |   |-- match_job_technologies.py
+    |   |-- parse_slack_event.py
     |   `-- run_greenhouse_agent.py
     |-- tests/
     |   |-- test_application_recommendation.py
@@ -343,6 +350,12 @@ Sendbird의 Greenhouse 공식 보드에서 현재 게시 공고 목록을 가져
 
 적용 직전에 기준 프로필 ID와 전체 내용 SHA-256, 기존 기술명과 `skill_id` 중복을 다시 확인합니다. 결과는 `private-data/profile-applications/<application-id>/`에 저장합니다. 승인 기술이 있으면 `application.json`과 `profile.json`을 함께 만들고, 승인 기술이 없으면 적용 이력만 만들며 새 프로필은 생성하지 않습니다. 기준 프로필 원본은 항상 보존합니다.
 
+첫 Slack 채널 호출 형식을 합성 이벤트로 검증합니다.
+
+    python scripts/parse_slack_event.py
+
+예제의 `<@봇사용자ID> 다음 공고 찾아줘` 문장을 기존 다음 공고 분석 동작명으로 변환합니다. 워크스페이스, 앱, 허용 사용자와 허용 채널을 검사하고 `event_id`가 같은 재전송은 기존 요청을 재사용합니다. 현재는 로컬 입력 경계만 검증하므로 실제 Slack 접속과 공고 분석은 실행하지 않습니다. 세부 계약은 `docs/SLACK_INTERFACE.md`에 기록했습니다.
+
 상세 분석된 공고에 사용자의 실제 판단을 별도 기록합니다. `fit`은 적합, `hold`는 보류, `not_fit`은 부적합입니다.
 
     python scripts/record_greenhouse_review.py --position 1 --fit hold --recommendation-useful yes --notes "직무는 관련 있지만 경력 조건 확인 필요"
@@ -456,8 +469,11 @@ Greenhouse를 사용하는 기업의 공개 상세공고 1건을 자동으로 �
 - 기술 추가 항목별 최신 최종 판단 선택과 승인 기술의 비파괴 새 프로필 버전 적용
 - 오래된 기준 프로필, 변조된 최종 검토 참조와 기술명·`skill_id` 중복 적용 거부
 - 승인 기술이 없을 때 적용 이력만 저장하고 빈 새 프로필 생성을 방지
+- Slack `app_mention`의 워크스페이스·앱·사용자·채널 허용 목록 검증
+- 지원하지 않는 명령, 봇 메시지와 메시지 하위 유형을 실제 동작으로 연결하지 않음
+- 같은 Slack `event_id` 재전송을 한 요청으로 재사용하고 원문 메시지를 저장하지 않음
 
-현재 구현은 공식 인크루트 RSS와 설정에 등록된 Greenhouse 기업 보드 목록을 읽고 로컬 JSON에 신규 후보를 중복 없이 저장합니다. Greenhouse 후보는 프로필에서 도출한 목표 직무와 선호 조건으로 정렬하며, 여러 보드 전체의 현재 `high` 후보 중 가장 최근 1건을 공고 ID 입력이나 복사·붙여넣기 없이 상세 조회·분석·저장합니다. 각 실행의 성공·실패와 분석 참조도 별도 보존합니다. 확인된 기술 부족이 있으면 기존 완료 프로젝트를 활용하는 가장 작은 학습 및 포트폴리오 개선 과제 1개를 생성합니다. 실제 검증을 위해 현재 후보 10건의 메타데이터 검토 큐를 만들고 미분석 공고를 한 번에 1건씩 상세 분석할 수 있으며 사용자의 실제 판단을 별도 비공개 기록으로 남길 수 있습니다. 사용자 문서 원본을 검증해 비공개 저장하고 UTF-8 텍스트에서 검토용 프로필 후보를 만든 뒤 후보별 승인 또는 거부를 기록하며, 최신 승인 후보만 기존 프로필과 분리된 갱신안으로 만들 수 있습니다. 승인된 기술 후보는 기존 기술과의 중복 또는 추가 확인 필요 상태로 매핑하고, 새 기술의 숙련도와 사용 증거를 명시적 사용자 확인으로 저장한 뒤 완성된 기술 추가안과 최종 승인·거부 기록을 만들 수 있습니다. 최신 최종 승인이 있는 기술은 기준 프로필을 덮어쓰지 않고 새 프로필 버전에 적용할 수 있습니다. 아직 다른 프로필 영역 매핑, PDF·DOCX 본문 추출, 나머지 실제 표본 검토, Greenhouse 소스 자체의 자동 발견, LLM 호출 또는 Slack 연동은 하지 않습니다.
+현재 구현은 공식 인크루트 RSS와 설정에 등록된 Greenhouse 기업 보드 목록을 읽고 로컬 JSON에 신규 후보를 중복 없이 저장합니다. Greenhouse 후보는 프로필에서 도출한 목표 직무와 선호 조건으로 정렬하며, 여러 보드 전체의 현재 `high` 후보 중 가장 최근 1건을 공고 ID 입력이나 복사·붙여넣기 없이 상세 조회·분석·저장합니다. 각 실행의 성공·실패와 분석 참조도 별도 보존합니다. 확인된 기술 부족이 있으면 기존 완료 프로젝트를 활용하는 가장 작은 학습 및 포트폴리오 개선 과제 1개를 생성합니다. 실제 검증을 위해 현재 후보 10건의 메타데이터 검토 큐를 만들고 미분석 공고를 한 번에 1건씩 상세 분석할 수 있으며 사용자의 실제 판단을 별도 비공개 기록으로 남길 수 있습니다. 사용자 문서 원본을 검증해 비공개 저장하고 UTF-8 텍스트에서 검토용 프로필 후보를 만든 뒤 후보별 승인 또는 거부를 기록하며, 최신 승인 후보만 기존 프로필과 분리된 갱신안으로 만들 수 있습니다. 승인된 기술 후보는 기존 기술과의 중복 또는 추가 확인 필요 상태로 매핑하고, 새 기술의 숙련도와 사용 증거를 명시적 사용자 확인으로 저장한 뒤 완성된 기술 추가안과 최종 승인·거부 기록을 만들 수 있습니다. 최신 최종 승인이 있는 기술은 기준 프로필을 덮어쓰지 않고 새 프로필 버전에 적용할 수 있습니다. 합성 Slack `app_mention`은 첫 내부 동작으로 안전하게 변환할 수 있습니다. 아직 실제 Slack Socket Mode 연결, 다른 프로필 영역 매핑, PDF·DOCX 본문 추출, 나머지 실제 표본 검토, Greenhouse 소스 자체의 자동 발견 또는 LLM 호출은 하지 않습니다.
 
 ## 예상 MVP 흐름
 
@@ -524,4 +540,4 @@ MVP가 실제로 유용하다고 판단되면 다음 기능을 검토합니다.
 
 현재 상태: 사용자 문서 비공개 수신, 자동 공고 발견·선별, 검토 큐와 공식 ATS 상세 분석, 근거 기반 추천 구현
 
-공식 인크루트 RSS와 설정에 등록된 Greenhouse 기업 보드 목록을 프로필 기반 발견 레코드로 변환하고 실행 간 중복을 제거해 로컬에 저장합니다. 실제 후보 10건의 메타데이터 검토 큐를 만들고 미분석 후보를 한 번에 1건씩 상세 분석할 수 있습니다. 현재 Sendbird 1건과 Moloco 2건까지 총 3건이 분석 파이프라인 0.2로 분석됐습니다. 상세 분석된 공고에는 사용자의 판단을 기록하고 후속 큐에도 유지할 수 있습니다. 사용자 문서 원본은 비공개로 저장하며 UTF-8 텍스트의 프로필 후보를 줄 번호 근거와 함께 만들고 후보별 승인·거부를 별도 기록할 수 있습니다. 가장 최근 결정이 승인인 후보만 기준 프로필 지문과 함께 별도 갱신안으로 만들며 기존 프로필은 변경하지 않습니다. 승인 기술 후보는 기존 기술 중복, 세부정보 필요 또는 기술명 분리 필요로 구분하고, 새 기술의 숙련도와 사용 증거를 명시적 사용자 확인 기록으로 저장한 뒤 완성된 추가안의 최종 승인·거부를 기록할 수 있습니다. 항목별 최신 최종 승인이 있는 기술은 기준 프로필 지문과 중복을 다시 검증한 뒤 원본과 분리된 새 프로필 버전에 적용할 수 있습니다. 다음 기능 단계는 기존 기능을 호출하는 최소 Slack 입력 인터페이스입니다.
+공식 인크루트 RSS와 설정에 등록된 Greenhouse 기업 보드 목록을 프로필 기반 발견 레코드로 변환하고 실행 간 중복을 제거해 로컬에 저장합니다. 실제 후보 10건의 메타데이터 검토 큐를 만들고 미분석 후보를 한 번에 1건씩 상세 분석할 수 있습니다. 현재 Sendbird 1건과 Moloco 2건까지 총 3건이 분석 파이프라인 0.2로 분석됐습니다. 상세 분석된 공고에는 사용자의 판단을 기록하고 후속 큐에도 유지할 수 있습니다. 사용자 문서 원본은 비공개로 저장하며 UTF-8 텍스트의 프로필 후보를 줄 번호 근거와 함께 만들고 후보별 승인·거부를 별도 기록할 수 있습니다. 가장 최근 결정이 승인인 후보만 기준 프로필 지문과 함께 별도 갱신안으로 만들며 기존 프로필은 변경하지 않습니다. 승인 기술 후보는 기존 기술 중복, 세부정보 필요 또는 기술명 분리 필요로 구분하고, 새 기술의 숙련도와 사용 증거를 명시적 사용자 확인 기록으로 저장한 뒤 완성된 추가안의 최종 승인·거부를 기록할 수 있습니다. 항목별 최신 최종 승인이 있는 기술은 기준 프로필 지문과 중복을 다시 검증한 뒤 원본과 분리된 새 프로필 버전에 적용할 수 있습니다. 합성 Slack 채널 호출을 허용 사용자·채널과 명령으로 검증해 기존 다음 공고 분석 동작명에 연결할 수 있습니다. 다음 기능 단계는 Socket Mode로 실제 Slack 앱과 로컬 Agent를 연결하는 것입니다.
