@@ -7,6 +7,7 @@ from hashlib import sha256
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 from typing import Any, Iterable, Mapping
 
@@ -19,6 +20,7 @@ from .text_extraction import PROFILE_TEXT_EXTRACTION_SCHEMA_VERSION
 
 
 PROFILE_UPDATE_PROPOSAL_SCHEMA_VERSION = "0.1"
+_PROPOSAL_ID_PATTERN = re.compile(r"^profile-update-proposal-[0-9a-f]{24}$")
 
 
 def _mapping(value: Any, name: str) -> Mapping[str, Any]:
@@ -44,7 +46,9 @@ def _timestamp(value: Any, name: str) -> tuple[float, str]:
     return parsed.timestamp(), text
 
 
-def _profile_hash(profile_document: Mapping[str, Any]) -> str:
+def profile_content_sha256(profile_document: Mapping[str, Any]) -> str:
+    """Return a stable content fingerprint for one profile document."""
+
     try:
         serialized = json.dumps(
             profile_document,
@@ -211,7 +215,7 @@ def build_profile_update_proposal(
     rejected_count = sum(
         review["decision"] == "reject" for review in latest.values()
     )
-    profile_hash = _profile_hash(profile_document)
+    profile_hash = profile_content_sha256(profile_document)
     proposal_key = "|".join(
         [profile_hash, extraction_id]
         + [
@@ -362,3 +366,34 @@ def save_profile_update_proposal(
         if temporary_path is not None and temporary_path.exists():
             temporary_path.unlink()
     return target_path, True
+
+
+def load_profile_update_proposal(
+    proposal_id: str,
+    directory: str | Path,
+) -> dict[str, Any]:
+    """Load one private update proposal without allowing path traversal."""
+
+    normalized_id = _text(proposal_id, "proposal_id")
+    if _PROPOSAL_ID_PATTERN.fullmatch(normalized_id) is None:
+        raise ProfileDocumentError("proposal_id 형식이 올바르지 않음")
+    path = Path(directory) / f"{normalized_id}.json"
+    try:
+        proposal = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ProfileDocumentError(
+            f"프로필 갱신안을 읽을 수 없음: {path}"
+        ) from error
+    if not isinstance(proposal, dict):
+        raise ProfileDocumentError("프로필 갱신안 최상위 JSON은 객체여야 함")
+    root = _mapping(proposal.get("profile_update_proposal"), "profile_update_proposal")
+    metadata = _mapping(proposal.get("metadata"), "metadata")
+    if root.get("proposal_id") != normalized_id:
+        raise ProfileDocumentError("갱신안의 proposal_id가 요청과 일치하지 않음")
+    if metadata.get("schema_version") != PROFILE_UPDATE_PROPOSAL_SCHEMA_VERSION:
+        raise ProfileDocumentError("현재 버전의 프로필 갱신안이 아님")
+    if metadata.get("git_tracking_allowed") is not False:
+        raise ProfileDocumentError("프로필 갱신안에 Git 제외 표시가 없음")
+    if metadata.get("profile_updated") is not False:
+        raise ProfileDocumentError("갱신안은 프로필 갱신 상태일 수 없음")
+    return proposal

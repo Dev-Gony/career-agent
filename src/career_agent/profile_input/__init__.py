@@ -23,7 +23,15 @@ from .text_extraction import (
 from .update_proposal import (
     PROFILE_UPDATE_PROPOSAL_SCHEMA_VERSION,
     build_profile_update_proposal,
+    load_profile_update_proposal,
+    profile_content_sha256,
     save_profile_update_proposal,
+)
+from .skill_mapping import (
+    PROFILE_SKILL_MAPPING_RULES_VERSION,
+    PROFILE_SKILL_MAPPING_SCHEMA_VERSION,
+    build_profile_skill_mapping_proposal,
+    save_profile_skill_mapping_proposal,
 )
 
 __all__ = [
@@ -41,7 +49,13 @@ __all__ = [
     "build_profile_text_extraction",
     "load_profile_text_extraction",
     "save_profile_text_extraction",
+    "PROFILE_SKILL_MAPPING_RULES_VERSION",
+    "PROFILE_SKILL_MAPPING_SCHEMA_VERSION",
+    "build_profile_skill_mapping_proposal",
+    "save_profile_skill_mapping_proposal",
     "PROFILE_UPDATE_PROPOSAL_SCHEMA_VERSION",
     "build_profile_update_proposal",
+    "load_profile_update_proposal",
+    "profile_content_sha256",
     "save_profile_update_proposal",
 ]

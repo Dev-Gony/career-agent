@@ -162,13 +162,49 @@ PDF와 DOCX는 원본 저장만 지원하며 현재 텍스트 후보 추출에�
 
 결과는 `private-data/profile-update-proposals/`에 저장한다. 같은 기준 프로필, 추출 결과와 최신 검토 집합은 같은 제안 ID를 사용하며 기존 내용이 동일할 때만 재사용한다. 이 명령은 기존 사용자 프로필 파일을 수정하지 않는다.
 
-## 9. 현재 한계
+## 9. 기술 후보 매핑안
+
+승인 후보 중 `profile_section`이 `skills`인 항목만 기존 프로필의 기술 목록과 비교한다.
+
+    python scripts/build_profile_skill_mapping.py --proposal-id profile-update-proposal-example
+
+기술명 비교는 Unicode NFKC 정규화, 대소문자와 연속 공백 정리만 적용한다. 별칭이나 유사어를 같은 기술로 추정하지 않는다.
+
+매핑 상태는 다음과 같다.
+
+- `duplicate_existing`: 정규화한 이름이 기존 기술과 정확히 같아 기존 `skill_id`를 연결함
+- `needs_details`: 새 단일 기술명으로 보이지만 `level`과 `evidence`가 없어 추가 확인이 필요함
+- `needs_separation`: 쉼표, 세미콜론, 세로줄 또는 가운뎃점으로 여러 기술이 섞였을 수 있어 개별 기술명 분리가 필요함
+
+    profile_skill_mapping:
+      mapping_id: "profile-skill-mapping-example"
+      status: "needs_confirmation"
+      base_profile_id: "sample-user-001"
+      base_profile_content_sha256: "기준 프로필 전체 SHA-256"
+      source_update_proposal_id: "profile-update-proposal-example"
+      rules_version: "0.1"
+
+    skill_mappings:
+      - mapping_item_id: "skill-mapping-item-001"
+        candidate_text: "FastAPI"
+        candidate_name: "FastAPI"
+        mapping_status: "needs_details"
+        existing_skill: null
+        missing_fields:
+          - "level"
+          - "evidence"
+        profile_change_ready: false
+
+결과는 `private-data/profile-skill-mappings/`에 저장한다. 기존 기술 중복이어도 자동으로 덮어쓰지 않으며, 새 기술 후보에도 숙련도와 사용 증거를 임의로 채우지 않는다. 모든 항목의 `profile_change_ready`와 전체 `profile_updated`는 계속 `false`다.
+
+## 10. 현재 한계
 
 - 제목 기반 분류이며 문장의 의미를 해석하지 않는다.
 - 한 줄 안의 기술 여러 개를 개별 기술로 분리하지 않는다.
 - 기간, 경력 연수, 숙련도와 성과를 구조화하지 않는다.
-- 승인 후보를 안전한 중간 갱신안에 모을 수 있지만 `USER_PROFILE_SCHEMA`의 세부 객체로 변환하거나 실제 프로필에 적용하지 않는다.
+- 기술 후보는 중복·세부정보 필요·분리 필요로 매핑할 수 있지만 새 기술 객체를 완성하거나 실제 프로필에 적용하지 않는다.
+- 목표 직무, 경력, 프로젝트와 다른 프로필 영역은 아직 타입 매핑하지 않는다.
 - PDF, DOCX와 이미지 OCR 추출은 아직 없다.
 - 외부 LLM을 호출하지 않는다.
 
-다음 단계에서는 단순한 기술과 목표 직무부터 타입이 있는 프로필 객체로 매핑하되, 사용자 확인 전에는 실제 프로필을 변경하지 않는다.
+다음 단계에서는 새 기술 후보에 필요한 숙련도와 사용 증거를 명시적으로 확인하는 기록을 추가하되, 사용자 확인 전에는 실제 프로필을 변경하지 않는다.
