@@ -8,6 +8,7 @@ from io import BytesIO
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import tempfile
 from typing import Any, Mapping
@@ -24,6 +25,9 @@ _FORMATS = {
     ".pdf": "pdf",
     ".docx": "docx",
 }
+_DOCUMENT_ID_PATTERN = re.compile(
+    r"^profile-document-(?:resume|career_history|portfolio|other)-[0-9a-f]{20}$"
+)
 
 
 class ProfileDocumentError(ValueError):
@@ -226,3 +230,53 @@ def save_profile_document_import(
         if temporary_directory.exists():
             shutil.rmtree(temporary_directory)
     return target_directory / "manifest.json", True
+
+
+def load_profile_document_import(
+    document_id: str,
+    directory: str | Path,
+) -> tuple[dict[str, Any], bytes]:
+    """Load and verify one previously stored private document."""
+
+    normalized_id = _text(document_id, "document_id")
+    if _DOCUMENT_ID_PATTERN.fullmatch(normalized_id) is None:
+        raise ProfileDocumentError("document_id 형식이 올바르지 않음")
+    target_directory = Path(directory) / normalized_id
+    manifest_path = target_directory / "manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ProfileDocumentError(
+            f"저장된 문서 manifest를 읽을 수 없음: {manifest_path}"
+        ) from error
+    root = _mapping(manifest.get("profile_document"), "profile_document")
+    metadata = _mapping(manifest.get("metadata"), "metadata")
+    if root.get("document_id") != normalized_id:
+        raise ProfileDocumentError("manifest의 document_id가 요청과 일치하지 않음")
+    if metadata.get("schema_version") != PROFILE_DOCUMENT_SCHEMA_VERSION:
+        raise ProfileDocumentError("현재 버전의 문서 manifest가 아님")
+    if metadata.get("git_tracking_allowed") is not False:
+        raise ProfileDocumentError("문서 manifest에 Git 제외 표시가 없음")
+    stored_filename = _text(
+        root.get("stored_filename"), "profile_document.stored_filename"
+    )
+    if Path(stored_filename).name != stored_filename:
+        raise ProfileDocumentError("stored_filename은 파일명이 아니므로 읽을 수 없음")
+    stored_path = target_directory / stored_filename
+    try:
+        content = stored_path.read_bytes()
+    except OSError as error:
+        raise ProfileDocumentError(
+            f"저장된 원본 문서를 읽을 수 없음: {stored_path}"
+        ) from error
+    expected_size = root.get("size_bytes")
+    if isinstance(expected_size, bool) or not isinstance(expected_size, int):
+        raise ProfileDocumentError("manifest의 size_bytes가 올바르지 않음")
+    if len(content) != expected_size:
+        raise ProfileDocumentError("저장된 원본 문서 크기가 manifest와 다름")
+    expected_hash = _text(
+        root.get("content_sha256"), "profile_document.content_sha256"
+    )
+    if sha256(content).hexdigest() != expected_hash:
+        raise ProfileDocumentError("저장된 원본 문서 해시가 manifest와 다름")
+    return manifest, content
