@@ -1,0 +1,117 @@
+"""Connect Slack Socket Mode to the validated local command boundary."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Callable, Mapping
+
+from .slack_events import (
+    SlackEventError,
+    build_slack_command_request,
+    save_slack_command_request,
+)
+
+
+SUPPORTED_COMMAND_REPLY = (
+    "요청을 확인했습니다. 현재는 Slack 연결 검증 단계이므로 "
+    "공고 분석은 아직 실행하지 않았습니다."
+)
+UNSUPPORTED_COMMAND_REPLY = "현재 지원하는 명령은 `다음 공고 찾아줘`입니다."
+
+
+def _reply_text(request: Mapping[str, Any], *, created: bool) -> str | None:
+    if not created:
+        return None
+    root = request.get("slack_command_request")
+    if not isinstance(root, Mapping):
+        raise SlackEventError("slack_command_request 객체가 필요함")
+    if root.get("routing_status") == "action_identified":
+        return SUPPORTED_COMMAND_REPLY
+    if root.get("reason") == "unsupported_command":
+        return UNSUPPORTED_COMMAND_REPLY
+    return None
+
+
+def process_slack_app_mention(
+    event_payload: Mapping[str, Any],
+    config: Mapping[str, Any],
+    *,
+    received_at: datetime,
+    output_directory: str | Path,
+) -> dict[str, Any]:
+    """Validate, store, and choose a fixed reply for one Slack mention."""
+
+    request = build_slack_command_request(
+        event_payload,
+        config,
+        received_at=received_at,
+        network_request_verified=True,
+    )
+    output_path, created = save_slack_command_request(request, output_directory)
+    return {
+        "request": request,
+        "output_path": output_path,
+        "created": created,
+        "reply_text": _reply_text(request, created=created),
+    }
+
+
+def register_slack_app_mention_listener(
+    app: Any,
+    config: Mapping[str, Any],
+    *,
+    output_directory: str | Path,
+    now: Callable[[], datetime] | None = None,
+) -> Callable[..., None]:
+    """Register the single supported Bolt event listener and return it for tests."""
+
+    clock = now or (lambda: datetime.now().astimezone())
+
+    def handle_app_mention(body: Mapping[str, Any], say: Any, logger: Any) -> None:
+        try:
+            result = process_slack_app_mention(
+                body,
+                config,
+                received_at=clock(),
+                output_directory=output_directory,
+            )
+        except SlackEventError as error:
+            logger.warning("Slack app_mention 거부: %s", error)
+            return
+
+        reply_text = result["reply_text"]
+        if reply_text is None:
+            return
+        request = result["request"]
+        say(
+            text=reply_text,
+            thread_ts=request["source"]["event_ts"],
+        )
+
+    app.event("app_mention")(handle_app_mention)
+    return handle_app_mention
+
+
+def create_slack_bolt_app(bot_token: str) -> Any:
+    """Create the official Slack Bolt app without exposing its token."""
+
+    try:
+        from slack_bolt import App
+    except ImportError as error:
+        raise SlackEventError(
+            "Slack SDK가 없음: python -m pip install -r requirements.txt 실행 필요"
+        ) from error
+    return App(token=bot_token)
+
+
+def run_slack_socket_mode(app: Any, app_token: str) -> None:
+    """Start the blocking official Socket Mode handler."""
+
+    try:
+        from slack_bolt.adapter.socket_mode import SocketModeHandler
+    except ImportError as error:
+        raise SlackEventError(
+            "Slack SDK가 없음: python -m pip install -r requirements.txt 실행 필요"
+        ) from error
+    SocketModeHandler(app, app_token).start()

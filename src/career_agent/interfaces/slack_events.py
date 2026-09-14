@@ -121,11 +121,14 @@ def build_slack_command_request(
     config: Mapping[str, Any],
     *,
     received_at: datetime,
+    network_request_verified: bool = False,
 ) -> dict[str, Any]:
     """Build a non-executing internal request from one Slack app mention."""
 
     if received_at.tzinfo is None or received_at.utcoffset() is None:
         raise SlackEventError("received_at은 시간대가 포함되어야 함")
+    if not isinstance(network_request_verified, bool):
+        raise SlackEventError("network_request_verified는 bool이어야 함")
     settings = validate_slack_interface_config(config)
     if event_payload.get("type") != "event_callback":
         raise SlackEventError("Slack event_callback만 처리할 수 있음")
@@ -218,8 +221,8 @@ def build_slack_command_request(
             "contains_message_text": False,
             "contains_personal_data": True,
             "git_tracking_allowed": False,
-            "network_request_verified": False,
-            "local_validation_only": True,
+            "network_request_verified": network_request_verified,
+            "local_validation_only": not network_request_verified,
         },
     }
 
@@ -243,10 +246,14 @@ def save_slack_command_request(
         raise SlackEventError("Slack 명령 요청에 원문 제외 표시가 없음")
     if metadata.get("git_tracking_allowed") is not False:
         raise SlackEventError("Slack 명령 요청에 Git 제외 표시가 없음")
-    if metadata.get("network_request_verified") is not False:
-        raise SlackEventError("로컬 검증 요청은 네트워크 인증 상태일 수 없음")
-    if metadata.get("local_validation_only") is not True:
-        raise SlackEventError("로컬 검증 전용 표시가 없음")
+    network_request_verified = metadata.get("network_request_verified")
+    local_validation_only = metadata.get("local_validation_only")
+    if not isinstance(network_request_verified, bool):
+        raise SlackEventError("Slack 명령 요청의 네트워크 인증 표시가 올바르지 않음")
+    if not isinstance(local_validation_only, bool):
+        raise SlackEventError("Slack 명령 요청의 로컬 검증 표시가 올바르지 않음")
+    if network_request_verified == local_validation_only:
+        raise SlackEventError("Slack 명령 요청의 전송 경로 표시가 서로 모순됨")
     if root.get("execution_status") != "not_executed":
         raise SlackEventError("로컬 Slack 요청은 실행 상태일 수 없음")
     if root.get("routing_status") not in {"action_identified", "ignored"}:

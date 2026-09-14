@@ -188,6 +188,17 @@ class SlackEventsTest(unittest.TestCase):
                 received_at=datetime(2026, 9, 14, 23),
             )
 
+    def test_marks_verified_transport_without_claiming_local_only(self) -> None:
+        request = build_slack_command_request(
+            _event(),
+            _config(),
+            received_at=RECEIVED_AT,
+            network_request_verified=True,
+        )
+
+        self.assertTrue(request["metadata"]["network_request_verified"])
+        self.assertFalse(request["metadata"]["local_validation_only"])
+
     def test_saves_retry_once_and_rejects_same_event_with_changed_content(self) -> None:
         request = build_slack_command_request(
             _event(), _config(), received_at=RECEIVED_AT

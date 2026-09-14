@@ -2,7 +2,7 @@
 
 ## 1. 목적
 
-Slack 채널에서 사용자가 Career Agent를 호출하는 첫 입력 경계를 정의한다. 현재 실제 Slack 앱의 Token 인증과 개인 허용 목록 설정까지 완료했으며, 합성 `app_mention` 이벤트를 검증하고 허용된 내부 동작 요청으로 변환할 수 있다. 실제 Socket Mode 이벤트 수신과 공고 분석 실행은 아직 연결하지 않았다.
+Slack 채널에서 사용자가 Career Agent를 호출하는 첫 입력 경계를 정의한다. 실제 Slack 앱의 Token 인증, 개인 허용 목록 설정과 Socket Mode 연결까지 완료했다. 합성 또는 실제 `app_mention` 이벤트를 검증하고 허용된 내부 동작 요청으로 변환할 수 있으며, 공고 분석 실행은 아직 연결하지 않았다.
 
     Slack app_mention 예제
     -> 워크스페이스·앱·사용자·채널 검증
@@ -168,18 +168,34 @@ Bot Token은 별도 Scope가 필요 없는 Slack 공식 `auth.test`로 인증하
 
 요청은 `https://slack.com/api/`의 두 허용 메서드에만 POST로 전송하며 외부 리디렉션을 따르지 않는다. Token은 Authorization 헤더로만 보내고, 응답의 Token과 임시 WebSocket URL은 출력하거나 저장하지 않는다. 비밀정보가 없는 인증 결과만 `private-data/slack-auth/`에 저장한다. 2026-09-14 실제 Bot Token 인증과 Socket Mode URL 발급 가능 여부도 확인했다.
 
-## 9. 현재 보안 경계와 다음 단계
+## 9. 실제 Socket Mode 수신
+
+공식 Slack Bolt SDK를 설치하고 로컬 수신기를 실행한다.
+
+    python -m pip install -r requirements.txt
+    python scripts/run_slack_socket.py
+
+지정 채널에서 다음처럼 봇을 호출한다.
+
+    @career_break 다음 공고 찾아줘
+
+수신기는 Bolt가 전달한 `app_mention` 전체 이벤트를 기존 변환기로 검증한다. 허용된 워크스페이스·앱·사용자·채널과 지원 명령이면 원래 메시지의 스레드에 현재 연결 검증 단계라는 고정 응답을 한 번 보낸다. 같은 `event_id`가 재전송되면 저장 결과를 재사용하고 중복 응답하지 않는다. 허용되지 않은 사용자나 채널에는 응답하지 않는다.
+
+실제 이벤트는 `network_request_verified: true`, 합성 로컬 이벤트는 `local_validation_only: true`로 구분한다. 두 경로 모두 현재 `execution_status`는 `not_executed`이므로 공고 조회나 분석을 시작하지 않는다. 메시지 원문은 저장하지 않는다.
+
+2026-09-14 공식 SDK 설치와 실제 Socket Mode 연결 성공까지 확인했다. 실제 채널에서 보낸 이벤트 수신과 답변 표시는 사용자 확인 전이다.
+
+## 10. 현재 보안 경계와 다음 단계
 
 HTTP Request URL 방식은 Slack Signing Secret으로 요청 서명을 반드시 확인해야 한다.
 
 - Slack 요청 서명 검증: https://docs.slack.dev/authentication/verifying-requests-from-slack
 
-현재 로컬 변환 결과의 `network_request_verified`는 항상 `false`이며 `execution_status`도 `not_executed`다. 따라서 실제 Slack 요청을 이 함수에 직접 넣어 실행하면 안 된다.
+HTTP Request URL 방식의 이벤트를 현재 변환기에 직접 넣으면 안 된다. 이 경로는 Slack Signing Secret 검증을 구현하지 않았기 때문이다. 실제 네트워크 이벤트는 인증된 Socket Mode 연결을 통해서만 전달한다.
 
-다음 단계에서는 Socket Mode 연결을 별도 어댑터로 만들고 다음 순서로 처리한다.
+다음 단계에서는 실제 채널 수신·응답을 확인한 뒤 다음 순서로 처리한다.
 
-1. 환경 변수에서 App Token과 Bot Token을 읽는다.
-2. Slack 연결이 인증한 이벤트만 현재 변환기에 전달한다.
-3. 요청을 먼저 확인 응답한 뒤 내부 작업을 분리 실행한다.
-4. 완료 또는 실패 결과를 원래 채널에 보낸다.
-5. 동일 `event_id` 재전송은 다시 분석하지 않는다.
+1. 지원 명령의 고정 확인 응답을 실제 채널에서 검증한다.
+2. 확인 응답 뒤 기존 다음 공고 분석을 별도 내부 작업으로 실행한다.
+3. 완료 또는 실패 결과를 원래 스레드에 보낸다.
+4. 동일 `event_id` 재전송은 다시 분석하지 않는다.

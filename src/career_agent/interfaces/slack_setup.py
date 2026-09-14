@@ -18,15 +18,23 @@ _TOKEN_PATTERNS = {
 }
 
 
-def _load_config(path: Path) -> dict:
+def load_slack_interface_config(path: str | Path) -> dict:
+    """Load and validate a private Slack interface config."""
+
+    normalized_path = Path(path)
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
+        value = json.loads(normalized_path.read_text(encoding="utf-8"))
     except FileNotFoundError as error:
-        raise SlackEventError(f"실제 Slack 설정 파일이 없음: {path}") from error
+        raise SlackEventError(
+            f"실제 Slack 설정 파일이 없음: {normalized_path}"
+        ) from error
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise SlackEventError(f"Slack 설정 JSON을 읽을 수 없음: {path}") from error
+        raise SlackEventError(
+            f"Slack 설정 JSON을 읽을 수 없음: {normalized_path}"
+        ) from error
     if not isinstance(value, dict):
         raise SlackEventError("Slack 설정 최상위 JSON은 객체여야 함")
+    validate_slack_interface_config(value)
     return value
 
 
@@ -71,7 +79,7 @@ def check_slack_setup(
 ) -> dict[str, bool]:
     """Validate Slack IDs and token presence without returning token values."""
 
-    validate_slack_interface_config(_load_config(Path(config_path)))
+    load_slack_interface_config(config_path)
     load_slack_tokens(env_file, environment=environment)
     return {
         "config_ready": True,
