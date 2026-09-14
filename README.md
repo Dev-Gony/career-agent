@@ -62,14 +62,16 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
 - 실제 Sendbird 서울 AI 공고를 로컬 파일로 구조화하고 기존 매칭기에 연결해 전체 흐름 확인
 - Greenhouse 공고 조회부터 매칭과 결과 JSON 저장까지 한 명령으로 실행하는 워크플로 구현
 - Greenhouse 기업 보드의 현재 공고 목록을 조회하고 프로필 목표 직무와 선호 조건으로 후보를 정렬하는 기능 구현
+- Greenhouse 현재 목록의 `high` 후보 1건을 공고 ID 입력 없이 상세 분석하고 실행별 결과로 저장하는 제한된 Agent 워크플로 구현
 
 다음 단계:
 
-1. Greenhouse 선별 후보를 상세 구조화와 분석으로 자동 연결
+1. 같은 공고와 판정 규칙이 변하지 않았을 때 상세 분석을 반복하지 않는 기준 추가
 2. 관심 기업 보드 목록을 로컬 설정으로 관리
-3. 저장된 실제 분석 결과의 사용자 검토와 판정 교정 반영
-4. 문서 입력과 대화가 가능한 첫 Slack 인터페이스 설계 및 구현
-5. 하루 1회 실행과 성공·실패 상태 기록
+3. 여러 기업의 `high` 후보를 한 번에 모두 분석하지 않는 실행 제한 설계
+4. 저장된 실제 분석 결과의 사용자 검토와 판정 교정 반영
+5. 문서 입력과 대화가 가능한 첫 Slack 인터페이스 설계 및 구현
+6. 하루 1회 실행과 성공·실패 상태 기록
 
 ## 저장소 구조
 
@@ -116,6 +118,7 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
     |       |   |-- service.py
     |       |   `-- technology.py
     |       `-- workflows/
+    |           |-- greenhouse_agent.py
     |           `-- greenhouse_analysis.py
     |-- scripts/
     |   |-- analyze_greenhouse_job.py
@@ -125,9 +128,11 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
     |   |-- import_greenhouse_job.py
     |   |-- match_job.py
     |   |-- match_job_experiences.py
-    |   `-- match_job_technologies.py
+    |   |-- match_job_technologies.py
+    |   `-- run_greenhouse_agent.py
     |-- tests/
     |   |-- test_application_recommendation.py
+    |   |-- test_greenhouse_agent_workflow.py
     |   |-- test_greenhouse_analysis_workflow.py
     |   |-- test_greenhouse_discovery.py
     |   |-- test_discovery_report.py
@@ -218,6 +223,12 @@ Sendbird의 Greenhouse 공식 보드에서 현재 게시 공고 목록을 가져
 
 목록 단계에서는 상세 본문을 가져오지 않습니다. `AI Agent`는 기존 최우선 목표인 AI Automation / Workflow Engineer에서 파생한 검색 표현이며 사용자가 별도 키워드를 입력할 필요가 없습니다. 제목에 인턴 또는 계약직이 명시되면 정규직 선호와 비교해 후보를 삭제하지 않고 우선순위만 한 단계 낮춥니다.
 
+공고 ID를 직접 입력하지 않고 현재 Greenhouse 목록에서 `high` 후보를 찾아 1건만 상세 분석합니다.
+
+    python scripts/run_greenhouse_agent.py
+
+현재 목록의 `high` 후보 중 가장 최근 공고만 분석하며 `high`가 없으면 상세 조회 없이 종료합니다. 로컬에 남은 과거 공고는 현재 목록에 없으면 선택하지 않고, 실패 시 다른 후보를 연쇄 조회하지 않습니다. 결과는 실행마다 고유한 분석 ID를 사용해 `private-data/agent-runs/`에 저장됩니다.
+
 예제 사용자 프로필과 예제 공고의 기술 요구사항만 비교합니다.
 
     python scripts/match_job_technologies.py
@@ -298,8 +309,10 @@ Greenhouse를 사용하는 기업의 공개 상세공고 1건을 자동으로 �
 - Greenhouse 보드 목록을 본문 없이 조회하고 프로필에서 도출한 `AI Agent` 표현으로 후보 선별
 - `Seoul`과 서울을 같은 지역으로 처리하고 명시된 인턴·계약직은 정규직 선호 기준으로 순위만 낮춤
 - Greenhouse 목록을 같은 로컬 저장소에 합치고 기업 보드와 외부 ID 기준으로 중복 제거
+- 현재 Greenhouse 목록에 있는 가장 최근 `high` 후보 1건만 상세 분석
+- 현재 `high` 후보가 없거나 로컬 저장소에만 남은 과거 `high` 후보뿐이면 상세 분석 없이 종료
 
-현재 구현은 공식 인크루트 RSS와 Greenhouse 기업 보드 목록을 읽고 로컬 JSON에 신규 후보를 중복 없이 저장합니다. Greenhouse 후보는 프로필에서 도출한 목표 직무와 선호 조건으로 정렬하며, 공개 API의 상세 공고 1건은 사용자의 복사·붙여넣기 없이 조회·분석·저장할 수 있습니다. 아직 선별 후보와 상세 분석의 자동 연결, LLM 호출 또는 Slack 연동은 하지 않습니다.
+현재 구현은 공식 인크루트 RSS와 Greenhouse 기업 보드 목록을 읽고 로컬 JSON에 신규 후보를 중복 없이 저장합니다. Greenhouse 후보는 프로필에서 도출한 목표 직무와 선호 조건으로 정렬하며, 현재 `high` 후보 1건은 공고 ID 입력이나 복사·붙여넣기 없이 상세 조회·분석·저장합니다. 아직 여러 관심 기업 설정, LLM 호출 또는 Slack 연동은 하지 않습니다.
 
 ## 예상 MVP 흐름
 
@@ -364,6 +377,6 @@ MVP가 실제로 유용하다고 판단되면 다음 기능을 검토합니다.
 
 ## 프로젝트 상태
 
-현재 상태: 자동 공고 발견·선별, 공식 ATS 상세 입력 및 핵심 근거 기반 매칭 구현
+현재 상태: 자동 공고 발견·선별, 현재 최우선 후보 1건의 공식 ATS 상세 입력 및 핵심 근거 기반 매칭 구현
 
-공식 인크루트 RSS와 Greenhouse 기업 보드 목록을 프로필 기반 발견 레코드로 변환하고 실행 간 중복을 제거해 로컬에 저장합니다. 실제 Sendbird 보드에서는 현재 공고 10건 중 `Software Engineer, AI Agent`를 `high`, 인턴 공고를 `medium`, 나머지 8건을 `review`로 분류했습니다. 같은 목록의 두 번째 실행은 신규 0건과 중복 10건으로 확인했습니다. Greenhouse 상세 공고 1건은 한 명령으로 조회·구조화·매칭하고 분석 ID가 있는 로컬 JSON으로 저장할 수 있습니다. 다음에는 선별된 후보를 상세 분석으로 자동 연결합니다.
+공식 인크루트 RSS와 Greenhouse 기업 보드 목록을 프로필 기반 발견 레코드로 변환하고 실행 간 중복을 제거해 로컬에 저장합니다. 실제 Sendbird 보드에서는 현재 공고 10건 중 `Software Engineer, AI Agent`를 `high`, 인턴 공고를 `medium`, 나머지 8건을 `review`로 분류했습니다. Agent 명령은 이 현재 `high` 후보를 자동 선택해 상세 구조화·매칭하고 고유 분석 ID가 있는 로컬 JSON으로 저장했습니다. 다음에는 변하지 않은 공고의 반복 분석을 피하고 관심 기업 보드 목록을 설정으로 분리합니다.
