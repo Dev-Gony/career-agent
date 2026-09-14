@@ -31,7 +31,17 @@ from .skill_mapping import (
     PROFILE_SKILL_MAPPING_RULES_VERSION,
     PROFILE_SKILL_MAPPING_SCHEMA_VERSION,
     build_profile_skill_mapping_proposal,
+    load_profile_skill_mapping_proposal,
     save_profile_skill_mapping_proposal,
+)
+from .skill_confirmation import (
+    MAX_SKILL_CONFIRMATION_NOTES_CHARS,
+    MAX_SKILL_EVIDENCE_CHARS,
+    MAX_SKILL_EVIDENCE_ITEMS,
+    PROFILE_SKILL_CONFIRMATION_SCHEMA_VERSION,
+    SKILL_LEVELS,
+    build_profile_skill_confirmation,
+    save_profile_skill_confirmation,
 )
 
 __all__ = [
@@ -52,7 +62,15 @@ __all__ = [
     "PROFILE_SKILL_MAPPING_RULES_VERSION",
     "PROFILE_SKILL_MAPPING_SCHEMA_VERSION",
     "build_profile_skill_mapping_proposal",
+    "load_profile_skill_mapping_proposal",
     "save_profile_skill_mapping_proposal",
+    "MAX_SKILL_CONFIRMATION_NOTES_CHARS",
+    "MAX_SKILL_EVIDENCE_CHARS",
+    "MAX_SKILL_EVIDENCE_ITEMS",
+    "PROFILE_SKILL_CONFIRMATION_SCHEMA_VERSION",
+    "SKILL_LEVELS",
+    "build_profile_skill_confirmation",
+    "save_profile_skill_confirmation",
     "PROFILE_UPDATE_PROPOSAL_SCHEMA_VERSION",
     "build_profile_update_proposal",
     "load_profile_update_proposal",

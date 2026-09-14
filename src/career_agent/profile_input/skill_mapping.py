@@ -21,6 +21,7 @@ from .update_proposal import (
 
 PROFILE_SKILL_MAPPING_SCHEMA_VERSION = "0.1"
 PROFILE_SKILL_MAPPING_RULES_VERSION = "0.1"
+_SKILL_MAPPING_ID_PATTERN = re.compile(r"^profile-skill-mapping-[0-9a-f]{24}$")
 _COMPOSITE_SKILL_PATTERN = re.compile(r"[,;|·]")
 _UPDATE_PROPOSAL_ID_PATTERN = re.compile(
     r"^profile-update-proposal-[0-9a-f]{24}$"
@@ -380,3 +381,37 @@ def save_profile_skill_mapping_proposal(
         if temporary_path is not None and temporary_path.exists():
             temporary_path.unlink()
     return target_path, True
+
+
+def load_profile_skill_mapping_proposal(
+    mapping_id: str,
+    directory: str | Path,
+) -> dict[str, Any]:
+    """Load one private skill mapping proposal without path traversal."""
+
+    normalized_id = _text(mapping_id, "mapping_id")
+    if _SKILL_MAPPING_ID_PATTERN.fullmatch(normalized_id) is None:
+        raise ProfileDocumentError("mapping_id 형식이 올바르지 않음")
+    path = Path(directory) / f"{normalized_id}.json"
+    try:
+        mapping_proposal = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ProfileDocumentError(
+            f"프로필 기술 매핑안을 읽을 수 없음: {path}"
+        ) from error
+    if not isinstance(mapping_proposal, dict):
+        raise ProfileDocumentError("프로필 기술 매핑안 최상위 JSON은 객체여야 함")
+    root = _mapping(
+        mapping_proposal.get("profile_skill_mapping"),
+        "profile_skill_mapping",
+    )
+    metadata = _mapping(mapping_proposal.get("metadata"), "metadata")
+    if root.get("mapping_id") != normalized_id:
+        raise ProfileDocumentError("기술 매핑안의 mapping_id가 요청과 일치하지 않음")
+    if metadata.get("schema_version") != PROFILE_SKILL_MAPPING_SCHEMA_VERSION:
+        raise ProfileDocumentError("현재 버전의 기술 매핑안이 아님")
+    if metadata.get("git_tracking_allowed") is not False:
+        raise ProfileDocumentError("기술 매핑안에 Git 제외 표시가 없음")
+    if metadata.get("profile_updated") is not False:
+        raise ProfileDocumentError("기술 매핑안은 프로필 갱신 상태일 수 없음")
+    return mapping_proposal

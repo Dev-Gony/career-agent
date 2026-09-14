@@ -197,14 +197,52 @@ PDF와 DOCX는 원본 저장만 지원하며 현재 텍스트 후보 추출에�
 
 결과는 `private-data/profile-skill-mappings/`에 저장한다. 기존 기술 중복이어도 자동으로 덮어쓰지 않으며, 새 기술 후보에도 숙련도와 사용 증거를 임의로 채우지 않는다. 모든 항목의 `profile_change_ready`와 전체 `profile_updated`는 계속 `false`다.
 
-## 10. 현재 한계
+## 10. 새 기술 세부정보 확인
+
+`needs_details` 기술 후보 한 건에 사용자가 명시적으로 확인한 숙련도와 사용 증거를 기록한다.
+
+    python scripts/confirm_profile_skill.py --mapping-id profile-skill-mapping-example --mapping-item-id skill-mapping-item-001 --level project --evidence "Tech News Automation에서 사용"
+
+증거가 여러 개면 `--evidence`를 반복한다.
+
+허용 숙련도는 `none`, `exposure`, `learning`, `basic`, `project`, `work`다. 사용 증거는 최소 1개, 최대 10개이며 각 항목은 300자 이하로 제한한다. 선택 메모는 1000자 이하로 제한한다.
+
+    profile_skill_confirmation:
+      confirmation_id: "profile-skill-confirmation-example"
+      confirmed_at: "2026-09-14T19:00:00+09:00"
+      confirmation_source: "explicit_user_input"
+      level: "project"
+      evidence:
+        - "Tech News Automation에서 사용"
+      notes: null
+
+    source:
+      mapping_id: "profile-skill-mapping-example"
+      mapping_item_id: "skill-mapping-item-001"
+      source_update_proposal_id: "profile-update-proposal-example"
+      candidate_id: "candidate-001"
+      document_id: "profile-document-resume-example"
+      line_start: 10
+      line_end: 10
+
+    metadata:
+      schema_version: "0.1"
+      contains_personal_data: true
+      contains_candidate_text: false
+      git_tracking_allowed: false
+      profile_updated: false
+
+기록에는 후보 기술명을 자동 복제하지 않고 매핑 항목과 원문 근거를 참조한다. 결과는 `private-data/profile-skill-confirmations/`에 불변 파일로 저장한다. `duplicate_existing`과 `needs_separation` 항목은 이 명령으로 확인할 수 없다.
+
+## 11. 현재 한계
 
 - 제목 기반 분류이며 문장의 의미를 해석하지 않는다.
 - 한 줄 안의 기술 여러 개를 개별 기술로 분리하지 않는다.
 - 기간, 경력 연수, 숙련도와 성과를 구조화하지 않는다.
-- 기술 후보는 중복·세부정보 필요·분리 필요로 매핑할 수 있지만 새 기술 객체를 완성하거나 실제 프로필에 적용하지 않는다.
+- `needs_details` 기술 후보의 숙련도와 증거를 확인할 수 있지만 여러 확인 기록 중 최신 판단을 선택하거나 완성된 기술 추가안을 만들지 않는다.
+- 기술 후보를 실제 프로필에 적용하지 않는다.
 - 목표 직무, 경력, 프로젝트와 다른 프로필 영역은 아직 타입 매핑하지 않는다.
 - PDF, DOCX와 이미지 OCR 추출은 아직 없다.
 - 외부 LLM을 호출하지 않는다.
 
-다음 단계에서는 새 기술 후보에 필요한 숙련도와 사용 증거를 명시적으로 확인하는 기록을 추가하되, 사용자 확인 전에는 실제 프로필을 변경하지 않는다.
+다음 단계에서는 기술 후보별 가장 최근 세부정보 확인을 선택하고, 확인이 끝난 후보만 완성된 기술 추가안으로 만들되 실제 프로필 적용은 분리한다.
