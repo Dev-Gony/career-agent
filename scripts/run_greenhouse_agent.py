@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-from datetime import date
 import json
 from pathlib import Path
 import sys
@@ -10,18 +9,21 @@ import sys
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
+from career_agent.config import (  # noqa: E402
+    GreenhouseBoardConfigError,
+    load_enabled_greenhouse_board,
+)
 from career_agent.workflows import (  # noqa: E402
     GreenhouseAgentError,
     run_greenhouse_agent,
 )
 
 
-DEFAULT_BOARD = "sendbird"
+DEFAULT_BOARD_CONFIG = REPOSITORY_ROOT / "data/greenhouse_boards.example.json"
 DEFAULT_PROFILE = REPOSITORY_ROOT / "data/user_profile.example.json"
 DEFAULT_SEARCH_PLAN = REPOSITORY_ROOT / "data/job_search_plan.example.json"
 DEFAULT_STORE_PATH = REPOSITORY_ROOT / "private-data/discoveries.json"
 DEFAULT_RUN_DIRECTORY = REPOSITORY_ROOT / "private-data/agent-runs"
-POLICY_CHECKED_AT = date(2026, 9, 14)
 
 
 def _load_json(path: Path) -> dict:
@@ -38,7 +40,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Greenhouse 현재 공고를 발견하고 high 후보 1건만 상세 분석합니다."
     )
-    parser.add_argument("--board", default=DEFAULT_BOARD)
+    parser.add_argument("--board-config", type=Path, default=DEFAULT_BOARD_CONFIG)
     parser.add_argument("--profile", type=Path, default=DEFAULT_PROFILE)
     parser.add_argument("--search-plan", type=Path, default=DEFAULT_SEARCH_PLAN)
     parser.add_argument("--store", type=Path, default=DEFAULT_STORE_PATH)
@@ -79,13 +81,14 @@ def main() -> int:
         sys.stderr.reconfigure(encoding="utf-8")
     args = _build_parser().parse_args()
     try:
+        board = load_enabled_greenhouse_board(_load_json(args.board_config))
         previous_runs, previous_paths = _load_previous_runs(args.run_directory)
         result = run_greenhouse_agent(
             _load_json(args.profile),
             _load_json(args.search_plan),
             args.store,
-            board_token=args.board,
-            policy_checked_at=POLICY_CHECKED_AT,
+            board_token=board["board_token"],
+            policy_checked_at=board["policy_checked_at"],
             previous_runs=previous_runs,
         )
         if result["status"] == "no_high_candidate":
@@ -104,7 +107,12 @@ def main() -> int:
                 json.dumps(result, ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8",
             )
-    except (GreenhouseAgentError, OSError, UnicodeError) as error:
+    except (
+        GreenhouseAgentError,
+        GreenhouseBoardConfigError,
+        OSError,
+        UnicodeError,
+    ) as error:
         print(f"Greenhouse Agent 실행 실패: {error}", file=sys.stderr)
         return 1
 

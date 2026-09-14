@@ -1,0 +1,19 @@
+{
+  "greenhouse_boards": {
+    "boards": [
+      {
+        "board_token": "sendbird",
+        "company": "Sendbird",
+        "careers_url": "https://sendbird.com/careers",
+        "access_method": "greenhouse_job_board_api",
+        "policy_checked_at": "2026-09-14",
+        "enabled": true
+      }
+    ],
+    "metadata": {
+      "schema_version": "1.0",
+      "data_type": "public_source_registry",
+      "contains_sensitive_personal_data": false
+    }
+  }
+}

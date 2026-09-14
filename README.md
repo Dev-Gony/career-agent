@@ -64,11 +64,12 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
 - Greenhouse 기업 보드의 현재 공고 목록을 조회하고 프로필 목표 직무와 선호 조건으로 후보를 정렬하는 기능 구현
 - Greenhouse 현재 목록의 `high` 후보 1건을 공고 ID 입력 없이 상세 분석하고 실행별 결과로 저장하는 제한된 Agent 워크플로 구현
 - 공고 갱신 시각, 프로필 내용과 분석 규칙이 같으면 기존 상세 분석을 재사용하는 반복 실행 제한 구현
+- 검증된 Greenhouse 기업 보드를 코드 밖의 소스 등록부에서 읽고 현재 MVP에서는 활성 보드 1개만 허용하는 설정 구현
 
 다음 단계:
 
-1. 관심 기업 보드 목록을 로컬 설정으로 관리
-2. 여러 기업의 `high` 후보를 한 번에 모두 분석하지 않는 실행 제한 설계
+1. 여러 기업의 `high` 후보를 한 번에 모두 분석하지 않는 전역 실행 제한 설계
+2. Agent가 공식 기업 채용 URL에서 Greenhouse 소스를 발견해 등록부 후보로 제안하는 단계 설계
 3. 저장된 실제 분석 결과의 사용자 검토와 판정 교정 반영
 4. 문서 입력과 대화가 가능한 첫 Slack 인터페이스 설계 및 구현
 5. 하루 1회 실행과 성공·실패 상태 기록
@@ -87,9 +88,11 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
     |   |-- JOB_SEARCH_PLAN_SCHEMA.md
     |   |-- INCRUIT_RSS_MAPPING.md
     |   |-- GREENHOUSE_API_MAPPING.md
+    |   |-- GREENHOUSE_BOARD_CONFIG_SCHEMA.md
     |   |-- MATCHING_RULES.md
     |   `-- MATCH_RESULT_SCHEMA.md
     |-- data/
+    |   |-- greenhouse_boards.example.json
     |   |-- user_profile.example.json
     |   |-- job_posting.example.json
     |   |-- job_discovery.example.json
@@ -99,6 +102,8 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
     |   `-- match_result.example.json
     |-- src/
     |   `-- career_agent/
+    |       |-- config/
+    |       |   `-- greenhouse_boards.py
     |       |-- discovery/
     |       |   |-- greenhouse_board.py
     |       |   |-- incruit_feed.py
@@ -132,6 +137,7 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
     |   `-- run_greenhouse_agent.py
     |-- tests/
     |   |-- test_application_recommendation.py
+    |   |-- test_greenhouse_board_config.py
     |   |-- test_greenhouse_agent_workflow.py
     |   |-- test_greenhouse_analysis_workflow.py
     |   |-- test_greenhouse_discovery.py
@@ -183,6 +189,10 @@ RSS나 공식 API에서 발견한 후보를 상세 분석 전 단계에서 저�
 
 Greenhouse 공개 Job Board API 공고를 내부 채용공고 스키마로 변환하는 기준과 조회 전용 접근 경계를 정의합니다.
 
+### docs/GREENHOUSE_BOARD_CONFIG_SCHEMA.md
+
+Agent가 확인한 Greenhouse 공식 기업 채용 소스를 코드 밖에서 관리하고 현재 활성 보드를 1개로 제한하는 설정 구조를 정의합니다.
+
 ### docs/MATCHING_RULES.md
 
 실제 증거의 우선순위, 일치 수준, 부족과 정보 부족의 구분 및 지원 판단 원칙을 정의합니다.
@@ -228,6 +238,12 @@ Sendbird의 Greenhouse 공식 보드에서 현재 게시 공고 목록을 가져
     python scripts/run_greenhouse_agent.py
 
 현재 목록의 `high` 후보 중 가장 최근 공고만 분석하며 `high`가 없으면 상세 조회 없이 종료합니다. 로컬에 남은 과거 공고는 현재 목록에 없으면 선택하지 않고, 실패 시 다른 후보를 연쇄 조회하지 않습니다. 새 분석은 고유한 분석 ID를 사용해 `private-data/agent-runs/`에 저장됩니다. 같은 공고의 갱신 시각, 프로필 내용, 매칭 규칙과 분석 파이프라인 버전이 모두 같으면 기존 파일을 재사용하고 새 파일을 만들지 않습니다.
+
+기본 실행은 `data/greenhouse_boards.example.json`의 검증된 Sendbird 소스를 읽습니다. 개인 설정은 `private-data/greenhouse_boards.json`에 두고 다음처럼 지정할 수 있습니다.
+
+    python scripts/run_greenhouse_agent.py --board-config private-data/greenhouse_boards.json
+
+현재는 상세 분석 수가 기업 수만큼 늘어나지 않도록 `enabled: true`인 보드를 정확히 1개만 허용합니다. 이 등록부는 직무 키워드 입력이 아니라 Agent가 확인한 공식 채용 소스를 관리하기 위한 것입니다.
 
 예제 사용자 프로필과 예제 공고의 기술 요구사항만 비교합니다.
 
@@ -313,8 +329,9 @@ Greenhouse를 사용하는 기업의 공개 상세공고 1건을 자동으로 �
 - 현재 `high` 후보가 없거나 로컬 저장소에만 남은 과거 `high` 후보뿐이면 상세 분석 없이 종료
 - 현재 조회 결과를 저장된 과거 순위 대신 다시 계산된 프로필 관련성으로 선택
 - 공고·프로필·규칙이 모두 같을 때 기존 분석을 재사용하고 프로필이 달라지면 새 분석 실행
+- Greenhouse 소스 등록부의 필수 필드, HTTPS URL, 중복 token과 활성 보드 1개 제한 검증
 
-현재 구현은 공식 인크루트 RSS와 Greenhouse 기업 보드 목록을 읽고 로컬 JSON에 신규 후보를 중복 없이 저장합니다. Greenhouse 후보는 프로필에서 도출한 목표 직무와 선호 조건으로 정렬하며, 현재 `high` 후보 1건은 공고 ID 입력이나 복사·붙여넣기 없이 상세 조회·분석·저장합니다. 아직 여러 관심 기업 설정, LLM 호출 또는 Slack 연동은 하지 않습니다.
+현재 구현은 공식 인크루트 RSS와 설정에 등록된 Greenhouse 기업 보드 목록을 읽고 로컬 JSON에 신규 후보를 중복 없이 저장합니다. Greenhouse 후보는 프로필에서 도출한 목표 직무와 선호 조건으로 정렬하며, 현재 `high` 후보 1건은 공고 ID 입력이나 복사·붙여넣기 없이 상세 조회·분석·저장합니다. 현재 등록부는 활성 보드 1개만 실행하며 아직 여러 보드 통합 순위, LLM 호출 또는 Slack 연동은 하지 않습니다.
 
 ## 예상 MVP 흐름
 
@@ -381,4 +398,4 @@ MVP가 실제로 유용하다고 판단되면 다음 기능을 검토합니다.
 
 현재 상태: 자동 공고 발견·선별, 현재 최우선 후보 1건의 공식 ATS 상세 입력 및 핵심 근거 기반 매칭 구현
 
-공식 인크루트 RSS와 Greenhouse 기업 보드 목록을 프로필 기반 발견 레코드로 변환하고 실행 간 중복을 제거해 로컬에 저장합니다. 실제 Sendbird 보드에서는 현재 공고 10건 중 `Software Engineer, AI Agent`를 `high`, 인턴 공고를 `medium`, 나머지 8건을 `review`로 분류했습니다. Agent 명령은 이 현재 `high` 후보를 자동 선택해 상세 구조화·매칭하고 고유 분석 ID가 있는 로컬 JSON으로 저장했습니다. 같은 조건의 두 번째 실행에서는 이 분석을 재사용해 새 파일을 만들지 않았습니다. 다음에는 관심 기업 보드 목록을 설정으로 분리합니다.
+공식 인크루트 RSS와 설정에 등록된 Greenhouse 기업 보드 목록을 프로필 기반 발견 레코드로 변환하고 실행 간 중복을 제거해 로컬에 저장합니다. 실제 Sendbird 보드에서는 현재 공고 10건 중 `Software Engineer, AI Agent`를 `high`, 인턴 공고를 `medium`, 나머지 8건을 `review`로 분류했습니다. Agent 명령은 이 현재 `high` 후보를 자동 선택해 상세 구조화·매칭하고 고유 분석 ID가 있는 로컬 JSON으로 저장했습니다. 같은 조건의 두 번째 실행에서는 이 분석을 재사용해 새 파일을 만들지 않았습니다. 다음에는 여러 보드의 후보를 합산하되 전체 상세 분석은 1건으로 제한하는 흐름을 설계합니다.
