@@ -72,16 +72,29 @@ def check_slack_setup(
     """Validate Slack IDs and token presence without returning token values."""
 
     validate_slack_interface_config(_load_config(Path(config_path)))
+    load_slack_tokens(env_file, environment=environment)
+    return {
+        "config_ready": True,
+        "app_token_ready": True,
+        "bot_token_ready": True,
+    }
+
+
+def load_slack_tokens(
+    env_file: str | Path,
+    *,
+    environment: Mapping[str, str] | None = None,
+) -> tuple[str, str]:
+    """Load validated App and Bot Tokens without logging their values."""
+
     file_values = _dotenv_values(Path(env_file))
     process_values = os.environ if environment is None else environment
+    validated: dict[str, str] = {}
     for name, pattern in _TOKEN_PATTERNS.items():
         value = process_values.get(name) or file_values.get(name)
         if not value:
             raise SlackEventError(f"{name}이 환경 변수 또는 .env에 없음")
         if "replace" in value.casefold() or pattern.fullmatch(value) is None:
             raise SlackEventError(f"{name} 형식이 올바르지 않음")
-    return {
-        "config_ready": True,
-        "app_token_ready": True,
-        "bot_token_ready": True,
-    }
+        validated[name] = value
+    return validated["SLACK_APP_TOKEN"], validated["SLACK_BOT_TOKEN"]

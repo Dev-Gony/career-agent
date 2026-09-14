@@ -148,6 +148,17 @@ Token은 저장소 파일이나 작업일지에 기록하지 않는다.
 
 이 명령은 ID 형식, 허용 목록과 Token의 존재 및 접두사만 확인한다. Token 값을 콘솔이나 결과 파일에 출력하지 않으며 Slack 네트워크에도 접속하지 않는다.
 
+Token을 입력한 뒤 실제 인증 상태는 다음 명령으로 확인한다.
+
+    python scripts/verify_slack_tokens.py
+
+Bot Token은 별도 Scope가 필요 없는 Slack 공식 `auth.test`로 인증하고, App Token은 `apps.connections.open` 응답으로 Socket Mode 사용 가능 여부를 확인한다.
+
+- `auth.test`: https://docs.slack.dev/reference/methods/auth.test/
+- `connections:write`: https://docs.slack.dev/reference/scopes/connections.write/
+
+요청은 `https://slack.com/api/`의 두 허용 메서드에만 POST로 전송하며 외부 리디렉션을 따르지 않는다. Token은 Authorization 헤더로만 보내고, 응답의 Token과 임시 WebSocket URL은 출력하거나 저장하지 않는다. 비밀정보가 없는 인증 결과만 `private-data/slack-auth/`에 저장한다.
+
 ## 9. 현재 보안 경계와 다음 단계
 
 HTTP Request URL 방식은 Slack Signing Secret으로 요청 서명을 반드시 확인해야 한다.

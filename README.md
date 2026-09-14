@@ -77,6 +77,7 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
 - 최신 최종 승인이 있는 기술만 원본을 보존한 새 프로필 버전에 적용하는 기능 구현
 - Slack `app_mention` 합성 이벤트의 허용 사용자·채널 검증과 첫 명령 라우팅 구현
 - 최소 권한 Slack App manifest와 Token 비노출 로컬 준비 검사 구현
+- Slack Bot Token 인증과 Socket Mode App Token 사용 가능 여부 검증 구현
 
 다음 단계:
 
@@ -364,6 +365,12 @@ Slack 앱 생성 전에는 `data/slack_app_manifest.example.json`을 사용합�
     python scripts/check_slack_setup.py
 
 검사 명령은 Token 값을 출력하거나 Slack에 접속하지 않습니다. 현재 실제 설정과 Token이 없으면 `Slack 연결 준비 미완료`가 나오는 것이 정상입니다.
+
+Token을 입력한 뒤 실제 인증과 Socket Mode 사용 가능 여부만 확인합니다.
+
+    python scripts/verify_slack_tokens.py
+
+이 명령은 Slack 공식 `auth.test`와 `apps.connections.open`만 호출합니다. Token과 임시 WebSocket URL은 결과 파일이나 콘솔에 남기지 않고, 비밀정보가 없는 인증 상태와 Slack 식별자만 `private-data/slack-auth/`에 저장합니다.
 
 상세 분석된 공고에 사용자의 실제 판단을 별도 기록합니다. `fit`은 적합, `hold`는 보류, `not_fit`은 부적합입니다.
 
