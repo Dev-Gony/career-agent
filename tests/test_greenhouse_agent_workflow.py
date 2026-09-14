@@ -18,6 +18,7 @@ from career_agent.workflows import (  # noqa: E402
     run_greenhouse_portfolio_agent,
 )
 from career_agent.ingestion import GreenhouseJobError  # noqa: E402
+from career_agent.matching import MATCHING_RULES_VERSION  # noqa: E402
 
 
 def _record(
@@ -135,7 +136,7 @@ class GreenhouseAgentWorkflowTest(unittest.TestCase):
                     "profile_content_sha256": profile_content_sha256(profile)
                 },
                 "metadata": {
-                    "matching_rules_version": "0.1",
+                    "matching_rules_version": MATCHING_RULES_VERSION,
                     "analysis_pipeline_version": "0.1",
                 },
             },
@@ -190,7 +191,7 @@ class GreenhouseAgentWorkflowTest(unittest.TestCase):
                     "identity": {"analysis_id": "analysis-existing"},
                     "inputs": {"profile_content_sha256": "different"},
                     "metadata": {
-                        "matching_rules_version": "0.1",
+                        "matching_rules_version": MATCHING_RULES_VERSION,
                         "analysis_pipeline_version": "0.1",
                     },
                 },

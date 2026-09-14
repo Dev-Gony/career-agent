@@ -3,6 +3,7 @@
 from .eligibility import EligibilityMatchError, assess_eligibility
 from .experience import ExperienceMatchError, match_experience_requirements
 from .insights import MatchInsightsError, build_match_insights
+from .learning import LearningRecommendationError, build_learning_recommendations
 from .recommendation import RecommendationError, build_application_recommendation
 from .responsibility import ResponsibilityMatchError, match_responsibilities
 from .service import (
@@ -19,6 +20,8 @@ __all__ = [
     "match_experience_requirements",
     "MatchInsightsError",
     "build_match_insights",
+    "LearningRecommendationError",
+    "build_learning_recommendations",
     "RecommendationError",
     "build_application_recommendation",
     "ResponsibilityMatchError",

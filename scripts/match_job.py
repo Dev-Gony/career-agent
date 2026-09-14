@@ -97,6 +97,18 @@ def _print_insights(result: dict) -> None:
         print("- 추가 확인 항목 없음")
 
 
+def _print_learning_recommendations(recommendations: list[dict]) -> None:
+    print("우선 학습 과제")
+    for recommendation in recommendations:
+        print(f"- {recommendation['topic']} [{recommendation['priority']}]")
+        print(f"  근거: {recommendation['based_on']}")
+        print(f"  행동: {recommendation['action']}")
+        print(f"  산출물: {recommendation['deliverable']}")
+        print(f"  완료 증거: {recommendation['completion_evidence']}")
+    if not recommendations:
+        print("- 확인된 부족에 근거한 즉시 학습 과제 없음")
+
+
 def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -119,6 +131,7 @@ def main() -> int:
     _print_section("주요 업무", result["responsibility_matches"])
     _print_eligibility(result["eligibility"])
     _print_insights(result)
+    _print_learning_recommendations(result["learning_recommendations"])
     _print_recommendation(result["application_recommendation"])
     return 0
 

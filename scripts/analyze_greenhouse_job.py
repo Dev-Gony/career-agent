@@ -92,6 +92,7 @@ def main() -> int:
     print(f"- 필수 조건 미확인: {result['summary']['required']['unknown']}개")
     print(f"- 지원 시 강조할 강점: {len(result['strengths'])}개")
     print(f"- 추가 확인 항목: {len(result['unknowns'])}개")
+    print(f"- 우선 학습 과제: {len(result['learning_recommendations'])}개")
     print(f"- 저장: {output_path}")
     _print_review_priorities(result)
     print("주의: 현재 프로필과 규칙 기반 비교 결과이며 합격 가능성 예측이 아닙니다.")

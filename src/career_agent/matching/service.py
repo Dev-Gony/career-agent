@@ -8,12 +8,13 @@ from typing import Any
 from .eligibility import EligibilityMatchError, assess_eligibility
 from .experience import ExperienceMatchError, match_experience_requirements
 from .insights import MatchInsightsError, build_match_insights
+from .learning import LearningRecommendationError, build_learning_recommendations
 from .recommendation import RecommendationError, build_application_recommendation
 from .responsibility import ResponsibilityMatchError, match_responsibilities
 from .technology import TechnologyMatchError, match_technology_requirements
 
 
-MATCHING_RULES_VERSION = "0.1"
+MATCHING_RULES_VERSION = "0.2"
 
 
 class RequirementMatchError(ValueError):
@@ -196,7 +197,16 @@ def match_job_requirements(
             responsibility_matches=responsibility["responsibility_matches"],
             responsibilities_evaluated=True,
         )
-    except (MatchInsightsError, RecommendationError) as error:
+        learning_recommendations = build_learning_recommendations(
+            profile_document,
+            required_matches,
+            preferred_matches,
+        )
+    except (
+        LearningRecommendationError,
+        MatchInsightsError,
+        RecommendationError,
+    ) as error:
         raise RequirementMatchError(str(error)) from error
 
     return {
@@ -217,6 +227,7 @@ def match_job_requirements(
         "strengths": insights["strengths"],
         "gaps": insights["gaps"],
         "unknowns": insights["unknowns"],
+        "learning_recommendations": learning_recommendations,
         "application_recommendation": application_recommendation,
         "metadata": {
             "matching_rules_version": MATCHING_RULES_VERSION,

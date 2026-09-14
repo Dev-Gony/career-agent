@@ -177,6 +177,7 @@ def main() -> int:
     print(f"- 지원 판단: {match_result['application_recommendation']['decision']}")
     print(f"- 지원 시 강조할 강점: {len(match_result['strengths'])}개")
     print(f"- 우선 확인 항목: {min(5, len(match_result['unknowns']))}개")
+    print(f"- 우선 학습 과제: {len(match_result['learning_recommendations'])}개")
     print(f"- 저장: {output_path}")
     print(f"- 실행 이력: {execution_path}")
     print("주의: 현재 조회된 high 후보 1건만 분석했으며 합격 가능성 예측이 아닙니다.")
