@@ -27,6 +27,15 @@ from .greenhouse_analysis import (
 class GreenhouseAgentError(RuntimeError):
     """Raised when the constrained discovery-to-analysis run fails."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        discovery: Mapping[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.discovery = discovery
+
 
 def run_greenhouse_agent(
     profile_document: dict[str, Any],
@@ -73,6 +82,7 @@ def run_greenhouse_portfolio_agent(
 
     board_results: list[dict[str, Any]] = []
     board_errors: list[dict[str, str]] = []
+    board_attempts: list[dict[str, Any]] = []
     current_records: list[dict[str, Any]] = []
     for board in board_list:
         if not isinstance(board, Mapping):
@@ -97,6 +107,13 @@ def run_greenhouse_portfolio_agent(
             board_errors.append(
                 {"board_token": board_token, "error": str(error)}
             )
+            board_attempts.append(
+                {
+                    "board_token": board_token,
+                    "status": "failed",
+                    "error": str(error),
+                }
+            )
             continue
 
         records = discovery.get("current_records")
@@ -105,6 +122,16 @@ def run_greenhouse_portfolio_agent(
         ):
             raise GreenhouseAgentError("현재 Greenhouse 발견 레코드 목록이 필요함")
         board_results.append(discovery)
+        board_attempts.append(
+            {
+                "board_token": board_token,
+                "status": "succeeded",
+                "fetched_records": discovery.get("fetched_records", 0),
+                "item_errors": len(discovery.get("item_errors", [])),
+                "new_records": discovery.get("new_records", 0),
+                "duplicate_records": discovery.get("duplicate_records", 0),
+            }
+        )
         current_records.extend(records)
 
     discovery_summary = {
@@ -116,6 +143,7 @@ def run_greenhouse_portfolio_agent(
         ),
         "board_results": board_results,
         "board_errors": board_errors,
+        "board_attempts": board_attempts,
         "executed_at": execution_time.isoformat(timespec="seconds"),
     }
     if not board_results:
@@ -123,7 +151,8 @@ def run_greenhouse_portfolio_agent(
             error["board_token"] for error in board_errors
         )
         raise GreenhouseAgentError(
-            f"모든 Greenhouse 보드 목록 조회가 실패함: {failed_tokens}"
+            f"모든 Greenhouse 보드 목록 조회가 실패함: {failed_tokens}",
+            discovery=discovery_summary,
         )
 
     candidates = _current_high_candidates(current_records)
@@ -175,7 +204,9 @@ def run_greenhouse_portfolio_agent(
         KeyError,
         TypeError,
     ) as error:
-        raise GreenhouseAgentError(str(error)) from error
+        raise GreenhouseAgentError(
+            str(error), discovery=discovery_summary
+        ) from error
 
     return {
         "status": "analyzed",

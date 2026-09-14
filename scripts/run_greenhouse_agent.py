@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import json
 from pathlib import Path
 import sys
@@ -13,6 +14,11 @@ from career_agent.config import (  # noqa: E402
     GreenhouseBoardConfigError,
     load_enabled_greenhouse_boards,
 )
+from career_agent.execution import (  # noqa: E402
+    ExecutionLogError,
+    build_greenhouse_execution_record,
+    save_execution_record,
+)
 from career_agent.workflows import (  # noqa: E402
     GreenhouseAgentError,
     run_greenhouse_portfolio_agent,
@@ -24,6 +30,7 @@ DEFAULT_PROFILE = REPOSITORY_ROOT / "data/user_profile.example.json"
 DEFAULT_SEARCH_PLAN = REPOSITORY_ROOT / "data/job_search_plan.example.json"
 DEFAULT_STORE_PATH = REPOSITORY_ROOT / "private-data/discoveries.json"
 DEFAULT_RUN_DIRECTORY = REPOSITORY_ROOT / "private-data/agent-runs"
+DEFAULT_EXECUTION_DIRECTORY = REPOSITORY_ROOT / "private-data/execution-runs"
 
 
 def _load_json(path: Path) -> dict:
@@ -45,6 +52,9 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--search-plan", type=Path, default=DEFAULT_SEARCH_PLAN)
     parser.add_argument("--store", type=Path, default=DEFAULT_STORE_PATH)
     parser.add_argument("--run-directory", type=Path, default=DEFAULT_RUN_DIRECTORY)
+    parser.add_argument(
+        "--execution-directory", type=Path, default=DEFAULT_EXECUTION_DIRECTORY
+    )
     parser.add_argument("--output", type=Path)
     return parser
 
@@ -80,6 +90,7 @@ def main() -> int:
         sys.stdout.reconfigure(encoding="utf-8")
         sys.stderr.reconfigure(encoding="utf-8")
     args = _build_parser().parse_args()
+    execution_time = datetime.now().astimezone()
     try:
         boards = load_enabled_greenhouse_boards(_load_json(args.board_config))
         previous_runs, previous_paths = _load_previous_runs(args.run_directory)
@@ -88,6 +99,7 @@ def main() -> int:
             _load_json(args.search_plan),
             args.store,
             boards=boards,
+            executed_at=execution_time,
             previous_runs=previous_runs,
         )
         discovery = result["discovery"]
@@ -101,7 +113,16 @@ def main() -> int:
             )
             print(f"- 목록 조회 실패 보드: {failed_boards}")
         if result["status"] == "no_high_candidate":
+            execution_path = save_execution_record(
+                build_greenhouse_execution_record(
+                    executed_at=execution_time,
+                    status=result["status"],
+                    discovery=result["discovery"],
+                ),
+                args.execution_directory,
+            )
             print("현재 Greenhouse 보드들에 high 후보가 없어 상세 분석을 실행하지 않았습니다.")
+            print(f"- 실행 이력: {execution_path}")
             return 0
 
         analysis_id = result["analysis"]["match_result"]["identity"]["analysis_id"]
@@ -116,13 +137,32 @@ def main() -> int:
                 json.dumps(result, ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8",
             )
+        execution_path = save_execution_record(
+            build_greenhouse_execution_record(
+                executed_at=execution_time,
+                status=result["status"],
+                discovery=result["discovery"],
+                selection=result["selection"],
+                analysis_id=analysis_id,
+                analysis_filename=output_path.name,
+            ),
+            args.execution_directory,
+        )
     except (
         GreenhouseAgentError,
         GreenhouseBoardConfigError,
+        ExecutionLogError,
         OSError,
         UnicodeError,
     ) as error:
+        failure_path = _save_failure_execution(
+            args.execution_directory,
+            executed_at=execution_time,
+            error=error,
+        )
         print(f"Greenhouse Agent 실행 실패: {error}", file=sys.stderr)
+        if failure_path is not None:
+            print(f"실패 실행 이력: {failure_path}", file=sys.stderr)
         return 1
 
     selection = result["selection"]
@@ -138,8 +178,30 @@ def main() -> int:
     print(f"- 지원 시 강조할 강점: {len(match_result['strengths'])}개")
     print(f"- 우선 확인 항목: {min(5, len(match_result['unknowns']))}개")
     print(f"- 저장: {output_path}")
+    print(f"- 실행 이력: {execution_path}")
     print("주의: 현재 조회된 high 후보 1건만 분석했으며 합격 가능성 예측이 아닙니다.")
     return 0
+
+
+def _save_failure_execution(
+    directory: Path,
+    *,
+    executed_at: datetime,
+    error: Exception,
+) -> Path | None:
+    discovery = (
+        error.discovery if isinstance(error, GreenhouseAgentError) else None
+    )
+    try:
+        record = build_greenhouse_execution_record(
+            executed_at=executed_at,
+            status="failed",
+            discovery=discovery,
+            error=str(error),
+        )
+        return save_execution_record(record, directory)
+    except ExecutionLogError:
+        return None
 
 
 if __name__ == "__main__":

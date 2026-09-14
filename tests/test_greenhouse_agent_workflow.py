@@ -322,7 +322,9 @@ class GreenhouseAgentWorkflowTest(unittest.TestCase):
         mocked_discovery.side_effect = GreenhouseJobError("합성 목록 조회 실패")
 
         with tempfile.TemporaryDirectory() as directory:
-            with self.assertRaisesRegex(GreenhouseAgentError, "모든 Greenhouse"):
+            with self.assertRaisesRegex(
+                GreenhouseAgentError, "모든 Greenhouse"
+            ) as raised:
                 run_greenhouse_portfolio_agent(
                     {"profile": {}},
                     {"job_search_plan": {}},
@@ -340,6 +342,8 @@ class GreenhouseAgentWorkflowTest(unittest.TestCase):
                     executed_at=self.execution_time,
                 )
 
+        self.assertEqual(2, raised.exception.discovery["boards_failed"])
+        self.assertEqual(2, len(raised.exception.discovery["board_attempts"]))
         mocked_analyze.assert_not_called()
 
 
