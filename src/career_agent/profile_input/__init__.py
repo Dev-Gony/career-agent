@@ -57,6 +57,12 @@ from .skill_addition_review import (
     build_profile_skill_addition_review,
     save_profile_skill_addition_review,
 )
+from .skill_application import (
+    PROFILE_SKILL_APPLICATION_RULES_VERSION,
+    PROFILE_SKILL_APPLICATION_SCHEMA_VERSION,
+    build_profile_skill_application,
+    save_profile_skill_application,
+)
 
 __all__ = [
     "DOCUMENT_KINDS",
@@ -95,6 +101,10 @@ __all__ = [
     "SKILL_ADDITION_REVIEW_DECISIONS",
     "build_profile_skill_addition_review",
     "save_profile_skill_addition_review",
+    "PROFILE_SKILL_APPLICATION_RULES_VERSION",
+    "PROFILE_SKILL_APPLICATION_SCHEMA_VERSION",
+    "build_profile_skill_application",
+    "save_profile_skill_application",
     "PROFILE_UPDATE_PROPOSAL_SCHEMA_VERSION",
     "build_profile_update_proposal",
     "load_profile_update_proposal",

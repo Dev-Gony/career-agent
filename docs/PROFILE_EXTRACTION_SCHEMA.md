@@ -303,14 +303,44 @@ PDF와 DOCX는 원본 저장만 지원하며 현재 텍스트 후보 추출에�
 
 최종 검토 기록은 기술명, 숙련도와 사용 증거를 자동 복제하지 않고 추가안과 항목만 참조한다. 같은 항목을 다시 판단해도 기존 기록을 덮어쓰지 않는다. 결과는 `private-data/profile-skill-addition-reviews/`에 저장하며 실제 프로필을 변경하지 않는다.
 
-## 13. 현재 한계
+## 13. 최종 승인 기술 적용
+
+`scripts/apply_profile_skill_additions.py`는 기술 추가 항목마다 시간대가 포함된 `reviewed_at`이 가장 늦은 최종 판단을 선택한다.
+
+    python scripts/apply_profile_skill_additions.py --proposal-id profile-skill-addition-example
+
+최신 판단이 `approve`인 기술만 적용한다. 적용 직전에 추가안의 기준 `profile_id`와 전체 프로필 SHA-256을 현재 프로필과 비교하고, 기존 기술 및 이번 적용 기술 사이의 기술명과 `skill_id` 중복을 다시 검사한다.
+
+    profile_skill_application:
+      application_id: "profile-skill-application-example"
+      status: "applied_to_new_version"
+      base_profile_id: "sample-user-001"
+      base_profile_content_sha256: "기준 프로필 전체 SHA-256"
+      source_addition_proposal_id: "profile-skill-addition-example"
+      output_profile_content_sha256: "새 프로필 전체 SHA-256"
+      rules_version: "0.1"
+
+    applied_items:
+      - addition_item_id: "skill-addition-item-001"
+        final_review_id: "profile-skill-addition-review-example"
+        skill_id: "skill-import-0123456789ab"
+
+    metadata:
+      schema_version: "0.1"
+      contains_skill_content: false
+      git_tracking_allowed: false
+      profile_updated: true
+
+결과는 `private-data/profile-applications/<application-id>/`에 저장한다. 승인이 있으면 기술 내용을 복제하지 않은 `application.json`과 새 전체 프로필인 `profile.json`을 함께 저장한다. 승인이 없거나 추가안이 비어 있으면 `no_approved_skills` 적용 이력만 저장하고 `profile.json`은 만들지 않는다. 입력으로 사용한 기준 프로필 파일은 수정하지 않는다.
+
+## 14. 현재 한계
 
 - 제목 기반 분류이며 문장의 의미를 해석하지 않는다.
 - 한 줄 안의 기술 여러 개를 개별 기술로 분리하지 않는다.
 - 기간, 경력 연수, 숙련도와 성과를 구조화하지 않는다.
-- 완성된 기술 추가안의 최종 승인·거부는 기록할 수 있지만 후보별 최신 최종 판단 선택과 실제 프로필 적용은 아직 없다.
+- 기술 영역만 새 프로필 버전에 적용하며 목표 직무, 경력과 프로젝트는 아직 적용하지 않는다.
 - 목표 직무, 경력, 프로젝트와 다른 프로필 영역은 아직 타입 매핑하지 않는다.
 - PDF, DOCX와 이미지 OCR 추출은 아직 없다.
 - 외부 LLM을 호출하지 않는다.
 
-다음 단계에서는 후보별 최신 최종 판단이 승인인 기술만 새 버전의 사용자 프로필 파일에 적용하고 기존 프로필 원본을 보존한다.
+다음 단계에서는 이 입력·검토·적용 흐름을 호출하는 최소 Slack 대화 인터페이스를 만든다.

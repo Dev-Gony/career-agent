@@ -91,10 +91,11 @@ def _validate_skill(item: Mapping[str, Any], position: int) -> None:
             )
 
 
-def _addition_item(
+def validated_profile_skill_addition_index(
     proposal: Mapping[str, Any],
-    addition_item_id: str,
-) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+) -> tuple[Mapping[str, Any], dict[str, Mapping[str, Any]]]:
+    """Validate one addition proposal and index all reviewable items."""
+
     root = _mapping(proposal.get("profile_skill_addition"), "profile_skill_addition")
     metadata = _mapping(proposal.get("metadata"), "metadata")
     if metadata.get("schema_version") != PROFILE_SKILL_ADDITION_SCHEMA_VERSION:
@@ -105,9 +106,6 @@ def _addition_item(
         raise ProfileDocumentError("반영되지 않은 기술 추가안만 검토할 수 있음")
     if root.get("rules_version") != PROFILE_SKILL_ADDITION_RULES_VERSION:
         raise ProfileDocumentError("현재 규칙 버전의 기술 추가안이 아님")
-    if root.get("status") != "needs_final_review":
-        raise ProfileDocumentError("최종 검토할 기술이 있는 추가안이 아님")
-    normalized_item_id = _text(addition_item_id, "addition_item_id")
     raw_items = proposal.get("skill_additions")
     if not isinstance(raw_items, list):
         raise ProfileDocumentError("skill_additions 배열이 필요함")
@@ -123,7 +121,7 @@ def _addition_item(
         raise ProfileDocumentError("완성 기술 수와 skill_additions가 일치하지 않음")
 
     item_ids: set[str] = set()
-    matches: list[Mapping[str, Any]] = []
+    index: dict[str, Mapping[str, Any]] = {}
     skill_ids: set[str] = set()
     for position, raw_item in enumerate(raw_items):
         item = _mapping(raw_item, f"skill_additions[{position}]")
@@ -134,6 +132,7 @@ def _addition_item(
         if item_id in item_ids:
             raise ProfileDocumentError(f"중복 기술 추가 항목 ID: {item_id}")
         item_ids.add(item_id)
+        index[item_id] = item
         if item.get("application_status") != "needs_final_review":
             raise ProfileDocumentError(
                 f"skill_additions[{position}]가 최종 검토 전 상태가 아님"
@@ -165,11 +164,28 @@ def _addition_item(
             raise ProfileDocumentError(
                 f"skill_additions[{position}]의 원문 줄 범위가 올바르지 않음"
             )
-        if item_id == normalized_item_id:
-            matches.append(item)
-    if not matches:
+    expected_status = "needs_final_review" if raw_items else "no_confirmed_skills"
+    if root.get("status") != expected_status:
+        raise ProfileDocumentError("기술 추가안 상태가 완성 기술 수와 일치하지 않음")
+    return root, index
+
+
+def _addition_item(
+    proposal: Mapping[str, Any],
+    addition_item_id: str,
+) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    preliminary_root = _mapping(
+        proposal.get("profile_skill_addition"),
+        "profile_skill_addition",
+    )
+    if preliminary_root.get("status") != "needs_final_review":
+        raise ProfileDocumentError("최종 검토할 기술이 있는 추가안이 아님")
+    root, index = validated_profile_skill_addition_index(proposal)
+    normalized_item_id = _text(addition_item_id, "addition_item_id")
+    item = index.get(normalized_item_id)
+    if item is None:
         raise ProfileDocumentError(f"기술 추가 항목을 찾을 수 없음: {normalized_item_id}")
-    return root, matches[0]
+    return root, item
 
 
 def build_profile_skill_addition_review(
