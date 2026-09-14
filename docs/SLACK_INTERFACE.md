@@ -2,7 +2,7 @@
 
 ## 1. 목적
 
-Slack 채널에서 사용자가 Career Agent를 호출하는 첫 입력 경계를 정의한다. 이번 버전은 실제 Slack 연결이나 공고 분석 실행이 아니라, 합성 `app_mention` 이벤트를 검증하고 허용된 내부 동작 요청으로 변환하는 로컬 단계다.
+Slack 채널에서 사용자가 Career Agent를 호출하는 첫 입력 경계를 정의한다. 현재 실제 Slack 앱의 Token 인증과 개인 허용 목록 설정까지 완료했으며, 합성 `app_mention` 이벤트를 검증하고 허용된 내부 동작 요청으로 변환할 수 있다. 실제 Socket Mode 이벤트 수신과 공고 분석 실행은 아직 연결하지 않았다.
 
     Slack app_mention 예제
     -> 워크스페이스·앱·사용자·채널 검증
@@ -128,17 +128,26 @@ Token은 저장소 파일이나 작업일지에 기록하지 않는다.
 
 ## 8. 로컬 비밀정보와 준비 검사
 
-먼저 예제 파일을 각각 실제 비공개 파일로 복사한다.
+먼저 환경 변수 예제를 실제 비공개 파일로 복사한다.
 
     Copy-Item .env.example .env
-    Copy-Item data/slack_interface.example.json private-data/slack_interface.json
 
 `.env`에는 Slack 화면에서 복사한 값을 본인 PC에서만 입력한다.
 
     SLACK_APP_TOKEN=xapp-실제값
     SLACK_BOT_TOKEN=xoxb-실제값
 
-`private-data/slack_interface.json`에는 실제 워크스페이스, 앱, 봇 사용자, 본인 사용자와 테스트 채널 ID를 입력한다. Slack 웹 주소가 `https://app.slack.com/client/TXXXXXXX/CXXXXXXX` 형태라면 `T`로 시작하는 값이 워크스페이스 ID이고 `C`로 시작하는 값이 현재 채널 ID다.
+Token 인증을 마치면 출력된 인증 결과 ID와 Slack 화면에서 확인한 App ID, 본인 User ID, 테스트 Channel ID로 비공개 허용 설정을 만든다.
+
+    python scripts/configure_slack_interface.py `
+      --auth-id slack-auth-인증결과ID `
+      --app-id A앱ID `
+      --user-id U사용자ID `
+      --channel-id C채널ID
+
+이 명령은 인증 결과에서 확인된 워크스페이스와 봇 사용자 ID를 사용하고, 입력한 App ID가 인증 결과와 충돌하면 거부한다. 기존 설정과 내용이 같으면 재사용하며, 다른 설정으로 조용히 덮어쓰지 않는다. 실제 값은 콘솔에 다시 출력하지 않는다.
+
+Slack 웹 주소 끝의 `C`로 시작하는 값은 현재 채널 ID다. User ID는 Slack 프로필의 멤버 ID 복사 기능으로 확인한다.
 
 - Slack 워크스페이스 ID 안내: https://slack.com/help/articles/221769328-Locate-your-Slack-URL-or-ID
 
@@ -146,7 +155,7 @@ Token은 저장소 파일이나 작업일지에 기록하지 않는다.
 
     python scripts/check_slack_setup.py
 
-이 명령은 ID 형식, 허용 목록과 Token의 존재 및 접두사만 확인한다. Token 값을 콘솔이나 결과 파일에 출력하지 않으며 Slack 네트워크에도 접속하지 않는다.
+이 명령은 ID 형식, 허용 목록과 Token의 존재 및 접두사만 확인한다. Token 값을 콘솔이나 결과 파일에 출력하지 않으며 Slack 네트워크에도 접속하지 않는다. 2026-09-14 실제 개인 설정은 이 검사를 통과했다.
 
 Token을 입력한 뒤 실제 인증 상태는 다음 명령으로 확인한다.
 
@@ -157,7 +166,7 @@ Bot Token은 별도 Scope가 필요 없는 Slack 공식 `auth.test`로 인증하
 - `auth.test`: https://docs.slack.dev/reference/methods/auth.test/
 - `connections:write`: https://docs.slack.dev/reference/scopes/connections.write/
 
-요청은 `https://slack.com/api/`의 두 허용 메서드에만 POST로 전송하며 외부 리디렉션을 따르지 않는다. Token은 Authorization 헤더로만 보내고, 응답의 Token과 임시 WebSocket URL은 출력하거나 저장하지 않는다. 비밀정보가 없는 인증 결과만 `private-data/slack-auth/`에 저장한다.
+요청은 `https://slack.com/api/`의 두 허용 메서드에만 POST로 전송하며 외부 리디렉션을 따르지 않는다. Token은 Authorization 헤더로만 보내고, 응답의 Token과 임시 WebSocket URL은 출력하거나 저장하지 않는다. 비밀정보가 없는 인증 결과만 `private-data/slack-auth/`에 저장한다. 2026-09-14 실제 Bot Token 인증과 Socket Mode URL 발급 가능 여부도 확인했다.
 
 ## 9. 현재 보안 경계와 다음 단계
 

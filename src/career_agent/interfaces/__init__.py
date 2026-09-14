@@ -13,6 +13,11 @@ from .slack_auth import (
     save_slack_authentication_result,
     verify_slack_authentication,
 )
+from .slack_config import (
+    build_slack_interface_config,
+    load_slack_authentication_result,
+    save_slack_interface_config,
+)
 
 __all__ = [
     "SLACK_COMMAND_REQUEST_SCHEMA_VERSION",
@@ -25,4 +30,7 @@ __all__ = [
     "SlackAuthenticationError",
     "save_slack_authentication_result",
     "verify_slack_authentication",
+    "build_slack_interface_config",
+    "load_slack_authentication_result",
+    "save_slack_interface_config",
 ]
