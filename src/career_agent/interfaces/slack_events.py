@@ -67,7 +67,9 @@ def _identifier_list(
     return frozenset(identifiers)
 
 
-def _validated_config(config: Mapping[str, Any]) -> dict[str, Any]:
+def validate_slack_interface_config(config: Mapping[str, Any]) -> dict[str, Any]:
+    """Validate a private Slack interface allowlist without reading secrets."""
+
     root = _mapping(config.get("slack_interface"), "slack_interface")
     metadata = _mapping(config.get("metadata"), "metadata")
     if metadata.get("schema_version") != SLACK_INTERFACE_CONFIG_SCHEMA_VERSION:
@@ -124,7 +126,7 @@ def build_slack_command_request(
 
     if received_at.tzinfo is None or received_at.utcoffset() is None:
         raise SlackEventError("received_at은 시간대가 포함되어야 함")
-    settings = _validated_config(config)
+    settings = validate_slack_interface_config(config)
     if event_payload.get("type") != "event_callback":
         raise SlackEventError("Slack event_callback만 처리할 수 있음")
     event_id = _identifier(event_payload.get("event_id"), "event_id", _EVENT_ID_PATTERN)

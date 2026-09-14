@@ -86,11 +86,34 @@ Slack은 이벤트 수신 확인이 늦거나 실패하면 같은 이벤트를 �
 
 이 명령은 Slack에 접속하지 않고 실제 공고도 분석하지 않는다.
 
-## 7. 실제 Slack 연결 선택
+## 7. Slack 앱 생성과 권한 확인
 
 개인용 로컬 MVP의 첫 연결 방식은 Socket Mode가 적합하다. Socket Mode는 공개 HTTP Request URL 대신 WebSocket 연결을 사용하므로 AWS, Docker 또는 외부 공개 서버 없이 로컬 PC에서 시험할 수 있다.
 
 - Socket Mode: https://docs.slack.dev/apis/events-api/using-socket-mode/
+- Bolt for Python 시작 안내: https://docs.slack.dev/tools/bolt-python/getting-started
+
+저장소의 `data/slack_app_manifest.example.json`은 다음 최소 권한만 요청한다.
+
+- `app_mentions:read`: 봇을 호출한 채널 메시지 수신
+- `chat:write`: 처리 결과를 채널에 답변
+- `app_mention`: 구독 이벤트
+- `connections:write`: manifest의 Bot Token Scope가 아니라 별도로 만드는 Socket Mode App Token의 권한
+
+사용자가 Slack에서 확인할 순서는 다음과 같다.
+
+1. https://api.slack.com/apps 에 로그인한다.
+2. 새 앱 만들기에서 manifest를 사용하는 방식을 선택한다.
+3. 사용할 워크스페이스를 선택한다.
+4. `data/slack_app_manifest.example.json` 전체 내용을 붙여넣는다.
+5. 표시되는 앱 기능과 권한을 확인한 뒤 앱을 생성한다.
+6. `OAuth & Permissions`에서 워크스페이스 설치를 시도한다.
+7. 설치와 허용 화면이 완료되면 앱 설치 권한이 있는 것이다.
+8. 관리자 승인이나 제한 메시지가 나오면 해당 워크스페이스에는 직접 설치 권한이 없는 것이다.
+
+회사 워크스페이스에서 설치가 제한되면 개인 테스트용 Slack 워크스페이스를 만들어 그곳에서 먼저 검증할 수 있다. 이 프로젝트는 개인용 MVP이므로 초기 검증에 회사 워크스페이스가 필요하지 않다.
+
+앱 설치 뒤에는 `Basic Information`의 App-Level Tokens에서 `connections:write`만 가진 App Token을 만들고, `OAuth & Permissions`에서 Bot Token을 확인한다.
 
 실제 연결 단계에서는 다음 정보가 필요하다.
 
@@ -103,7 +126,29 @@ Slack은 이벤트 수신 확인이 늦거나 실패하면 같은 이벤트를 �
 
 Token은 저장소 파일이나 작업일지에 기록하지 않는다.
 
-## 8. 현재 보안 경계와 다음 단계
+## 8. 로컬 비밀정보와 준비 검사
+
+먼저 예제 파일을 각각 실제 비공개 파일로 복사한다.
+
+    Copy-Item .env.example .env
+    Copy-Item data/slack_interface.example.json private-data/slack_interface.json
+
+`.env`에는 Slack 화면에서 복사한 값을 본인 PC에서만 입력한다.
+
+    SLACK_APP_TOKEN=xapp-실제값
+    SLACK_BOT_TOKEN=xoxb-실제값
+
+`private-data/slack_interface.json`에는 실제 워크스페이스, 앱, 봇 사용자, 본인 사용자와 테스트 채널 ID를 입력한다. Slack 웹 주소가 `https://app.slack.com/client/TXXXXXXX/CXXXXXXX` 형태라면 `T`로 시작하는 값이 워크스페이스 ID이고 `C`로 시작하는 값이 현재 채널 ID다.
+
+- Slack 워크스페이스 ID 안내: https://slack.com/help/articles/221769328-Locate-your-Slack-URL-or-ID
+
+준비 상태는 다음 명령으로 확인한다.
+
+    python scripts/check_slack_setup.py
+
+이 명령은 ID 형식, 허용 목록과 Token의 존재 및 접두사만 확인한다. Token 값을 콘솔이나 결과 파일에 출력하지 않으며 Slack 네트워크에도 접속하지 않는다.
+
+## 9. 현재 보안 경계와 다음 단계
 
 HTTP Request URL 방식은 Slack Signing Secret으로 요청 서명을 반드시 확인해야 한다.
 

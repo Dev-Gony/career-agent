@@ -76,6 +76,7 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
 - 완성된 기술 추가안 한 건의 최종 승인·거부를 기술 내용과 분리해 기록하는 기능 구현
 - 최신 최종 승인이 있는 기술만 원본을 보존한 새 프로필 버전에 적용하는 기능 구현
 - Slack `app_mention` 합성 이벤트의 허용 사용자·채널 검증과 첫 명령 라우팅 구현
+- 최소 권한 Slack App manifest와 Token 비노출 로컬 준비 검사 구현
 
 다음 단계:
 
@@ -113,7 +114,8 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
     |   |-- incruit_rss_item.example.xml
     |   |-- match_result.example.json
     |   |-- slack_interface.example.json
-    |   `-- slack_app_mention.example.json
+    |   |-- slack_app_mention.example.json
+    |   `-- slack_app_manifest.example.json
     |-- src/
     |   `-- career_agent/
     |       |-- config/
@@ -145,6 +147,7 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
     |           `-- greenhouse_analysis.py
     |-- scripts/
     |   |-- analyze_greenhouse_job.py
+    |   |-- check_slack_setup.py
     |   |-- discover_greenhouse.py
     |   |-- discover_incruit.py
     |   |-- list_discoveries.py
@@ -355,6 +358,12 @@ Sendbird의 Greenhouse 공식 보드에서 현재 게시 공고 목록을 가져
     python scripts/parse_slack_event.py
 
 예제의 `<@봇사용자ID> 다음 공고 찾아줘` 문장을 기존 다음 공고 분석 동작명으로 변환합니다. 워크스페이스, 앱, 허용 사용자와 허용 채널을 검사하고 `event_id`가 같은 재전송은 기존 요청을 재사용합니다. 현재는 로컬 입력 경계만 검증하므로 실제 Slack 접속과 공고 분석은 실행하지 않습니다. 세부 계약은 `docs/SLACK_INTERFACE.md`에 기록했습니다.
+
+Slack 앱 생성 전에는 `data/slack_app_manifest.example.json`을 사용합니다. 실제 앱을 설치한 뒤 `.env.example`을 `.env`로 복사해 App Token과 Bot Token을 본인 PC에서만 입력하고, 실제 ID 설정을 `private-data/slack_interface.json`에 저장합니다. 준비 상태는 다음 명령으로 검사합니다.
+
+    python scripts/check_slack_setup.py
+
+검사 명령은 Token 값을 출력하거나 Slack에 접속하지 않습니다. 현재 실제 설정과 Token이 없으면 `Slack 연결 준비 미완료`가 나오는 것이 정상입니다.
 
 상세 분석된 공고에 사용자의 실제 판단을 별도 기록합니다. `fit`은 적합, `hold`는 보류, `not_fit`은 부적합입니다.
 
