@@ -234,15 +234,52 @@ PDF와 DOCX는 원본 저장만 지원하며 현재 텍스트 후보 추출에�
 
 기록에는 후보 기술명을 자동 복제하지 않고 매핑 항목과 원문 근거를 참조한다. 결과는 `private-data/profile-skill-confirmations/`에 불변 파일로 저장한다. `duplicate_existing`과 `needs_separation` 항목은 이 명령으로 확인할 수 없다.
 
-## 11. 현재 한계
+## 11. 완성된 기술 추가안
+
+기술 후보별 가장 최근 사용자 확인을 선택해 필수 필드가 갖춰진 기술 추가안을 만든다.
+
+    python scripts/build_profile_skill_additions.py --mapping-id profile-skill-mapping-example
+
+같은 후보에 확인 기록이 여러 개 있으면 시간대가 포함된 `confirmed_at`이 가장 최근인 기록만 사용한다. 최신 확인이 있는 `needs_details` 후보만 추가안에 포함하고, 미확인 후보와 기존 기술 중복 및 분리 필요 후보는 제외한다.
+
+    profile_skill_addition:
+      proposal_id: "profile-skill-addition-example"
+      status: "needs_final_review"
+      base_profile_id: "sample-user-001"
+      base_profile_content_sha256: "기준 프로필 전체 SHA-256"
+      source_mapping_id: "profile-skill-mapping-example"
+      rules_version: "0.1"
+
+    skill_additions:
+      - addition_item_id: "skill-addition-item-001"
+        proposed_skill:
+          skill_id: "skill-import-0123456789ab"
+          name: "FastAPI"
+          level: "project"
+          evidence:
+            - "Tech News Automation에서 사용"
+          notes: null
+        source:
+          mapping_item_id: "skill-mapping-item-001"
+          candidate_id: "candidate-001"
+          confirmation_id: "profile-skill-confirmation-example"
+        application_status: "needs_final_review"
+
+    metadata:
+      schema_version: "0.1"
+      git_tracking_allowed: false
+      profile_updated: false
+
+`skill_id`는 매핑 ID, 항목 ID와 정규화된 기술명으로 결정적으로 만든다. 현재 프로필 지문이 매핑 당시와 다르거나 기술명이 기존 프로필과 중복되면 추가안 생성을 거부한다. 결과는 `private-data/profile-skill-additions/`에 저장하며 실제 프로필에는 적용하지 않는다.
+
+## 12. 현재 한계
 
 - 제목 기반 분류이며 문장의 의미를 해석하지 않는다.
 - 한 줄 안의 기술 여러 개를 개별 기술로 분리하지 않는다.
 - 기간, 경력 연수, 숙련도와 성과를 구조화하지 않는다.
-- `needs_details` 기술 후보의 숙련도와 증거를 확인할 수 있지만 여러 확인 기록 중 최신 판단을 선택하거나 완성된 기술 추가안을 만들지 않는다.
-- 기술 후보를 실제 프로필에 적용하지 않는다.
+- 최신 확인을 사용해 완성된 기술 추가안을 만들 수 있지만 최종 승인 기록과 실제 프로필 적용은 아직 없다.
 - 목표 직무, 경력, 프로젝트와 다른 프로필 영역은 아직 타입 매핑하지 않는다.
 - PDF, DOCX와 이미지 OCR 추출은 아직 없다.
 - 외부 LLM을 호출하지 않는다.
 
-다음 단계에서는 기술 후보별 가장 최근 세부정보 확인을 선택하고, 확인이 끝난 후보만 완성된 기술 추가안으로 만들되 실제 프로필 적용은 분리한다.
+다음 단계에서는 완성된 기술 추가안의 최종 승인 또는 거부를 별도 불변 기록으로 저장하고, 승인 전에는 실제 프로필을 변경하지 않는다.

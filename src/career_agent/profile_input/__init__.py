@@ -43,6 +43,12 @@ from .skill_confirmation import (
     build_profile_skill_confirmation,
     save_profile_skill_confirmation,
 )
+from .skill_addition import (
+    PROFILE_SKILL_ADDITION_RULES_VERSION,
+    PROFILE_SKILL_ADDITION_SCHEMA_VERSION,
+    build_profile_skill_addition_proposal,
+    save_profile_skill_addition_proposal,
+)
 
 __all__ = [
     "DOCUMENT_KINDS",
@@ -71,6 +77,10 @@ __all__ = [
     "SKILL_LEVELS",
     "build_profile_skill_confirmation",
     "save_profile_skill_confirmation",
+    "PROFILE_SKILL_ADDITION_RULES_VERSION",
+    "PROFILE_SKILL_ADDITION_SCHEMA_VERSION",
+    "build_profile_skill_addition_proposal",
+    "save_profile_skill_addition_proposal",
     "PROFILE_UPDATE_PROPOSAL_SCHEMA_VERSION",
     "build_profile_update_proposal",
     "load_profile_update_proposal",

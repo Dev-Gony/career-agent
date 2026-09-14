@@ -40,7 +40,9 @@ def _text(value: Any, name: str) -> str:
     return value.strip()
 
 
-def _normalized_skill_name(value: str) -> str:
+def normalize_skill_name(value: str) -> str:
+    """Normalize a skill name for conservative exact comparison."""
+
     normalized = unicodedata.normalize("NFKC", value)
     return " ".join(normalized.casefold().split())
 
@@ -55,7 +57,7 @@ def _existing_skills(profile: Mapping[str, Any]) -> dict[str, dict[str, str]]:
         skill = _mapping(raw_skill, f"profile.skills[{position}]")
         skill_id = _text(skill.get("skill_id"), f"profile.skills[{position}].skill_id")
         name = _text(skill.get("name"), f"profile.skills[{position}].name")
-        normalized_name = _normalized_skill_name(name)
+        normalized_name = normalize_skill_name(name)
         if skill_id in skill_ids:
             raise ProfileDocumentError(f"중복 skill_id: {skill_id}")
         if normalized_name in skills:
@@ -214,7 +216,7 @@ def build_profile_skill_mapping_proposal(
             skipped_non_skill_count += 1
             continue
         candidate_text = addition["candidate_text"].strip()
-        normalized_name = _normalized_skill_name(candidate_text)
+        normalized_name = normalize_skill_name(candidate_text)
         existing = existing_skills.get(normalized_name)
         if existing is not None:
             mapping_status = "duplicate_existing"
