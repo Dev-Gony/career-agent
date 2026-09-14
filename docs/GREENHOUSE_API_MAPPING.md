@@ -9,6 +9,7 @@ ATS는 Applicant Tracking System의 약자로 기업이 채용공고와 지원 �
 ## 2. 확인한 공식 제공 범위
 
 - Greenhouse Job Board API의 GET 공고 데이터는 공개 조회용이며 인증이 필요하지 않다.
+- 현재 게시 공고 목록 조회 엔드포인트는 `GET /v1/boards/{board_token}/jobs`다.
 - 공고 1건 조회 엔드포인트는 `GET /v1/boards/{board_token}/jobs/{job_id}`다.
 - 지원서 제출은 별도 인증이 필요한 POST 영역이며 현재 MVP에서 사용하지 않는다.
 
@@ -30,6 +31,8 @@ ATS는 Applicant Tracking System의 약자로 기업이 채용공고와 지원 �
 - 요청 주소와 같은 공식 API 경로로 끝나는 응답
 
 HTML 채용페이지 직접 크롤링, 지원서 제출, 인증 우회와 비공식 내부 API 사용은 하지 않는다.
+
+목록 조회에서는 `content=true`를 사용하지 않는다. 제목, 회사, 근무지, 공고 ID와 원문 URL만 후보 선별에 사용하고 상세 본문은 선별된 공고를 실제 분석할 때 별도 1건 조회로 가져온다.
 
 ## 4. 변환 기준
 

@@ -16,6 +16,7 @@ from career_agent.ingestion import (  # noqa: E402
     GreenhouseJobError,
     build_greenhouse_job_posting,
     fetch_greenhouse_job,
+    fetch_greenhouse_jobs,
 )
 
 
@@ -104,6 +105,25 @@ class GreenhouseIngestionTest(unittest.TestCase):
         with patch("career_agent.ingestion.greenhouse.urlopen", return_value=response):
             with self.assertRaisesRegex(GreenhouseJobError, "응답 URL"):
                 fetch_greenhouse_job("example", "12345")
+
+    def test_fetches_public_board_job_list_without_content_query(self) -> None:
+        response = FakeResponse(
+            {"jobs": [_example_job()]},
+            url="https://boards-api.greenhouse.io/v1/boards/example/jobs",
+        )
+
+        with patch(
+            "career_agent.ingestion.greenhouse.urlopen", return_value=response
+        ) as mocked_open:
+            actual = fetch_greenhouse_jobs("example")
+
+        self.assertEqual([12345], [job["id"] for job in actual])
+        request = mocked_open.call_args.args[0]
+        self.assertEqual(
+            "https://boards-api.greenhouse.io/v1/boards/example/jobs",
+            request.full_url,
+        )
+        self.assertNotIn("content=true", request.full_url)
 
     def test_maps_explicit_sections_without_inferring_full_time(self) -> None:
         actual = build_greenhouse_job_posting(

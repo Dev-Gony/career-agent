@@ -118,15 +118,61 @@ def fetch_greenhouse_job(
 
     normalized_board = _validate_board_token(board_token)
     normalized_job_id = _validate_job_id(job_id)
+    expected_path = f"/v1/boards/{normalized_board}/jobs/{normalized_job_id}"
+    api_url = f"https://{ALLOWED_API_HOST}{expected_path}"
+    document = _fetch_greenhouse_json(
+        api_url,
+        expected_path=expected_path,
+        timeout_seconds=timeout_seconds,
+        max_bytes=max_bytes,
+    )
+    if str(document.get("id")) != normalized_job_id:
+        raise GreenhouseJobError("요청한 공고 ID와 응답 공고 ID가 일치하지 않음")
+    return document
+
+
+def fetch_greenhouse_jobs(
+    board_token: str,
+    *,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    max_bytes: int = DEFAULT_MAX_BYTES,
+) -> list[dict[str, Any]]:
+    """Fetch current job metadata from one public Greenhouse board."""
+
+    normalized_board = _validate_board_token(board_token)
+    expected_path = f"/v1/boards/{normalized_board}/jobs"
+    api_url = f"https://{ALLOWED_API_HOST}{expected_path}"
+    document = _fetch_greenhouse_json(
+        api_url,
+        expected_path=expected_path,
+        timeout_seconds=timeout_seconds,
+        max_bytes=max_bytes,
+    )
+    jobs = document.get("jobs")
+    if not isinstance(jobs, list):
+        raise GreenhouseJobError("Greenhouse 목록 응답에 jobs 배열이 없음")
+    validated_jobs: list[dict[str, Any]] = []
+    for position, job in enumerate(jobs):
+        if not isinstance(job, dict):
+            raise GreenhouseJobError(
+                f"Greenhouse jobs[{position}]는 객체여야 함"
+            )
+        _validate_job_id(job.get("id"))
+        validated_jobs.append(job)
+    return validated_jobs
+
+
+def _fetch_greenhouse_json(
+    api_url: str,
+    *,
+    expected_path: str,
+    timeout_seconds: float,
+    max_bytes: int,
+) -> dict[str, Any]:
     if timeout_seconds <= 0:
         raise ValueError("timeout_seconds는 0보다 커야 함")
     if max_bytes <= 0:
         raise ValueError("max_bytes는 0보다 커야 함")
-
-    api_url = (
-        f"https://{ALLOWED_API_HOST}/v1/boards/"
-        f"{normalized_board}/jobs/{normalized_job_id}"
-    )
     request = Request(
         api_url,
         headers={"Accept": "application/json", "User-Agent": USER_AGENT},
@@ -139,7 +185,7 @@ def fetch_greenhouse_job(
                 raise GreenhouseJobError(
                     f"Greenhouse 응답 상태가 200이 아님: {status}"
                 )
-            _validate_api_response_url(response.geturl(), normalized_board, normalized_job_id)
+            _validate_api_response_url(response.geturl(), expected_path)
             _validate_content_type(response.headers)
             _validate_content_length(response.headers, max_bytes)
             payload = response.read(max_bytes + 1)
@@ -158,8 +204,6 @@ def fetch_greenhouse_job(
         raise GreenhouseJobError("Greenhouse JSON 응답을 해석할 수 없음") from error
     if not isinstance(document, dict):
         raise GreenhouseJobError("Greenhouse JSON 최상위 값이 객체가 아님")
-    if str(document.get("id")) != normalized_job_id:
-        raise GreenhouseJobError("요청한 공고 ID와 응답 공고 ID가 일치하지 않음")
     return document
 
 
@@ -317,9 +361,8 @@ def _validate_job_id(value: Any) -> str:
     return normalized
 
 
-def _validate_api_response_url(url: str, board_token: str, job_id: str) -> None:
+def _validate_api_response_url(url: str, expected_path: str) -> None:
     parts = urlsplit(url)
-    expected_path = f"/v1/boards/{board_token}/jobs/{job_id}"
     if (
         parts.scheme != "https"
         or parts.hostname != ALLOWED_API_HOST

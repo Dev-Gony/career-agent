@@ -61,11 +61,12 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
 - Greenhouse 공개 Job Board API의 상세 공고 1건을 내부 스키마로 변환하는 조회 전용 연동 구현
 - 실제 Sendbird 서울 AI 공고를 로컬 파일로 구조화하고 기존 매칭기에 연결해 전체 흐름 확인
 - Greenhouse 공고 조회부터 매칭과 결과 JSON 저장까지 한 명령으로 실행하는 워크플로 구현
+- Greenhouse 기업 보드의 현재 공고 목록을 조회하고 프로필 목표 직무와 선호 조건으로 후보를 정렬하는 기능 구현
 
 다음 단계:
 
-1. 실제 상세 공고 결과에서 중요한 복합 조건의 추출·판정 범위를 보강
-2. ATS 공고 발견과 상세 구조화를 한 실행 흐름으로 연결
+1. Greenhouse 선별 후보를 상세 구조화와 분석으로 자동 연결
+2. 관심 기업 보드 목록을 로컬 설정으로 관리
 3. 저장된 실제 분석 결과의 사용자 검토와 판정 교정 반영
 4. 문서 입력과 대화가 가능한 첫 Slack 인터페이스 설계 및 구현
 5. 하루 1회 실행과 성공·실패 상태 기록
@@ -97,8 +98,10 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
     |-- src/
     |   `-- career_agent/
     |       |-- discovery/
+    |       |   |-- greenhouse_board.py
     |       |   |-- incruit_feed.py
     |       |   |-- incruit_rss.py
+    |       |   |-- ranking.py
     |       |   |-- report.py
     |       |   |-- service.py
     |       |   `-- store.py
@@ -116,6 +119,7 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
     |           `-- greenhouse_analysis.py
     |-- scripts/
     |   |-- analyze_greenhouse_job.py
+    |   |-- discover_greenhouse.py
     |   |-- discover_incruit.py
     |   |-- list_discoveries.py
     |   |-- import_greenhouse_job.py
@@ -125,6 +129,7 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
     |-- tests/
     |   |-- test_application_recommendation.py
     |   |-- test_greenhouse_analysis_workflow.py
+    |   |-- test_greenhouse_discovery.py
     |   |-- test_discovery_report.py
     |   |-- test_discovery_service.py
     |   |-- test_incruit_rss.py
@@ -203,6 +208,16 @@ Greenhouse 공개 Job Board API 공고를 내부 채용공고 스키마로 변�
 
     python scripts/list_discoveries.py --priority high --limit 10
 
+Sendbird의 Greenhouse 공식 보드에서 현재 게시 공고 목록을 가져와 같은 로컬 저장소에 중복 없이 저장하고 프로필 관련 후보를 표시합니다.
+
+    python scripts/discover_greenhouse.py
+
+기본 화면에는 `high`와 `medium` 후보만 표시합니다. 제목에서 목표 직무 관련성이 확인되지 않은 `review` 후보까지 보려면 다음 명령을 사용합니다.
+
+    python scripts/discover_greenhouse.py --include-review
+
+목록 단계에서는 상세 본문을 가져오지 않습니다. `AI Agent`는 기존 최우선 목표인 AI Automation / Workflow Engineer에서 파생한 검색 표현이며 사용자가 별도 키워드를 입력할 필요가 없습니다. 제목에 인턴 또는 계약직이 명시되면 정규직 선호와 비교해 후보를 삭제하지 않고 우선순위만 한 단계 낮춥니다.
+
 예제 사용자 프로필과 예제 공고의 기술 요구사항만 비교합니다.
 
     python scripts/match_job_technologies.py
@@ -280,8 +295,11 @@ Greenhouse를 사용하는 기업의 공개 상세공고 1건을 자동으로 �
 - Greenhouse 조회·구조화·매칭 결과의 단일 실행과 저장 가능한 분석 메타데이터 생성
 - 저장 결과에 사용자 프로필 원문을 복제하지 않고 검토 전 상태 유지
 - 미확인 항목을 필수 조건·지원 가능 조건·주요 업무·우대 조건 순으로 정렬하고 콘솔에는 상위 5개만 표시
+- Greenhouse 보드 목록을 본문 없이 조회하고 프로필에서 도출한 `AI Agent` 표현으로 후보 선별
+- `Seoul`과 서울을 같은 지역으로 처리하고 명시된 인턴·계약직은 정규직 선호 기준으로 순위만 낮춤
+- Greenhouse 목록을 같은 로컬 저장소에 합치고 기업 보드와 외부 ID 기준으로 중복 제거
 
-현재 구현은 공식 인크루트 RSS를 읽고 로컬 JSON에 신규 후보를 저장하며, 구조화된 공고의 기술·경험 요구사항, 주요 업무와 지원 가능 조건을 비교해 강점·부족·미확인 항목과 지원 판단을 생성합니다. Greenhouse 공개 API의 상세 공고 1건은 사용자의 복사·붙여넣기 없이 한 명령으로 조회·분석·저장할 수 있습니다. 아직 LLM 호출, 발견 후보와 상세 입력의 자동 연결 또는 Slack 연동은 하지 않습니다.
+현재 구현은 공식 인크루트 RSS와 Greenhouse 기업 보드 목록을 읽고 로컬 JSON에 신규 후보를 중복 없이 저장합니다. Greenhouse 후보는 프로필에서 도출한 목표 직무와 선호 조건으로 정렬하며, 공개 API의 상세 공고 1건은 사용자의 복사·붙여넣기 없이 조회·분석·저장할 수 있습니다. 아직 선별 후보와 상세 분석의 자동 연결, LLM 호출 또는 Slack 연동은 하지 않습니다.
 
 ## 예상 MVP 흐름
 
@@ -346,6 +364,6 @@ MVP가 실제로 유용하다고 판단되면 다음 기능을 검토합니다.
 
 ## 프로젝트 상태
 
-현재 상태: 자동 공고 발견, 공식 ATS 상세 입력 및 핵심 근거 기반 매칭 구현
+현재 상태: 자동 공고 발견·선별, 공식 ATS 상세 입력 및 핵심 근거 기반 매칭 구현
 
-공식 인크루트 RSS를 읽어 프로필 기반 발견 레코드로 변환하고 실행 간 중복을 제거해 로컬에 저장하는 첫 동작 가능한 기능을 구현했습니다. 실제 첫 실행은 신규 20건, 두 번째 실행은 신규 0건과 중복 20건으로 확인했습니다. Greenhouse 공개 Job Board API에서는 실제 Sendbird 서울 AI 공고 1건을 한 명령으로 조회·구조화·매칭하고 분석 ID가 있는 로컬 JSON으로 저장했습니다. 실공고 결과는 Python과 LLM API 증거를 연결했고, 사용자 경력 연수·고용 형태·하이브리드 근무 선호가 확인되지 않은 점은 조건부로 남겼습니다. 다음에는 실제 결과에서 중요한 복합 조건을 보강하고 발견 후보에서 상세 분석으로 이어지는 한 흐름을 연결합니다.
+공식 인크루트 RSS와 Greenhouse 기업 보드 목록을 프로필 기반 발견 레코드로 변환하고 실행 간 중복을 제거해 로컬에 저장합니다. 실제 Sendbird 보드에서는 현재 공고 10건 중 `Software Engineer, AI Agent`를 `high`, 인턴 공고를 `medium`, 나머지 8건을 `review`로 분류했습니다. 같은 목록의 두 번째 실행은 신규 0건과 중복 10건으로 확인했습니다. Greenhouse 상세 공고 1건은 한 명령으로 조회·구조화·매칭하고 분석 ID가 있는 로컬 JSON으로 저장할 수 있습니다. 다음에는 선별된 후보를 상세 분석으로 자동 연결합니다.

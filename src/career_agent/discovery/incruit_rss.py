@@ -11,6 +11,8 @@ from typing import Any, Mapping
 from urllib.parse import parse_qs, urlsplit, urlunsplit
 import xml.etree.ElementTree as ElementTree
 
+from .ranking import build_profile_relevance
+
 
 PROVIDER = "incruit"
 MAX_XML_CHARACTERS = 1_000_000
@@ -146,7 +148,7 @@ def _build_record_from_item(
             "match_ready": False,
             "reason": "RSS에 주요 업무와 자격 요건 전문이 없음",
         },
-        "profile_relevance": _build_profile_relevance(summary, search_plan),
+        "profile_relevance": build_profile_relevance(summary, search_plan),
         "deduplication": deduplication,
         "parse_notes": {
             "warnings": warnings,
@@ -297,87 +299,6 @@ def _build_identity(source_url: str) -> tuple[dict[str, str], dict[str, str]]:
             "strategy": "canonical_url_hash",
         },
     )
-
-
-def _build_profile_relevance(
-    summary: Mapping[str, str | None], search_plan: Mapping[str, Any]
-) -> dict[str, Any]:
-    plan = search_plan.get("job_search_plan", search_plan)
-    title = (summary.get("title") or "").casefold()
-    related_role_ids: list[str] = []
-    matched_terms: list[str] = []
-    matched_priorities: list[int | str] = []
-
-    for axis in plan.get("role_axes", []):
-        term = next(
-            (
-                candidate
-                for candidate in axis.get("discovery_terms", [])
-                if candidate.casefold() in title
-            ),
-            None,
-        )
-        if term is None:
-            continue
-        related_role_ids.append(axis["target_role_id"])
-        matched_terms.append(term)
-        matched_priorities.append(axis.get("priority", "conditional"))
-
-    location_assessment = _assess_location(summary.get("location_text"), plan)
-    employment_assessment = "unknown"
-    priority = _discovery_priority(matched_priorities, location_assessment)
-    confidence = "medium" if matched_terms else "low"
-
-    positive_signals = [
-        f"제목에 검색 확장어 '{term}'가 포함됨" for term in matched_terms
-    ]
-    if priority == "high" and location_assessment == "match":
-        reason = "최우선 목표 직무 표현이 제목에 직접 나타나고 선호 지역과 일치함"
-    elif matched_terms:
-        reason = "목표 직무 표현이 제목에 있으나 상세 업무와 자격 요건 확인이 필요함"
-    else:
-        reason = "제목만으로 목표 직무 축과의 직접 관련성을 확인할 수 없음"
-
-    return {
-        "profile_id": plan["identity"]["profile_id"],
-        "related_target_role_ids": related_role_ids,
-        "positive_signals": positive_signals,
-        "low_preference_signals": [],
-        "location_assessment": location_assessment,
-        "employment_assessment": employment_assessment,
-        "priority": priority,
-        "confidence": confidence,
-        "reason": reason,
-    }
-
-
-def _assess_location(location_text: str | None, plan: Mapping[str, Any]) -> str:
-    if not location_text:
-        return "unknown"
-    normalized_values = (
-        plan.get("objective_preferences", {})
-        .get("locations", {})
-        .get("normalized_values", [])
-    )
-    return "match" if any(value in location_text for value in normalized_values) else "mismatch"
-
-
-def _discovery_priority(
-    matched_priorities: list[int | str], location_assessment: str
-) -> str:
-    numeric_priorities = [value for value in matched_priorities if isinstance(value, int)]
-    if not matched_priorities:
-        return "review"
-    if numeric_priorities and min(numeric_priorities) == 1:
-        priority = "high"
-    elif numeric_priorities and min(numeric_priorities) <= 3:
-        priority = "medium"
-    else:
-        priority = "review"
-
-    if location_assessment == "mismatch":
-        return {"high": "medium", "medium": "low", "review": "low"}[priority]
-    return priority
 
 
 def _unique_preserving_order(values: list[str]) -> list[str]:

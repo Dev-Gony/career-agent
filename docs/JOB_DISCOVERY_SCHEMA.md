@@ -160,9 +160,11 @@
 권장 `strategy` 값:
 
 - provider_external_id
+- provider_board_external_id
 - canonical_url_hash
 
 외부 ID가 있으면 URL 해시보다 우선한다.
+기업 ATS처럼 같은 공급자 안에 여러 기업 보드가 있으면 `{provider}:{board_token}:{external_id}`를 중복 키로 사용한다.
 
 ## 10. parse_notes
 
