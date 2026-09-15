@@ -17,6 +17,7 @@ SUPPORTED_COMMAND_REPLY = (
     "요청을 확인했습니다. 현재는 Slack 연결 검증 단계이므로 "
     "공고 분석은 아직 실행하지 않았습니다."
 )
+ACTION_STARTED_REPLY = "요청을 확인했습니다. 다음 공고 1건 분석을 시작합니다."
 UNSUPPORTED_COMMAND_REPLY = "현재 지원하는 명령은 `다음 공고 찾아줘`입니다."
 
 
@@ -63,6 +64,7 @@ def register_slack_app_mention_listener(
     *,
     output_directory: str | Path,
     now: Callable[[], datetime] | None = None,
+    action_runner: Callable[[str], Mapping[str, str]] | None = None,
 ) -> Callable[..., None]:
     """Register the single supported Bolt event listener and return it for tests."""
 
@@ -80,12 +82,31 @@ def register_slack_app_mention_listener(
             logger.warning("Slack app_mention 거부: %s", error)
             return
 
+        request = result["request"]
+        root = request["slack_command_request"]
         reply_text = result["reply_text"]
         if reply_text is None:
             return
-        request = result["request"]
+        if action_runner is not None and root["action"] is not None:
+            reply_text = ACTION_STARTED_REPLY
         say(
             text=reply_text,
+            thread_ts=request["source"]["event_ts"],
+        )
+        if action_runner is None or root["action"] is None:
+            return
+        try:
+            action_result = action_runner(root["action"])
+            public_message = action_result.get("public_message")
+            if not isinstance(public_message, str) or not public_message.strip():
+                raise SlackEventError("Slack 동작 결과의 공개 메시지가 없음")
+        except SlackEventError as error:
+            logger.warning("Slack 내부 동작 실패: %s", error)
+            public_message = (
+                "공고 분석을 시작하지 못했습니다. 로컬 실행 이력을 확인해주세요."
+            )
+        say(
+            text=public_message,
             thread_ts=request["source"]["event_ts"],
         )
 

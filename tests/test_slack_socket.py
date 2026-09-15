@@ -11,6 +11,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
 from career_agent.interfaces import (  # noqa: E402
+    SlackEventError,
     process_slack_app_mention,
     register_slack_app_mention_listener,
 )
@@ -163,6 +164,59 @@ class SlackSocketTest(unittest.TestCase):
             listener(invalid, lambda **values: replies.append(values), logger)
 
         self.assertEqual([], replies)
+        self.assertEqual(1, len(logger.messages))
+
+    def test_registered_listener_runs_identified_action_once(self) -> None:
+        app = _FakeApp()
+        replies: list[dict] = []
+        actions: list[str] = []
+        logger = _FakeLogger()
+
+        def run_action(action: str) -> dict[str, str]:
+            actions.append(action)
+            return {
+                "status": "completed",
+                "public_message": "공고 분석 완료",
+            }
+
+        with tempfile.TemporaryDirectory() as directory:
+            listener = register_slack_app_mention_listener(
+                app,
+                _config(),
+                output_directory=directory,
+                now=lambda: RECEIVED_AT,
+                action_runner=run_action,
+            )
+            listener(_event(), lambda **values: replies.append(values), logger)
+            listener(_event(), lambda **values: replies.append(values), logger)
+
+        self.assertEqual(["analyze_next_greenhouse_review"], actions)
+        self.assertEqual(2, len(replies))
+        self.assertIn("분석을 시작", replies[0]["text"])
+        self.assertEqual("공고 분석 완료", replies[1]["text"])
+        self.assertEqual([], logger.messages)
+
+    def test_registered_listener_reports_safe_action_failure(self) -> None:
+        app = _FakeApp()
+        replies: list[dict] = []
+        logger = _FakeLogger()
+
+        def fail_action(_action: str) -> dict[str, str]:
+            raise SlackEventError("private failure details")
+
+        with tempfile.TemporaryDirectory() as directory:
+            listener = register_slack_app_mention_listener(
+                app,
+                _config(),
+                output_directory=directory,
+                now=lambda: RECEIVED_AT,
+                action_runner=fail_action,
+            )
+            listener(_event(), lambda **values: replies.append(values), logger)
+
+        self.assertEqual(2, len(replies))
+        self.assertIn("시작하지 못했습니다", replies[1]["text"])
+        self.assertNotIn("private failure details", replies[1]["text"])
         self.assertEqual(1, len(logger.messages))
 
 

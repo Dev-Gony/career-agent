@@ -28,6 +28,7 @@ from .slack_socket import (
     register_slack_app_mention_listener,
     run_slack_socket_mode,
 )
+from .slack_actions import run_slack_career_action
 
 __all__ = [
     "SLACK_COMMAND_REQUEST_SCHEMA_VERSION",
@@ -48,4 +49,5 @@ __all__ = [
     "process_slack_app_mention",
     "register_slack_app_mention_listener",
     "run_slack_socket_mode",
+    "run_slack_career_action",
 ]
