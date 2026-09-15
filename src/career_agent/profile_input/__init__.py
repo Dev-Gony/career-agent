@@ -27,6 +27,12 @@ from .update_proposal import (
     profile_content_sha256,
     save_profile_update_proposal,
 )
+from .evidence_summary import (
+    PROFILE_EVIDENCE_SUMMARY_RULES_VERSION,
+    PROFILE_EVIDENCE_SUMMARY_SCHEMA_VERSION,
+    build_profile_evidence_summary,
+    save_profile_evidence_summary,
+)
 from .skill_mapping import (
     PROFILE_SKILL_MAPPING_RULES_VERSION,
     PROFILE_SKILL_MAPPING_SCHEMA_VERSION,
@@ -110,4 +116,8 @@ __all__ = [
     "load_profile_update_proposal",
     "profile_content_sha256",
     "save_profile_update_proposal",
+    "PROFILE_EVIDENCE_SUMMARY_RULES_VERSION",
+    "PROFILE_EVIDENCE_SUMMARY_SCHEMA_VERSION",
+    "build_profile_evidence_summary",
+    "save_profile_evidence_summary",
 ]

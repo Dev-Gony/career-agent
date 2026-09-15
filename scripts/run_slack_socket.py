@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime
+import json
 from pathlib import Path
 import sys
 from typing import Any, Mapping
@@ -22,8 +23,10 @@ from career_agent.interfaces import (  # noqa: E402
 )
 from career_agent.profile_input import (  # noqa: E402
     ProfileDocumentError,
+    build_profile_evidence_summary,
     build_profile_text_extraction,
     load_profile_document_import,
+    save_profile_evidence_summary,
     save_profile_text_extraction,
 )
 
@@ -39,6 +42,20 @@ DEFAULT_PROFILE_DOCUMENT_DIRECTORY = (
 DEFAULT_PROFILE_EXTRACTION_DIRECTORY = (
     REPOSITORY_ROOT / "private-data/profile-extractions"
 )
+DEFAULT_PROFILE_EVIDENCE_DIRECTORY = (
+    REPOSITORY_ROOT / "private-data/profile-evidence-summaries"
+)
+DEFAULT_PROFILE = REPOSITORY_ROOT / "data/user_profile.example.json"
+
+
+def _load_profile() -> dict[str, Any]:
+    try:
+        profile = json.loads(DEFAULT_PROFILE.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise SlackEventError("기준 사용자 프로필을 읽을 수 없음") from error
+    if not isinstance(profile, dict):
+        raise SlackEventError("기준 사용자 프로필 형식이 올바르지 않음")
+    return profile
 
 
 def _extract_imported_profile_document(
@@ -65,12 +82,22 @@ def _extract_imported_profile_document(
             extraction,
             DEFAULT_PROFILE_EXTRACTION_DIRECTORY,
         )
+        evidence_summary = build_profile_evidence_summary(
+            extraction,
+            _load_profile(),
+            analyzed_at=extracted_at,
+        )
+        save_profile_evidence_summary(
+            evidence_summary,
+            DEFAULT_PROFILE_EVIDENCE_DIRECTORY,
+        )
     except ProfileDocumentError as error:
         raise SlackEventError("저장된 프로필 문서를 추출할 수 없음") from error
     return {
         "status": "extracted" if created else "reused",
         "document_format": document_format,
         "summary": extraction["summary"],
+        "evidence_summary": evidence_summary["summary"],
     }
 
 

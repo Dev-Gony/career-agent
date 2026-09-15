@@ -118,12 +118,38 @@ def _profile_extraction_reply(result: Mapping[str, Any]) -> str:
         if len(normalized_counts) == 1
         else "각 후보는 사용자 검토가 필요합니다."
     )
+    evidence_summary = result.get("evidence_summary")
+    evidence_details = ""
+    if evidence_summary is not None:
+        if not isinstance(evidence_summary, Mapping):
+            raise SlackEventError("프로필 근거 신호 요약 형식이 올바르지 않음")
+        evidence_fields = (
+            ("기간 표현", "duration_expression_count"),
+            ("수치 표현", "quantified_expression_count"),
+            ("실행·개선 표현", "action_expression_count"),
+            ("기술명 언급", "technology_mention_candidate_count"),
+        )
+        evidence_lines = []
+        for label, field in evidence_fields:
+            value = evidence_summary.get(field)
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, int)
+                or not 0 <= value <= candidate_count
+            ):
+                raise SlackEventError(f"프로필 근거 신호 {field}가 올바르지 않음")
+            evidence_lines.append(f"- {label}: {value}개 문장")
+        evidence_details = (
+            "\n\n자동 탐지 근거 신호(미확정)\n"
+            + "\n".join(evidence_lines)
+        )
     return (
         "첨부파일 1차 문단 분류를 완료했습니다.\n"
         f"- 프로필 검토 후보: {candidate_count}개\n"
         f"{details}\n"
         f"- 미분류 문단: {unclassified_count}개\n"
         f"- 개인정보 형태 제외: {sensitive_count}개\n\n"
+        f"{evidence_details}\n\n"
         f"분류 품질: 확인 필요. {quality_note}\n"
         "이 결과는 이력서의 최종 분석 결과가 아니며, "
         "아직 개인 프로필에는 반영하지 않았습니다."

@@ -88,6 +88,25 @@ DOCX 본문 XML은 최대 8MB와 20,000개 문단으로 제한한다. 암호화�
 
 동일 문서와 동일 규칙 버전의 추출은 기존 결과를 재사용한다. 콘솔에는 후보 수와 영역별 수만 표시하고 후보 문장 자체는 출력하지 않는다.
 
+### 6.1 비확정 근거 신호 요약
+
+추출 후보에서 기간, 수치, 실행·개선 동사와 통제된 기술명 표현을 탐지해 `private-data/profile-evidence-summaries/`에 별도 저장한다. 후보 문장 원문은 복제하지 않고 후보 ID와 원문 문단 위치만 참조한다.
+
+    profile_evidence_summary:
+      summary_id: "profile-evidence-summary-example"
+      source_extraction_id: "profile-text-extraction-example"
+      status: "needs_review"
+      rules_version: "0.1"
+
+    summary:
+      candidate_count: 15
+      duration_expression_count: 6
+      quantified_expression_count: 4
+      action_expression_count: 9
+      technology_mention_candidate_count: 2
+
+이 결과는 표현 탐지 결과다. 기간 표현을 실제 근속 기간으로 계산하지 않고, 수치 표현을 성과로 확정하지 않으며, 기술명 언급을 보유 기술이나 숙련도로 판단하지 않는다. 사용자 확인 전 `profile_updated`는 `false`다.
+
 ## 7. 후보 승인 또는 거부
 
 `scripts/review_profile_candidate.py`는 추출 후보 한 건에 사용자가 명시한 결정을 기록한다.
