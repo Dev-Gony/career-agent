@@ -51,6 +51,19 @@ class RequirementMatchingServiceTest(unittest.TestCase):
         self.assertEqual("sample-user-001", result["inputs"]["profile_id"])
         self.assertEqual("job-001", result["inputs"]["posting_id"])
         self.assertEqual("eligible", result["eligibility"]["status"])
+        self.assertEqual("sufficient", result["jd_information_level"])
+        self.assertEqual("RECOMMEND", result["recommendation"])
+        self.assertEqual(
+            result["application_recommendation"]["recommendation_reason"],
+            result["recommendation_reason"],
+        )
+        confirmed_names = [item["name"] for item in result["confirmed_matches"]]
+        self.assertIn("Python", confirmed_names)
+        self.assertIn("LLM API", confirmed_names)
+        self.assertNotIn("Docker", confirmed_names)
+        self.assertTrue(
+            all(item["user_evidence"] for item in result["confirmed_matches"])
+        )
         self.assertNotIn(
             "eligibility", result["metadata"]["incomplete_sections"]
         )

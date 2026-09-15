@@ -33,15 +33,19 @@
     |-- job_posting_information
     |-- summary
     |-- eligibility
+    |-- jd_information_level
     |-- required_matches
     |-- preferred_matches
     |-- responsibility_matches
+    |-- confirmed_matches
     |-- strengths
     |-- gaps
     |-- unknowns
     |-- learning_recommendations
     |-- portfolio_recommendations
     |-- application_recommendation
+    |-- recommendation
+    |-- recommendation_reason
     |-- analysis_notes
     `-- metadata
 
@@ -226,6 +230,26 @@
 
 검사 결과나 업무 선호만으로 기술 요구사항의 `strong_match`를 만들 수 없다.
 
+### 10.1. confirmed_matches
+
+공고 조건과 사용자 근거가 실제로 `strong_match` 또는 `match`인 항목만 모아 제공한다.
+
+예시:
+
+    confirmed_matches:
+      - source_section: "requirements"
+        name: "Python"
+        result: "strong_match"
+        posting_evidence: "Python을 활용한 개발 경험"
+        user_evidence:
+          - source_type: "skill"
+            source_name: "Python"
+            source_id: "skill-python"
+            evidence_level: "project"
+            detail: "Tech News Automation"
+
+`partial`, `gap`, `unknown` 항목은 포함하지 않는다. 공고 정보 충분도가 낮아 최종 판단이 `HOLD`여도 우대사항 등에서 확인된 개별 일치는 버리지 않는다.
+
 ## 11. strengths
 
 지원 시 강조할 수 있는 강점을 저장한다.
@@ -359,6 +383,8 @@
       interpretation: "현재 프로필과 공고 조건의 비교 결과이며 합격 가능성 예측이 아님"
 
 `status`는 자동 처리에 사용하는 안정된 값이며 `RECOMMEND`, `HOLD`, `NOT_RECOMMEND` 중 하나다. `decision`은 사용자에게 보여주는 한국어 설명이며 `docs/MATCHING_RULES.md`의 지원 판단 목록만 사용한다. `recommendation_reason`은 `reasons`의 첫 번째 핵심 근거를 함께 제공한다.
+
+최상위의 `jd_information_level`, `recommendation`, `recommendation_reason`은 Slack과 다른 인터페이스가 중첩 구조를 다시 해석하지 않고 핵심 결과를 사용할 수 있게 제공하는 호환 필드다. 각각 `job_posting_information.level`, `application_recommendation.status`, `application_recommendation.recommendation_reason`과 같은 값을 가져야 한다.
 
 `confidence`는 합격 확률이 아니라 입력과 판정 근거의 명확성을 나타낸다. `interpretation`에는 이 결과가 합격 가능성 예측이 아니라는 경계를 명시한다.
 

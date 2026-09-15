@@ -90,9 +90,21 @@ class JobPostingInformationTest(unittest.TestCase):
         recommendation = result["application_recommendation"]
 
         self.assertEqual("insufficient", result["job_posting_information"]["level"])
+        self.assertEqual("insufficient", result["jd_information_level"])
         self.assertEqual("HOLD", recommendation["status"])
+        self.assertEqual("HOLD", result["recommendation"])
         self.assertEqual("판단 보류", recommendation["decision"])
         self.assertIn("추천을 확정하지 않습니다", recommendation["recommendation_reason"])
+        self.assertEqual(
+            ["LLM API"],
+            [item["name"] for item in result["confirmed_matches"]],
+        )
+        self.assertTrue(
+            all(
+                item["source_section"] == "preferred_qualifications"
+                for item in result["confirmed_matches"]
+            )
+        )
 
     def test_confirmed_required_gap_is_not_recommended(self) -> None:
         profile = deepcopy(self.profile)

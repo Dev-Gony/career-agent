@@ -140,6 +140,32 @@ def _summarize(matches: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
+def _confirmed_matches(
+    required_matches: list[dict[str, Any]],
+    preferred_matches: list[dict[str, Any]],
+    responsibility_matches: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    confirmed: list[dict[str, Any]] = []
+    for match in [*required_matches, *responsibility_matches, *preferred_matches]:
+        assessment = _required_mapping(match, "assessment")
+        if assessment.get("result") not in {"strong_match", "match"}:
+            continue
+        requirement = _required_mapping(match, "requirement")
+        user_evidence = match.get("user_evidence")
+        if not isinstance(user_evidence, list) or not user_evidence:
+            raise RequirementMatchError("확인된 일치에는 사용자 근거가 필요합니다.")
+        confirmed.append(
+            {
+                "source_section": _required_text(requirement, "source_section"),
+                "name": _required_text(requirement, "name"),
+                "result": str(assessment["result"]),
+                "posting_evidence": _required_text(requirement, "evidence_text"),
+                "user_evidence": user_evidence,
+            }
+        )
+    return confirmed
+
+
 def match_job_requirements(
     profile_document: dict[str, Any],
     posting_document: dict[str, Any],
@@ -223,6 +249,12 @@ def match_job_requirements(
     ) as error:
         raise RequirementMatchError(str(error)) from error
 
+    confirmed_matches = _confirmed_matches(
+        required_matches,
+        preferred_matches,
+        responsibility["responsibility_matches"],
+    )
+
     return {
         "scope": "requirements_responsibilities_eligibility_and_recommendation",
         "inputs": {
@@ -236,15 +268,21 @@ def match_job_requirements(
         },
         "eligibility": eligibility,
         "job_posting_information": job_posting_information,
+        "jd_information_level": job_posting_information["level"],
         "required_matches": required_matches,
         "preferred_matches": preferred_matches,
         "responsibility_matches": responsibility["responsibility_matches"],
         "strengths": insights["strengths"],
+        "confirmed_matches": confirmed_matches,
         "gaps": insights["gaps"],
         "unknowns": insights["unknowns"],
         "learning_recommendations": learning_recommendations,
         "portfolio_recommendations": portfolio_recommendations,
         "application_recommendation": application_recommendation,
+        "recommendation": application_recommendation["status"],
+        "recommendation_reason": application_recommendation[
+            "recommendation_reason"
+        ],
         "metadata": {
             "matching_rules_version": MATCHING_RULES_VERSION,
             "analysis_mode": "mvp_rule_based",
