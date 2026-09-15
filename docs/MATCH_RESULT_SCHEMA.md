@@ -21,6 +21,7 @@
 5. 적합도 백분율은 첫 MVP에서 사용하지 않는다.
 6. 내부의 상세한 사고 과정은 저장하지 않고 사용자에게 필요한 판단 근거만 저장한다.
 7. 동일한 입력을 다시 확인할 수 있도록 입력 식별자와 규칙 버전을 기록한다.
+8. 공고 정보 충분도와 사용자 적합도를 서로 다른 값으로 기록한다.
 
 ## 3. 최상위 구조
 
@@ -29,6 +30,7 @@
     match_result
     |-- identity
     |-- inputs
+    |-- job_posting_information
     |-- summary
     |-- eligibility
     |-- required_matches
@@ -78,6 +80,35 @@
       posting_collected_at: "2026-09-13"
 
 `profile_content_sha256`은 프로필 원문을 결과에 복제하지 않고 이전 분석과 입력 내용이 같은지 비교하기 위한 로컬 지문이다. 이 값만으로 프로필 내용을 복원하거나 사용자 적합도를 판단하지 않는다.
+
+## 5.1. job_posting_information
+
+공고에 비교 가능한 정보가 얼마나 명시되어 있는지 기록한다. 이 값은 사용자 적합도나 합격 가능성이 아니다.
+
+예시:
+
+    job_posting_information:
+      level: "sufficient"
+      confirmed_fields:
+        - "company"
+        - "position"
+        - "responsibilities"
+        - "required_qualifications"
+        - "experience"
+        - "employment"
+        - "location"
+      missing_fields: []
+      reasons:
+        - "회사·직무·주요 업무·필수 조건과 핵심 근무 조건이 명시되어 있습니다."
+      interpretation: "공고 정보의 명시 수준이며 사용자와의 적합도 판정이 아닙니다."
+
+`level` 값은 다음 중 하나다.
+
+- `sufficient`: 주요 업무와 필수 조건이 있고 경력·고용 형태·근무 지역 중 두 영역 이상이 명시됨
+- `partial`: 일부 비교 근거는 있으나 주요 업무, 필수 조건 또는 핵심 근무 조건이 충분하지 않음
+- `insufficient`: 주요 업무와 필수 조건을 모두 확인할 수 없음
+
+우대사항은 공고가 별도로 두지 않을 수 있으므로 `sufficient`의 필수 조건으로 사용하지 않는다. 비어 있거나 `unknown`, `미확인`인 값은 확인된 필드로 세지 않으며 추정해서 채우지 않는다.
 
 ## 6. summary
 

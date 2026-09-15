@@ -3,6 +3,10 @@
 from .eligibility import EligibilityMatchError, assess_eligibility
 from .experience import ExperienceMatchError, match_experience_requirements
 from .insights import MatchInsightsError, build_match_insights
+from .job_posting_information import (
+    JobPostingInformationError,
+    assess_job_posting_information,
+)
 from .learning import LearningRecommendationError, build_learning_recommendations
 from .portfolio import PortfolioRecommendationError, build_portfolio_recommendations
 from .recommendation import RecommendationError, build_application_recommendation
@@ -21,6 +25,8 @@ __all__ = [
     "match_experience_requirements",
     "MatchInsightsError",
     "build_match_insights",
+    "JobPostingInformationError",
+    "assess_job_posting_information",
     "LearningRecommendationError",
     "build_learning_recommendations",
     "PortfolioRecommendationError",

@@ -8,6 +8,10 @@ from typing import Any
 from .eligibility import EligibilityMatchError, assess_eligibility
 from .experience import ExperienceMatchError, match_experience_requirements
 from .insights import MatchInsightsError, build_match_insights
+from .job_posting_information import (
+    JobPostingInformationError,
+    assess_job_posting_information,
+)
 from .learning import LearningRecommendationError, build_learning_recommendations
 from .portfolio import PortfolioRecommendationError, build_portfolio_recommendations
 from .recommendation import RecommendationError, build_application_recommendation
@@ -15,7 +19,7 @@ from .responsibility import ResponsibilityMatchError, match_responsibilities
 from .technology import TechnologyMatchError, match_technology_requirements
 
 
-MATCHING_RULES_VERSION = "0.3"
+MATCHING_RULES_VERSION = "0.4"
 
 
 class RequirementMatchError(ValueError):
@@ -151,6 +155,7 @@ def match_job_requirements(
     posting_id = _required_text(_required_mapping(posting, "identity"), "posting_id")
 
     try:
+        job_posting_information = assess_job_posting_information(posting_document)
         technology = match_technology_requirements(profile_document, posting_document)
         experience = match_experience_requirements(profile_document, posting_document)
         eligibility = assess_eligibility(profile_document, posting_document)
@@ -159,6 +164,7 @@ def match_job_requirements(
         TechnologyMatchError,
         ExperienceMatchError,
         EligibilityMatchError,
+        JobPostingInformationError,
         ResponsibilityMatchError,
     ) as error:
         raise RequirementMatchError(str(error)) from error
@@ -228,6 +234,7 @@ def match_job_requirements(
             "responsibilities": responsibility["summary"],
         },
         "eligibility": eligibility,
+        "job_posting_information": job_posting_information,
         "required_matches": required_matches,
         "preferred_matches": preferred_matches,
         "responsibility_matches": responsibility["responsibility_matches"],
