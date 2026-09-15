@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import subprocess
 import sys
 from typing import Any, Callable, Mapping
+from urllib.parse import urlsplit
 
 from .slack_events import SlackEventError
 
 
 ANALYZE_NEXT_REVIEW_ACTION = "analyze_next_greenhouse_review"
 MAX_ACTION_OUTPUT_CHARS = 32 * 1024
+MAX_ANALYSIS_FILE_BYTES = 2 * 1024 * 1024
 
 _RESULT_LABELS = (
     "선택",
@@ -33,7 +36,74 @@ def _safe_slack_text(value: str, *, limit: int = 500) -> str:
     )
 
 
-def _public_success_message(stdout: str) -> str:
+def _mapping(value: Any, name: str) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        raise SlackEventError(f"{name} 객체가 필요함")
+    return value
+
+
+def _text(value: Any, name: str, *, limit: int = 500) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise SlackEventError(f"{name} 문자열이 필요함")
+    return _safe_slack_text(value, limit=limit)
+
+
+def _strings(value: Any, name: str) -> list[str]:
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise SlackEventError(f"{name} 문자열 배열이 필요함")
+    return [item for item in value if item.strip()]
+
+
+def _safe_https_url(value: Any) -> str:
+    if not isinstance(value, str) or len(value) > 2048:
+        raise SlackEventError("공고 원문 URL 형식이 올바르지 않음")
+    if any(character in value for character in "<>|\r\n\t"):
+        raise SlackEventError("공고 원문 URL에 허용되지 않은 문자가 있음")
+    parsed = urlsplit(value)
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        raise SlackEventError("공고 원문 URL은 인증정보가 없는 HTTPS여야 함")
+    return value
+
+
+def _analysis_path(stdout: str, repository_root: Path) -> Path:
+    paths = [
+        line.removeprefix("- 분석 저장: ").strip()
+        for line in stdout.splitlines()
+        if line.startswith("- 분석 저장: ")
+    ]
+    if len(paths) != 1 or not paths[0]:
+        raise SlackEventError("다음 공고 분석 파일 경로가 한 개가 아님")
+    raw_path = Path(paths[0])
+    path = (raw_path if raw_path.is_absolute() else repository_root / raw_path).resolve()
+    allowed_directory = (repository_root / "private-data" / "agent-runs").resolve()
+    if not path.is_relative_to(allowed_directory) or path.suffix.casefold() != ".json":
+        raise SlackEventError("다음 공고 분석 파일이 허용 경로 밖에 있음")
+    try:
+        if path.stat().st_size > MAX_ANALYSIS_FILE_BYTES:
+            raise SlackEventError("다음 공고 분석 파일이 너무 큼")
+    except OSError as error:
+        raise SlackEventError("다음 공고 분석 파일을 확인할 수 없음") from error
+    return path
+
+
+def _load_analysis(stdout: str, repository_root: Path) -> Mapping[str, Any]:
+    path = _analysis_path(stdout, repository_root)
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise SlackEventError("다음 공고 분석 파일을 읽을 수 없음") from error
+    root = _mapping(document, "분석 파일")
+    if root.get("status") != "analyzed" or root.get("workflow") != "greenhouse_review_queue":
+        raise SlackEventError("현재 검토 큐 분석 결과가 아님")
+    return root
+
+
+def _summary_values(stdout: str) -> dict[str, str]:
     if "Greenhouse 다음 검토 공고 1건 분석 완료" not in stdout.splitlines():
         raise SlackEventError("다음 공고 분석 출력의 완료 표시가 없음")
     values: dict[str, str] = {}
@@ -43,18 +113,119 @@ def _public_success_message(stdout: str) -> str:
         label, separator, value = line[2:].partition(": ")
         if separator and label in _RESULT_LABELS and value.strip():
             values[label] = _safe_slack_text(value)
-    if "선택" not in values or "지원 판단" not in values:
-        raise SlackEventError("다음 공고 분석 출력의 필수 요약이 없음")
+    return values
+
+
+def _strength_lines(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        raise SlackEventError("strengths 배열이 필요함")
+    lines: list[str] = []
+    for index, raw_item in enumerate(value[:2]):
+        item = _mapping(raw_item, f"strengths[{index}]")
+        title = _text(item.get("title"), f"strengths[{index}].title", limit=180)
+        evidence = _strings(item.get("evidence"), f"strengths[{index}].evidence")
+        evidence_text = ", ".join(_safe_slack_text(entry, limit=100) for entry in evidence[:2])
+        suffix = f" (근거: {evidence_text})" if evidence_text else ""
+        lines.append(f"- {title}{suffix}")
+    return lines
+
+
+def _gap_lines(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        raise SlackEventError("gaps 배열이 필요함")
+    lines: list[str] = []
+    for index, raw_item in enumerate(value[:2]):
+        item = _mapping(raw_item, f"gaps[{index}]")
+        name = _text(item.get("name"), f"gaps[{index}].name", limit=180)
+        reason = _text(item.get("reason"), f"gaps[{index}].reason", limit=220)
+        lines.append(f"- {name}: {reason}")
+    return lines
+
+
+def _unknown_lines(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        raise SlackEventError("unknowns 배열이 필요함")
+    lines: list[str] = []
+    for index, raw_item in enumerate(value[:3], start=1):
+        item = _mapping(raw_item, f"unknowns[{index - 1}]")
+        question = _text(
+            item.get("question"),
+            f"unknowns[{index - 1}].question",
+            limit=240,
+        )
+        lines.append(f"{index}. {question}")
+    return lines
+
+
+def _public_success_message(
+    stdout: str,
+    analysis_document: Mapping[str, Any],
+) -> str:
+    values = _summary_values(stdout)
+    selection = _mapping(analysis_document.get("selection"), "selection")
+    analysis = _mapping(analysis_document.get("analysis"), "analysis")
+    posting = _mapping(analysis.get("job_posting"), "analysis.job_posting")
+    source = _mapping(posting.get("source"), "analysis.job_posting.source")
+    match_result = _mapping(analysis.get("match_result"), "analysis.match_result")
+    recommendation = _mapping(
+        match_result.get("application_recommendation"),
+        "analysis.match_result.application_recommendation",
+    )
+
+    company = _text(selection.get("company"), "selection.company", limit=150)
+    title = _text(selection.get("title"), "selection.title", limit=250)
+    source_url = _safe_https_url(source.get("url"))
+    if selection.get("source_url") != source.get("url"):
+        raise SlackEventError("선택 공고와 분석 공고의 원문 URL이 일치하지 않음")
+    decision = _text(recommendation.get("decision"), "recommendation.decision", limit=100)
+    reasons = _strings(recommendation.get("reasons"), "recommendation.reasons")
+    next_steps = _strings(
+        recommendation.get("next_steps"),
+        "recommendation.next_steps",
+    )
+    strengths = _strength_lines(match_result.get("strengths"))
+    gaps = _gap_lines(match_result.get("gaps"))
+    unknowns = _unknown_lines(match_result.get("unknowns"))
 
     lines = [
-        "공고 1건 분석을 완료했습니다.",
-        f"- 선택: {values['선택']}",
-        f"- 지원 판단: {values['지원 판단']}",
+        "*공고 분석 완료*",
+        f"*{company}*",
+        title,
+        f"<{source_url}|공고 원문 보기>",
+        "",
+        f"*지원 판단: {decision}*",
     ]
-    for label in _RESULT_LABELS[2:]:
-        if label in values:
-            lines.append(f"- {label}: {values[label]}")
-    lines.append("합격 가능성 예측이 아니며, 현재 프로필과 공고의 비교 결과입니다.")
+    lines.extend(
+        f"- {_safe_slack_text(reason, limit=300)}"
+        for reason in reasons[:2]
+    )
+    lines.extend(["", "*확인된 강점*"])
+    lines.extend(strengths or ["- 현재 프로필에서 직접 연결된 강점을 찾지 못했습니다."])
+    if gaps:
+        lines.extend(["", "*확인된 부족*"])
+        lines.extend(gaps)
+    lines.extend(["", "*우선 확인할 점*"])
+    lines.extend(unknowns or ["- 추가 확인 항목이 없습니다."])
+    if next_steps:
+        lines.extend(
+            ["", "*다음 행동*", f"- {_safe_slack_text(next_steps[0], limit=250)}"]
+        )
+    analyzed = values.get("현재 큐 분석 완료")
+    remaining = values.get("현재 큐 분석 필요")
+    if analyzed or remaining:
+        lines.extend(
+            [
+                "",
+                "*검토 큐*",
+                f"- 분석 완료: {analyzed or '확인 불가'} / 분석 필요: {remaining or '확인 불가'}",
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            "_합격 가능성 예측이 아니라 현재 프로필과 공고의 비교 결과입니다._",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -107,7 +278,8 @@ def run_slack_career_action(
             "public_message": "공고 분석에 실패했습니다. 로컬 실행 이력을 확인해주세요.",
         }
     try:
-        message = _public_success_message(stdout)
+        analysis_document = _load_analysis(stdout, root)
+        message = _public_success_message(stdout, analysis_document)
     except SlackEventError:
         return {
             "status": "failed",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -13,8 +14,9 @@ sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 from career_agent.interfaces import SlackEventError, run_slack_career_action  # noqa: E402
 
 
-SUCCESS_OUTPUT = """Greenhouse 다음 검토 공고 1건 분석 완료
-- 선택: Example <AI> & Data / Agent Engineer
+def _success_output(path: Path) -> str:
+    return f"""Greenhouse 다음 검토 공고 1건 분석 완료
+- 선택: Example AI & Data / Agent Engineer
 - 큐 위치: 4
 - 지원 판단: apply_with_preparation
 - 우선 확인 항목: 3개
@@ -22,8 +24,47 @@ SUCCESS_OUTPUT = """Greenhouse 다음 검토 공고 1건 분석 완료
 - 포트폴리오 과제: 1개
 - 현재 큐 분석 완료: 4개
 - 현재 큐 분석 필요: 6개
-- 분석 저장: private-data/secret.json
+- 분석 저장: {path}
 """
+
+
+def _analysis_document(*, source_url: str = "https://example.com/jobs/1") -> dict:
+    return {
+        "status": "analyzed",
+        "workflow": "greenhouse_review_queue",
+        "selection": {
+            "company": "Example <AI> & Data",
+            "title": "Agent Engineer",
+            "source_url": source_url,
+        },
+        "analysis": {
+            "job_posting": {"source": {"url": source_url}},
+            "match_result": {
+                "strengths": [
+                    {
+                        "title": "Python 활용 경험",
+                        "evidence": ["Tech News Automation"],
+                    }
+                ],
+                "gaps": [
+                    {
+                        "name": "운영 경험",
+                        "reason": "직접 운영 근거가 부족합니다.",
+                    }
+                ],
+                "unknowns": [
+                    {
+                        "question": "운영 시스템을 직접 소유한 범위를 확인",
+                    }
+                ],
+                "application_recommendation": {
+                    "decision": "조건부 지원",
+                    "reasons": ["필수 조건의 충족 여부를 추가 확인해야 합니다."],
+                    "next_steps": ["필수 조건부터 확인합니다."],
+                },
+            },
+        },
+    }
 
 
 def _repository() -> tempfile.TemporaryDirectory:
@@ -37,15 +78,32 @@ def _repository() -> tempfile.TemporaryDirectory:
     return directory
 
 
+def _save_analysis(directory: str, document: dict | None = None) -> Path:
+    path = Path(directory) / "private-data" / "agent-runs" / "analysis.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps(document or _analysis_document(), ensure_ascii=False),
+        encoding="utf-8",
+    )
+    return path
+
+
 class SlackActionsTest(unittest.TestCase):
     def test_runs_static_command_and_returns_escaped_public_summary(self) -> None:
         calls: list[tuple] = []
 
-        def run_process(command, **options):
-            calls.append((command, options))
-            return subprocess.CompletedProcess(command, 0, SUCCESS_OUTPUT, "")
-
         with _repository() as directory:
+            analysis_path = _save_analysis(directory)
+
+            def run_process(command, **options):
+                calls.append((command, options))
+                return subprocess.CompletedProcess(
+                    command,
+                    0,
+                    _success_output(analysis_path),
+                    "",
+                )
+
             result = run_slack_career_action(
                 "analyze_next_greenhouse_review",
                 repository_root=directory,
@@ -54,6 +112,12 @@ class SlackActionsTest(unittest.TestCase):
 
         self.assertEqual("completed", result["status"])
         self.assertIn("Example &lt;AI&gt; &amp; Data", result["public_message"])
+        self.assertIn("<https://example.com/jobs/1|공고 원문 보기>", result["public_message"])
+        self.assertIn("Python 활용 경험", result["public_message"])
+        self.assertIn("Tech News Automation", result["public_message"])
+        self.assertIn("운영 경험", result["public_message"])
+        self.assertIn("운영 시스템을 직접 소유한 범위를 확인", result["public_message"])
+        self.assertIn("분석 완료: 4개 / 분석 필요: 6개", result["public_message"])
         self.assertNotIn("private-data", result["public_message"])
         command, options = calls[0]
         self.assertEqual(sys.executable, command[0])
@@ -97,6 +161,48 @@ class SlackActionsTest(unittest.TestCase):
 
         self.assertEqual("failed", timed_out["status"])
         self.assertEqual("failed", malformed["status"])
+
+    def test_rejects_analysis_file_outside_private_agent_runs(self) -> None:
+        with _repository() as directory:
+            outside_path = Path(directory) / "outside.json"
+            outside_path.write_text(
+                json.dumps(_analysis_document()),
+                encoding="utf-8",
+            )
+            result = run_slack_career_action(
+                "analyze_next_greenhouse_review",
+                repository_root=directory,
+                run_process=lambda command, **_options: subprocess.CompletedProcess(
+                    command,
+                    0,
+                    _success_output(outside_path),
+                    "",
+                ),
+            )
+
+        self.assertEqual("failed", result["status"])
+        self.assertNotIn(str(outside_path), result["public_message"])
+
+    def test_rejects_unsafe_source_url_from_analysis(self) -> None:
+        unsafe_url = "https://example.com/jobs/1|<!channel>"
+        with _repository() as directory:
+            analysis_path = _save_analysis(
+                directory,
+                _analysis_document(source_url=unsafe_url),
+            )
+            result = run_slack_career_action(
+                "analyze_next_greenhouse_review",
+                repository_root=directory,
+                run_process=lambda command, **_options: subprocess.CompletedProcess(
+                    command,
+                    0,
+                    _success_output(analysis_path),
+                    "",
+                ),
+            )
+
+        self.assertEqual("failed", result["status"])
+        self.assertNotIn("<!channel>", result["public_message"])
 
     def test_rejects_unknown_action_before_starting_process(self) -> None:
         with self.assertRaisesRegex(SlackEventError, "허용되지 않은"):
