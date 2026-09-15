@@ -97,7 +97,12 @@ class GreenhouseReviewQueueTest(unittest.TestCase):
         }
         self.high = _record("100", "high", "2026-09-10T10:00:00+09:00")
         self.medium = _record("200", "medium", "2026-09-14T10:00:00+09:00")
-        self.review = _record("300", "review", "2026-09-15T10:00:00+09:00")
+        self.review = _record(
+            "300",
+            "review",
+            "2026-09-15T10:00:00+09:00",
+            title="Automation Platform Engineer",
+        )
         self.low = _record("400", "low", "2026-09-16T10:00:00+09:00")
         self.discovery = {
             "executed_at": "2026-09-14T11:00:00+09:00",
@@ -168,7 +173,7 @@ class GreenhouseReviewQueueTest(unittest.TestCase):
             "600",
             "review",
             "2026-09-16T10:00:00+09:00",
-            title="Software Engineer - Korea",
+            title="Automation Platform Engineer - Korea",
         )
         self.discovery["board_results"][0]["current_records"] = [
             talent_pool,
@@ -188,7 +193,12 @@ class GreenhouseReviewQueueTest(unittest.TestCase):
         self.assertEqual("600", queue["items"][0]["external_job_id"])
 
     def test_deduplicates_candidate_and_applies_limit(self) -> None:
-        duplicate = _record("300", "review", "2026-09-16T10:00:00+09:00")
+        duplicate = _record(
+            "300",
+            "review",
+            "2026-09-16T10:00:00+09:00",
+            title="Automation Platform Engineer",
+        )
         self.discovery["board_results"][0]["current_records"].append(duplicate)
 
         queue = build_greenhouse_review_queue(
@@ -205,12 +215,12 @@ class GreenhouseReviewQueueTest(unittest.TestCase):
         self.assertEqual(2, queue["summary"]["selected_candidates"])
         self.assertEqual([1, 2], [item["position"] for item in queue["items"]])
 
-    def test_prefers_matching_location_and_broad_role_signal_within_review(self) -> None:
+    def test_keeps_distinctive_profile_signal_and_excludes_generic_role_word(self) -> None:
         local_technical = _record(
             "500",
             "review",
             "2026-09-10T10:00:00+09:00",
-            title="Software Engineer",
+            title="Automation Platform Engineer",
         )
         local_technical["profile_relevance"]["location_assessment"] = "match"
         local_technical["profile_relevance"]["employment_assessment"] = "unknown"
@@ -218,12 +228,21 @@ class GreenhouseReviewQueueTest(unittest.TestCase):
             "600",
             "review",
             "2026-09-16T10:00:00+09:00",
-            title="Growth Director",
+            title="Security Engineer",
         )
         remote_newer["profile_relevance"]["location_assessment"] = "mismatch"
         remote_newer["profile_relevance"]["employment_assessment"] = "unknown"
+        translated_generic = _record(
+            "700",
+            "review",
+            "2026-09-17T10:00:00+09:00",
+            title="Software Engineer (소프트웨어 엔지니어)",
+        )
+        translated_generic["profile_relevance"]["location_assessment"] = "match"
+        translated_generic["profile_relevance"]["employment_assessment"] = "unknown"
         self.discovery["board_results"][0]["current_records"] = [
             remote_newer,
+            translated_generic,
             local_technical,
         ]
 
@@ -237,7 +256,34 @@ class GreenhouseReviewQueueTest(unittest.TestCase):
         )
 
         self.assertEqual("500", queue["items"][0]["external_job_id"])
-        self.assertEqual(["engineer"], queue["items"][0]["broad_role_signals"])
+        self.assertEqual(
+            ["automation", "engineer"],
+            queue["items"][0]["broad_role_signals"],
+        )
+        self.assertEqual(1, queue["summary"]["eligible_current_candidates"])
+
+    def test_keeps_unique_single_term_from_profile_role_axis(self) -> None:
+        self.search_plan["job_search_plan"]["role_axes"][0][
+            "discovery_terms"
+        ].append("ITSM")
+        itsm = _record(
+            "900",
+            "review",
+            "2026-09-17T10:00:00+09:00",
+            title="ITSM Administrator",
+        )
+        self.discovery["board_results"][0]["current_records"] = [itsm]
+
+        queue = build_greenhouse_review_queue(
+            self.discovery,
+            [],
+            self.profile,
+            self.search_plan,
+            created_at=datetime(2026, 9, 14, 12, tzinfo=timezone.utc),
+            source_run_filename="source.json",
+        )
+
+        self.assertEqual(["itsm"], queue["items"][0]["broad_role_signals"])
 
     def test_moves_explicit_preference_mismatch_after_review_candidate(self) -> None:
         medium_mismatch = _record(
@@ -252,7 +298,7 @@ class GreenhouseReviewQueueTest(unittest.TestCase):
             "800",
             "review",
             "2026-09-10T10:00:00+09:00",
-            title="Software Engineer",
+            title="Automation Platform Engineer",
         )
         review_match["profile_relevance"]["location_assessment"] = "match"
         review_match["profile_relevance"]["employment_assessment"] = "unknown"

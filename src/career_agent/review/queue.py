@@ -24,6 +24,7 @@ _PRIORITY_ORDER = {"high": 0, "medium": 1, "review": 2}
 _ASSESSMENT_ORDER = {"match": 0, "unknown": 1, "mismatch": 2}
 _TOKEN_PATTERN = re.compile(r"[A-Za-z0-9]+|[가-힣]+")
 _TOKEN_STOPWORDS = {"and", "or", "the", "of"}
+_GENERIC_ROLE_TOKENS = frozenset({"engineer", "엔지니어"})
 
 
 class GreenhouseReviewQueueError(ValueError):
@@ -115,13 +116,17 @@ def _explicit_mismatch_rank(record: Mapping[str, Any]) -> int:
     )
 
 
-def _target_token_weights(search_plan: Mapping[str, Any]) -> dict[str, int]:
+def _target_role_tokens(
+    search_plan: Mapping[str, Any],
+) -> tuple[dict[str, int], tuple[frozenset[str], ...], frozenset[str]]:
     plan = search_plan.get("job_search_plan", search_plan)
     plan = _mapping(plan, "job_search_plan")
     role_axes = plan.get("role_axes")
     if not isinstance(role_axes, list) or not role_axes:
         raise GreenhouseReviewQueueError("job_search_plan.role_axes 배열이 필요함")
     weights: dict[str, int] = {}
+    axis_token_groups: list[frozenset[str]] = []
+    singleton_tokens: set[str] = set()
     for position, raw_axis in enumerate(role_axes):
         axis = _mapping(raw_axis, f"role_axes[{position}]")
         priority = axis.get("priority")
@@ -132,45 +137,85 @@ def _target_token_weights(search_plan: Mapping[str, Any]) -> dict[str, int]:
                 f"role_axes[{position}].discovery_terms 배열이 필요함"
             )
         phrases = [axis.get("canonical_role"), *discovery_terms]
+        axis_tokens: set[str] = set()
         for phrase in phrases:
             if not isinstance(phrase, str):
                 continue
-            for token in _TOKEN_PATTERN.findall(phrase.casefold()):
-                if len(token) < 2 or token in _TOKEN_STOPWORDS:
-                    continue
+            phrase_tokens = {
+                token
+                for token in _TOKEN_PATTERN.findall(phrase.casefold())
+                if len(token) >= 2 and token not in _TOKEN_STOPWORDS
+            }
+            axis_tokens.update(phrase_tokens)
+            if len(phrase_tokens) == 1:
+                singleton_tokens.update(phrase_tokens)
+            for token in phrase_tokens:
                 weights[token] = max(weights.get(token, 0), weight)
-    return weights
+        if axis_tokens:
+            axis_token_groups.append(frozenset(axis_tokens))
+    return weights, tuple(axis_token_groups), frozenset(singleton_tokens)
 
 
 def _broad_role_signals(
-    record: Mapping[str, Any], token_weights: Mapping[str, int]
+    record: Mapping[str, Any],
+    token_weights: Mapping[str, int],
+    axis_token_groups: tuple[frozenset[str], ...],
+    singleton_tokens: frozenset[str],
 ) -> list[str]:
     summary = _mapping(record.get("summary"), "record.summary")
     title = _text(summary.get("title"), "record.summary.title")
     title_tokens = set(_TOKEN_PATTERN.findall(title.casefold()))
+    relevant_tokens: set[str] = set()
+    for axis_tokens in axis_token_groups:
+        matches = title_tokens.intersection(axis_tokens)
+        distinctive_matches = matches.difference(_GENERIC_ROLE_TOKENS)
+        has_role_suffix = bool(matches.intersection(_GENERIC_ROLE_TOKENS))
+        if (
+            distinctive_matches.intersection(singleton_tokens)
+            or len(distinctive_matches) >= 2
+            or (distinctive_matches and has_role_suffix)
+        ):
+            relevant_tokens.update(matches)
     return sorted(
-        (token for token in title_tokens if token in token_weights),
+        relevant_tokens,
         key=lambda token: (-token_weights[token], token),
     )
 
 
 def _broad_role_score(
-    record: Mapping[str, Any], token_weights: Mapping[str, int]
+    record: Mapping[str, Any],
+    token_weights: Mapping[str, int],
+    axis_token_groups: tuple[frozenset[str], ...],
+    singleton_tokens: frozenset[str],
 ) -> int:
     return sum(
         token_weights[token]
-        for token in _broad_role_signals(record, token_weights)
+        for token in _broad_role_signals(
+            record,
+            token_weights,
+            axis_token_groups,
+            singleton_tokens,
+        )
     )
 
 
 def _sorted_unique_candidates(
     records: list[Mapping[str, Any]],
     token_weights: Mapping[str, int],
+    axis_token_groups: tuple[frozenset[str], ...],
+    singleton_tokens: frozenset[str],
 ) -> list[Mapping[str, Any]]:
     unique: dict[tuple[str, str], Mapping[str, Any]] = {}
     for record in records:
         priority = _priority(record)
         if priority is None:
+            continue
+        if priority == "review" and not _broad_role_signals(
+            record,
+            token_weights,
+            axis_token_groups,
+            singleton_tokens,
+        ):
             continue
         key = _candidate_key(record)
         existing = unique.get(key)
@@ -183,7 +228,12 @@ def _sorted_unique_candidates(
             _PRIORITY_ORDER[_priority(record) or "review"],
             _assessment_rank(record, "location_assessment"),
             _assessment_rank(record, "employment_assessment"),
-            -_broad_role_score(record, token_weights),
+            -_broad_role_score(
+                record,
+                token_weights,
+                axis_token_groups,
+                singleton_tokens,
+            ),
             -_source_timestamp(record),
             _candidate_key(record),
         ),
@@ -359,6 +409,8 @@ def _queue_item(
     review_status: str,
     human_review: Mapping[str, Any] | None,
     token_weights: Mapping[str, int],
+    axis_token_groups: tuple[frozenset[str], ...],
+    singleton_tokens: frozenset[str],
 ) -> dict[str, Any]:
     board_token, external_id = _candidate_key(record)
     source = _mapping(record.get("source"), "record.source")
@@ -376,7 +428,12 @@ def _queue_item(
         "ranking_reason": _text(relevance.get("reason"), "profile_relevance.reason"),
         "location_assessment": relevance.get("location_assessment", "unknown"),
         "employment_assessment": relevance.get("employment_assessment", "unknown"),
-        "broad_role_signals": _broad_role_signals(record, token_weights),
+        "broad_role_signals": _broad_role_signals(
+            record,
+            token_weights,
+            axis_token_groups,
+            singleton_tokens,
+        ),
         "source_url": _text(source.get("source_url"), "record.source.source_url"),
         "source_updated_at": source.get("updated_at"),
         "analysis_status": "analyzed_current" if analysis_id else "needs_analysis",
@@ -417,8 +474,15 @@ def build_greenhouse_review_queue(
         raise GreenhouseReviewQueueError("source_run_filename은 파일명이어야 함")
     _text(source_run_filename, "source_run_filename")
 
-    token_weights = _target_token_weights(search_plan)
-    candidates = _sorted_unique_candidates(_current_records(discovery), token_weights)
+    token_weights, axis_token_groups, singleton_tokens = _target_role_tokens(
+        search_plan
+    )
+    candidates = _sorted_unique_candidates(
+        _current_records(discovery),
+        token_weights,
+        axis_token_groups,
+        singleton_tokens,
+    )
     selected = candidates[:limit]
     profile_hash = profile_content_sha256(profile_document)
     runs = list(previous_runs)
@@ -443,6 +507,8 @@ def build_greenhouse_review_queue(
                 review_status=review_status,
                 human_review=current_human_review,
                 token_weights=token_weights,
+                axis_token_groups=axis_token_groups,
+                singleton_tokens=singleton_tokens,
             )
         )
 
