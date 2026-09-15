@@ -19,7 +19,7 @@ from .document_store import PROFILE_DOCUMENT_SCHEMA_VERSION, ProfileDocumentErro
 
 
 PROFILE_TEXT_EXTRACTION_SCHEMA_VERSION = "0.1"
-PROFILE_TEXT_EXTRACTION_RULES_VERSION = "0.2"
+PROFILE_TEXT_EXTRACTION_RULES_VERSION = "0.3"
 MAX_DOCX_DOCUMENT_XML_BYTES = 8 * 1024 * 1024
 MAX_DOCX_PARAGRAPHS = 20_000
 _SUPPORTED_FORMATS = {"plain_text", "markdown", "docx"}
@@ -36,6 +36,8 @@ _WORD_BREAK_TAGS = {
 _HEADING_SECTIONS = {
     "경력": "career_history",
     "경력사항": "career_history",
+    "경력 요약": "career_history",
+    "경력요약": "career_history",
     "경력 기술": "career_history",
     "경력기술": "career_history",
     "career": "career_history",

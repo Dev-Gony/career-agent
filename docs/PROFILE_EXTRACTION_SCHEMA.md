@@ -10,7 +10,7 @@
 
 - 비공개 문서 저장소에서 해시와 크기 검증이 끝난 문서
 - UTF-8 `.txt` 또는 `.md`, OOXML `.docx`
-- 추출 규칙 버전 `0.2`
+- 추출 규칙 버전 `0.3`
 
 PDF는 원본 저장만 지원하며 현재 텍스트 후보 추출에서는 거부한다. DOCX는 `word/document.xml`의 문단과 표 안 문단을 원래 순서대로 읽고, 여러 텍스트 조각을 한 문단으로 결합한다. 외부 문서 서비스는 호출하지 않는다.
 
@@ -20,7 +20,7 @@ PDF는 원본 저장만 지원하며 현재 텍스트 후보 추출에서는 거
 
 | 문서 제목 예 | 프로필 후보 영역 |
 | --- | --- |
-| 경력, 경력사항, Experience | `career_history` |
+| 경력, 경력사항, 경력 요약, Experience | `career_history` |
 | 프로젝트, Projects | `projects` |
 | 기술, 기술 스택, Skills | `skills` |
 | 학력, 교육, Education | `education` |

@@ -186,6 +186,32 @@ class ProfileTextExtractionTest(unittest.TestCase):
         )
         self.assertEqual(1, extraction["summary"]["omitted_sensitive_line_count"])
 
+    def test_recognizes_career_summary_heading_from_resume(self) -> None:
+        manifest, content = _docx_manifest(
+            [
+                ["경력 요약"],
+                ["운영 업무를 자동화했습니다."],
+                ["경력"],
+                ["품질 개선 업무를 수행했습니다."],
+            ]
+        )
+
+        extraction = build_profile_text_extraction(
+            manifest,
+            content,
+            extracted_at=EXTRACTED_AT,
+        )
+
+        self.assertEqual(2, extraction["summary"]["candidate_count"])
+        self.assertEqual(
+            {"career_history": 2},
+            extraction["summary"]["section_counts"],
+        )
+        self.assertEqual(
+            "0.3",
+            extraction["profile_extraction"]["rules_version"],
+        )
+
     def test_rejects_docx_document_xml_with_dtd(self) -> None:
         manifest, content = _docx_manifest(
             document_xml=(

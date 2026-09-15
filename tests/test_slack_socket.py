@@ -241,11 +241,50 @@ class SlackSocketTest(unittest.TestCase):
             )
 
         self.assertEqual(2, len(replies))
-        self.assertIn("검토 후보 3개", replies[1]["text"])
+        self.assertIn("1차 문단 분류", replies[1]["text"])
+        self.assertIn("검토 후보: 3개", replies[1]["text"])
         self.assertIn("경력: 2개", replies[1]["text"])
         self.assertIn("기술: 1개", replies[1]["text"])
+        self.assertIn("최종 분석 결과가 아니며", replies[1]["text"])
         self.assertNotIn("safe-document-id", replies[1]["text"])
         self.assertIn("아직 개인 프로필에는 반영하지 않았습니다", replies[1]["text"])
+        self.assertEqual([], logger.messages)
+
+    def test_registered_listener_warns_when_only_one_section_is_found(self) -> None:
+        app = _FakeApp()
+        replies: list[dict] = []
+        logger = _FakeLogger()
+
+        with tempfile.TemporaryDirectory() as directory:
+            listener = register_slack_app_mention_listener(
+                app,
+                _config(),
+                output_directory=directory,
+                now=lambda: RECEIVED_AT,
+                profile_document_importer=lambda _reference, _at: {
+                    "status": "stored",
+                    "document_id": "safe-document-id",
+                },
+                profile_document_extractor=lambda _result, _at: {
+                    "status": "extracted",
+                    "document_format": "docx",
+                    "summary": {
+                        "candidate_count": 13,
+                        "section_counts": {"career_history": 13},
+                        "unclassified_nonempty_line_count": 6,
+                        "omitted_sensitive_line_count": 1,
+                    },
+                },
+            )
+            listener(
+                _profile_event(),
+                lambda **values: replies.append(values),
+                logger,
+            )
+
+        self.assertIn("한 영역만 인식", replies[1]["text"])
+        self.assertIn("미분류 문단: 6개", replies[1]["text"])
+        self.assertIn("개인정보 형태 제외: 1개", replies[1]["text"])
         self.assertEqual([], logger.messages)
 
     def test_registered_listener_reports_empty_profile_extraction(self) -> None:

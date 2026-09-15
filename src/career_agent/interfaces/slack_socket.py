@@ -101,13 +101,31 @@ def _profile_extraction_reply(result: Mapping[str, Any]) -> str:
         raise SlackEventError("프로필 문서 후보 합계가 일치하지 않음")
     if candidate_count == 0:
         return PROFILE_DOCUMENT_EXTRACTION_EMPTY_REPLY
+    unclassified_count = summary.get("unclassified_nonempty_line_count", 0)
+    sensitive_count = summary.get("omitted_sensitive_line_count", 0)
+    for name, value in (
+        ("미분류 문단 수", unclassified_count),
+        ("개인정보 제외 문단 수", sensitive_count),
+    ):
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise SlackEventError(f"프로필 문서 {name}가 올바르지 않음")
     details = "\n".join(
         f"- {_PROFILE_SECTION_LABELS[section]}: {count}개"
         for section, count in normalized_counts
     )
+    quality_note = (
+        "한 영역만 인식해 추가 구조화가 필요합니다."
+        if len(normalized_counts) == 1
+        else "각 후보는 사용자 검토가 필요합니다."
+    )
     return (
-        f"첨부파일에서 프로필 검토 후보 {candidate_count}개를 찾았습니다.\n"
+        "첨부파일 1차 문단 분류를 완료했습니다.\n"
+        f"- 프로필 검토 후보: {candidate_count}개\n"
         f"{details}\n"
+        f"- 미분류 문단: {unclassified_count}개\n"
+        f"- 개인정보 형태 제외: {sensitive_count}개\n\n"
+        f"분류 품질: 확인 필요. {quality_note}\n"
+        "이 결과는 이력서의 최종 분석 결과가 아니며, "
         "아직 개인 프로필에는 반영하지 않았습니다."
     )
 
