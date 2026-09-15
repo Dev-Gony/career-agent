@@ -16,6 +16,7 @@ ALLOWED_STATUSES = {
     "reused",
     "no_high_candidate",
     "no_eligible_candidate",
+    "discovered_only",
     "failed",
 }
 

@@ -56,6 +56,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--execution-directory", type=Path, default=DEFAULT_EXECUTION_DIRECTORY
     )
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--discovery-only",
+        action="store_true",
+        help="공식 보드 목록만 갱신하고 상세 공고는 분석하지 않음",
+    )
     return parser
 
 
@@ -135,6 +140,7 @@ def main() -> int:
             boards=boards,
             executed_at=execution_time,
             previous_runs=previous_runs,
+            discovery_only=args.discovery_only,
         )
         discovery = result["discovery"]
         print(
@@ -147,12 +153,30 @@ def main() -> int:
             )
             print(f"- 목록 조회 실패 보드: {failed_boards}")
         discovery_snapshot_path: Path | None = None
-        if result["status"] in {"reused", "no_high_candidate"}:
+        if result["status"] in {
+            "reused",
+            "no_high_candidate",
+            "discovered_only",
+        }:
             discovery_snapshot_path = _save_discovery_snapshot(
                 result,
                 args.run_directory,
                 executed_at=execution_time,
             )
+        if result["status"] == "discovered_only":
+            execution_path = save_execution_record(
+                build_greenhouse_execution_record(
+                    executed_at=execution_time,
+                    status="discovered_only",
+                    discovery=result["discovery"],
+                ),
+                args.execution_directory,
+            )
+            print("Greenhouse 공식 보드 목록 갱신 완료")
+            print(f"- 발견 스냅샷: {discovery_snapshot_path}")
+            print(f"- 실행 이력: {execution_path}")
+            print("주의: 상세 공고 분석은 실행하지 않았습니다.")
+            return 0
         if result["status"] == "no_high_candidate":
             execution_path = save_execution_record(
                 build_greenhouse_execution_record(

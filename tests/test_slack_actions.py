@@ -104,6 +104,10 @@ def _repository() -> tempfile.TemporaryDirectory:
         "# test placeholder\n",
         encoding="utf-8",
     )
+    (scripts / "run_greenhouse_agent.py").write_text(
+        "# test placeholder\n",
+        encoding="utf-8",
+    )
     return directory
 
 
@@ -241,6 +245,68 @@ class SlackActionsTest(unittest.TestCase):
         self.assertIn("분석 완료: 1개", result["public_message"])
         self.assertIn("미분석이지만 조건 불일치: 3개", result["public_message"])
         self.assertIn("현재 분석 가능: 0", result["public_message"])
+        self.assertIn("공식 채용 소스를 방금 갱신", result["public_message"])
+
+    def test_refreshes_sources_and_retries_when_queue_has_no_candidate(self) -> None:
+        no_candidate = """Greenhouse 다음 검토 공고 없음
+- 현재 큐 분석 완료: 1개
+- 현재 큐 분석 필요: 1개
+"""
+        calls: list[list[str]] = []
+
+        with _repository() as directory:
+            analysis_path = _save_analysis(directory)
+            responses = iter(
+                [
+                    subprocess.CompletedProcess([], 0, no_candidate, ""),
+                    subprocess.CompletedProcess([], 0, "공식 목록 갱신 완료", ""),
+                    subprocess.CompletedProcess([], 0, "큐 생성 완료", ""),
+                    subprocess.CompletedProcess(
+                        [], 0, _success_output(analysis_path), ""
+                    ),
+                ]
+            )
+
+            def run_process(command, **_options):
+                calls.append(command)
+                return next(responses)
+
+            result = run_slack_career_action(
+                "analyze_next_greenhouse_review",
+                repository_root=directory,
+                run_process=run_process,
+            )
+
+        self.assertEqual("completed", result["status"])
+        self.assertEqual("analyze_next_greenhouse_review.py", Path(calls[0][1]).name)
+        self.assertEqual("run_greenhouse_agent.py", Path(calls[1][1]).name)
+        self.assertEqual("--discovery-only", calls[1][2])
+        self.assertEqual("build_greenhouse_review_queue.py", Path(calls[2][1]).name)
+        self.assertEqual("analyze_next_greenhouse_review.py", Path(calls[3][1]).name)
+
+    def test_reports_refresh_failure_without_exposing_error(self) -> None:
+        no_candidate = """Greenhouse 다음 검토 공고 없음
+- 현재 큐 분석 완료: 1개
+- 현재 큐 분석 필요: 0개
+"""
+        secret_error = "remote private response"
+        responses = iter(
+            [
+                subprocess.CompletedProcess([], 0, no_candidate, ""),
+                subprocess.CompletedProcess([], 1, "", secret_error),
+            ]
+        )
+
+        with _repository() as directory:
+            result = run_slack_career_action(
+                "analyze_next_greenhouse_review",
+                repository_root=directory,
+                run_process=lambda command, **_options: next(responses),
+            )
+
+        self.assertEqual("no_candidate", result["status"])
+        self.assertIn("공식 채용 소스 갱신도 완료하지 못했습니다", result["public_message"])
+        self.assertNotIn(secret_error, result["public_message"])
 
     def test_returns_fixed_failure_for_timeout_and_invalid_output(self) -> None:
         def timeout_process(*_args, **_options):

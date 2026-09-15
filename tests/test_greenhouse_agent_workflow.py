@@ -118,6 +118,33 @@ class GreenhouseAgentWorkflowTest(unittest.TestCase):
 
     @patch("career_agent.workflows.greenhouse_agent.analyze_greenhouse_job")
     @patch("career_agent.workflows.greenhouse_agent.run_greenhouse_discovery")
+    def test_discovery_only_never_fetches_job_detail(
+        self, mocked_discovery, mocked_analyze
+    ) -> None:
+        mocked_discovery.return_value = self.discovery
+
+        with tempfile.TemporaryDirectory() as directory:
+            result = run_greenhouse_portfolio_agent(
+                {"profile": {}},
+                {"job_search_plan": {}},
+                Path(directory) / "discoveries.json",
+                boards=[
+                    {
+                        "board_token": "example",
+                        "policy_checked_at": date(2026, 9, 14),
+                    }
+                ],
+                executed_at=self.execution_time,
+                discovery_only=True,
+            )
+
+        self.assertEqual("discovered_only", result["status"])
+        self.assertEqual(2, result["discovery"]["fetched_records"])
+        self.assertIsNone(result["selection"])
+        mocked_analyze.assert_not_called()
+
+    @patch("career_agent.workflows.greenhouse_agent.analyze_greenhouse_job")
+    @patch("career_agent.workflows.greenhouse_agent.run_greenhouse_discovery")
     def test_reuses_analysis_when_job_profile_and_rules_are_unchanged(
         self, mocked_discovery, mocked_analyze
     ) -> None:

@@ -72,6 +72,7 @@ def run_greenhouse_portfolio_agent(
     boards: Iterable[Mapping[str, Any]],
     executed_at: datetime | None = None,
     previous_runs: Iterable[Mapping[str, Any]] = (),
+    discovery_only: bool = False,
 ) -> dict[str, Any]:
     """Discover many boards but analyze at most one current high candidate."""
 
@@ -154,6 +155,15 @@ def run_greenhouse_portfolio_agent(
             f"모든 Greenhouse 보드 목록 조회가 실패함: {failed_tokens}",
             discovery=discovery_summary,
         )
+
+    if discovery_only:
+        return {
+            "status": "discovered_only",
+            "discovery": discovery_summary,
+            "selection": None,
+            "analysis": None,
+            "reuse": None,
+        }
 
     candidates = _current_high_candidates(current_records)
     if not candidates:

@@ -143,7 +143,11 @@ def _summary_values(stdout: str) -> dict[str, str]:
     return _result_values(stdout)
 
 
-def _public_no_candidate_message(stdout: str) -> str:
+def _public_no_candidate_message(
+    stdout: str,
+    *,
+    source_refreshed: bool | None = None,
+) -> str:
     if NO_CANDIDATE_MARKER not in stdout.splitlines():
         raise SlackEventError("다음 공고 없음 출력의 완료 표시가 없음")
     values = _result_values(stdout)
@@ -151,8 +155,7 @@ def _public_no_candidate_message(stdout: str) -> str:
     remaining = values.get("현재 큐 분석 필요")
     if analyzed is None or remaining is None:
         raise SlackEventError("다음 공고 없음 출력의 큐 상태가 없음")
-    return "\n".join(
-        [
+    lines = [
             "*현재 조건에 맞는 새 공고가 없습니다.*",
             (
                 "현재 등록된 공식 채용 소스에서 프로필 직무 근거와 "
@@ -164,9 +167,16 @@ def _public_no_candidate_message(stdout: str) -> str:
             f"- 미분석이지만 조건 불일치: {remaining}",
             "- 현재 분석 가능: 0",
             "",
-            "새 공고 목록이 갱신되면 다시 확인할 수 있습니다.",
         ]
-    )
+    if source_refreshed is True:
+        lines.append("공식 채용 소스를 방금 갱신했지만 새 분석 후보가 없습니다.")
+    elif source_refreshed is False:
+        lines.append(
+            "현재 큐에는 후보가 없고 공식 채용 소스 갱신도 완료하지 못했습니다."
+        )
+    else:
+        lines.append("새 공고 목록이 갱신되면 다시 확인할 수 있습니다.")
+    return "\n".join(lines)
 
 
 def _strength_lines(value: Any) -> list[str]:
@@ -356,9 +366,9 @@ def run_slack_career_action(
     if not script_path.is_file():
         raise SlackEventError("다음 공고 분석 실행 파일을 찾을 수 없음")
 
-    def run_script(path: Path) -> Any:
+    def run_script(path: Path, *arguments: str) -> Any:
         return run_process(
-            [sys.executable, str(path)],
+            [sys.executable, str(path), *arguments],
             cwd=root,
             capture_output=True,
             text=True,
@@ -369,6 +379,7 @@ def run_slack_career_action(
         )
 
     try:
+        source_refreshed: bool | None = None
         completed = run_script(script_path)
         initial_stderr = (
             completed.stderr if isinstance(completed.stderr, str) else ""
@@ -392,6 +403,45 @@ def run_slack_career_action(
                     "public_message": "공고 검토 목록을 갱신하지 못했습니다. 로컬 실행 이력을 확인해주세요.",
                 }
             completed = run_script(script_path)
+
+        current_stdout = (
+            completed.stdout if isinstance(completed.stdout, str) else ""
+        )
+        if completed.returncode == 0 and NO_CANDIDATE_MARKER in current_stdout.splitlines():
+            discovery_script = root / "scripts" / "run_greenhouse_agent.py"
+            queue_script = root / "scripts" / "build_greenhouse_review_queue.py"
+            if not discovery_script.is_file() or not queue_script.is_file():
+                raise SlackEventError("공식 공고 갱신 실행 파일을 찾을 수 없음")
+            refreshed = run_script(discovery_script, "--discovery-only")
+            refresh_output = "".join(
+                value
+                for value in (refreshed.stdout, refreshed.stderr)
+                if isinstance(value, str)
+            )
+            if refreshed.returncode != 0 or len(refresh_output) > MAX_ACTION_OUTPUT_CHARS:
+                return {
+                    "status": "no_candidate",
+                    "public_message": _public_no_candidate_message(
+                        current_stdout,
+                        source_refreshed=False,
+                    ),
+                }
+            rebuilt = run_script(queue_script)
+            rebuild_output = "".join(
+                value
+                for value in (rebuilt.stdout, rebuilt.stderr)
+                if isinstance(value, str)
+            )
+            if rebuilt.returncode != 0 or len(rebuild_output) > MAX_ACTION_OUTPUT_CHARS:
+                return {
+                    "status": "no_candidate",
+                    "public_message": _public_no_candidate_message(
+                        current_stdout,
+                        source_refreshed=False,
+                    ),
+                }
+            completed = run_script(script_path)
+            source_refreshed = True
     except subprocess.TimeoutExpired:
         return {
             "status": "failed",
@@ -416,7 +466,10 @@ def run_slack_career_action(
         if NO_CANDIDATE_MARKER in stdout.splitlines():
             return {
                 "status": "no_candidate",
-                "public_message": _public_no_candidate_message(stdout),
+                "public_message": _public_no_candidate_message(
+                    stdout,
+                    source_refreshed=source_refreshed,
+                ),
             }
         analysis_document = _load_analysis(stdout, root)
         message = _public_success_message(stdout, analysis_document)

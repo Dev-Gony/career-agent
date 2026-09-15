@@ -90,6 +90,16 @@ class ExecutionLogTest(unittest.TestCase):
             "no_eligible_candidate",
             actual["execution"]["status"],
         )
+
+    def test_allows_discovery_only_as_normal_status(self) -> None:
+        actual = build_greenhouse_execution_record(
+            executed_at=self.executed_at,
+            status="discovered_only",
+            discovery=self.discovery,
+        )
+
+        self.assertEqual("discovered_only", actual["execution"]["status"])
+        self.assertIsNone(actual["analysis_reference"])
         self.assertIsNone(actual["error"])
 
 
