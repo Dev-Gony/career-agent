@@ -27,6 +27,27 @@ _RESULT_LABELS = (
     "현재 큐 분석 필요",
 )
 
+_INFORMATION_LEVEL_LABELS = {
+    "sufficient": "충분",
+    "partial": "일부 부족",
+    "insufficient": "부족",
+}
+_POSTING_FIELD_LABELS = {
+    "company": "회사명",
+    "position": "직무명",
+    "responsibilities": "주요 업무",
+    "required_qualifications": "필수 조건",
+    "preferred_qualifications": "우대 조건",
+    "experience": "요구 경력",
+    "employment": "고용 형태",
+    "location": "근무 지역",
+}
+_MATCH_SECTION_LABELS = {
+    "requirements": "필수 조건",
+    "responsibilities": "주요 업무",
+    "preferred_qualifications": "우대 조건",
+}
+
 
 def _safe_slack_text(value: str, *, limit: int = 500) -> str:
     normalized = " ".join(value.split())[:limit]
@@ -186,6 +207,51 @@ def _unknown_lines(value: Any) -> list[str]:
     return lines
 
 
+def _posting_information(value: Any) -> tuple[str, list[str]]:
+    information = _mapping(value, "job_posting_information")
+    level = information.get("level")
+    if level not in _INFORMATION_LEVEL_LABELS:
+        raise SlackEventError("공고 정보 충분도 값을 해석할 수 없음")
+    missing = _strings(
+        information.get("missing_fields"),
+        "job_posting_information.missing_fields",
+    )
+    missing_labels = [
+        _POSTING_FIELD_LABELS.get(field, _safe_slack_text(field, limit=80))
+        for field in missing[:5]
+    ]
+    return f"{_INFORMATION_LEVEL_LABELS[level]} ({level})", missing_labels
+
+
+def _confirmed_match_lines(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        raise SlackEventError("confirmed_matches 배열이 필요함")
+    lines: list[str] = []
+    for index, raw_item in enumerate(value[:3]):
+        item = _mapping(raw_item, f"confirmed_matches[{index}]")
+        section = _text(
+            item.get("source_section"),
+            f"confirmed_matches[{index}].source_section",
+            limit=80,
+        )
+        name = _text(item.get("name"), f"confirmed_matches[{index}].name", limit=180)
+        evidence_items = item.get("user_evidence")
+        if not isinstance(evidence_items, list) or not evidence_items:
+            raise SlackEventError("확인된 일치에 사용자 근거가 필요함")
+        evidence = _mapping(
+            evidence_items[0],
+            f"confirmed_matches[{index}].user_evidence[0]",
+        )
+        detail = _text(
+            evidence.get("detail"),
+            f"confirmed_matches[{index}].user_evidence[0].detail",
+            limit=140,
+        )
+        section_label = _MATCH_SECTION_LABELS.get(section, section)
+        lines.append(f"- [{section_label}] {name} (근거: {detail})")
+    return lines
+
+
 def _public_success_message(
     stdout: str,
     analysis_document: Mapping[str, Any],
@@ -200,6 +266,9 @@ def _public_success_message(
         match_result.get("application_recommendation"),
         "analysis.match_result.application_recommendation",
     )
+    information_level, missing_posting_fields = _posting_information(
+        match_result.get("job_posting_information")
+    )
 
     company = _text(selection.get("company"), "selection.company", limit=150)
     title = _text(selection.get("title"), "selection.title", limit=250)
@@ -207,12 +276,15 @@ def _public_success_message(
     if selection.get("source_url") != source.get("url"):
         raise SlackEventError("선택 공고와 분석 공고의 원문 URL이 일치하지 않음")
     decision = _text(recommendation.get("decision"), "recommendation.decision", limit=100)
+    status = _text(recommendation.get("status"), "recommendation.status", limit=30)
+    if status not in {"RECOMMEND", "HOLD", "NOT_RECOMMEND"}:
+        raise SlackEventError("지원 추천 상태를 해석할 수 없음")
     reasons = _strings(recommendation.get("reasons"), "recommendation.reasons")
     next_steps = _strings(
         recommendation.get("next_steps"),
         "recommendation.next_steps",
     )
-    strengths = _strength_lines(match_result.get("strengths"))
+    confirmed_matches = _confirmed_match_lines(match_result.get("confirmed_matches"))
     gaps = _gap_lines(match_result.get("gaps"))
     unknowns = _unknown_lines(match_result.get("unknowns"))
 
@@ -222,18 +294,23 @@ def _public_success_message(
         title,
         f"<{source_url}|공고 원문 보기>",
         "",
-        f"*지원 판단: {decision}*",
+        f"*공고 정보 수준: {information_level}*",
+        f"*최종 추천: {status}*",
+        f"- 판단 설명: {decision}",
     ]
     lines.extend(
         f"- {_safe_slack_text(reason, limit=300)}"
         for reason in reasons[:2]
     )
-    lines.extend(["", "*확인된 강점*"])
-    lines.extend(strengths or ["- 현재 프로필에서 직접 연결된 강점을 찾지 못했습니다."])
+    lines.extend(["", "*확인된 일치*"])
+    lines.extend(confirmed_matches or ["- 확인된 일치 항목이 없습니다."])
     if gaps:
-        lines.extend(["", "*확인된 부족*"])
+        lines.extend(["", "*확인된 부족 또는 불일치*"])
         lines.extend(gaps)
-    lines.extend(["", "*우선 확인할 점*"])
+    if missing_posting_fields:
+        lines.extend(["", "*공고에서 확인할 수 없는 정보*"])
+        lines.extend(f"- {field}" for field in missing_posting_fields)
+    lines.extend(["", "*비교를 위해 추가 확인할 정보*"])
     lines.extend(unknowns or ["- 추가 확인 항목이 없습니다."])
     if next_steps:
         lines.extend(

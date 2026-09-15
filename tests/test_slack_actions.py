@@ -40,6 +40,30 @@ def _analysis_document(*, source_url: str = "https://example.com/jobs/1") -> dic
         "analysis": {
             "job_posting": {"source": {"url": source_url}},
             "match_result": {
+                "job_posting_information": {
+                    "level": "partial",
+                    "confirmed_fields": ["company", "position", "requirements"],
+                    "missing_fields": ["responsibilities", "employment"],
+                    "reasons": ["일부 비교 근거만 확인됩니다."],
+                    "interpretation": "적합도 판정이 아닙니다.",
+                },
+                "confirmed_matches": [
+                    {
+                        "source_section": "requirements",
+                        "name": "Python",
+                        "result": "strong_match",
+                        "posting_evidence": "Python 개발 경험",
+                        "user_evidence": [
+                            {
+                                "source_type": "project",
+                                "source_name": "Tech News Automation",
+                                "source_id": "project-tech-news",
+                                "evidence_level": "project",
+                                "detail": "Python 자동화 구현",
+                            }
+                        ],
+                    }
+                ],
                 "strengths": [
                     {
                         "title": "Python 활용 경험",
@@ -58,6 +82,7 @@ def _analysis_document(*, source_url: str = "https://example.com/jobs/1") -> dic
                     }
                 ],
                 "application_recommendation": {
+                    "status": "HOLD",
                     "decision": "조건부 지원",
                     "reasons": ["필수 조건의 충족 여부를 추가 확인해야 합니다."],
                     "next_steps": ["필수 조건부터 확인합니다."],
@@ -113,8 +138,13 @@ class SlackActionsTest(unittest.TestCase):
         self.assertEqual("completed", result["status"])
         self.assertIn("Example &lt;AI&gt; &amp; Data", result["public_message"])
         self.assertIn("<https://example.com/jobs/1|공고 원문 보기>", result["public_message"])
-        self.assertIn("Python 활용 경험", result["public_message"])
-        self.assertIn("Tech News Automation", result["public_message"])
+        self.assertIn("공고 정보 수준: 일부 부족 (partial)", result["public_message"])
+        self.assertIn("최종 추천: HOLD", result["public_message"])
+        self.assertIn("[필수 조건] Python", result["public_message"])
+        self.assertIn("Python 자동화 구현", result["public_message"])
+        self.assertIn("공고에서 확인할 수 없는 정보", result["public_message"])
+        self.assertIn("주요 업무", result["public_message"])
+        self.assertIn("고용 형태", result["public_message"])
         self.assertIn("운영 경험", result["public_message"])
         self.assertIn("운영 시스템을 직접 소유한 범위를 확인", result["public_message"])
         self.assertIn("분석 완료: 4개 / 분석 필요: 6개", result["public_message"])
