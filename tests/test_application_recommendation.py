@@ -32,6 +32,7 @@ class ApplicationRecommendationTest(unittest.TestCase):
         recommendation = result["application_recommendation"]
 
         self.assertEqual("적극 지원", recommendation["decision"])
+        self.assertEqual("RECOMMEND", recommendation["status"])
         self.assertEqual("high", recommendation["confidence"])
         self.assertTrue(
             any("Docker" in caution and "AWS" in caution for caution in recommendation["cautions"])
@@ -51,6 +52,9 @@ class ApplicationRecommendationTest(unittest.TestCase):
         self.assertEqual(
             "역량 보완 후 지원", result["application_recommendation"]["decision"]
         )
+        self.assertEqual(
+            "NOT_RECOMMEND", result["application_recommendation"]["status"]
+        )
 
     def test_unknown_required_condition_makes_recommendation_conditional(self) -> None:
         posting = deepcopy(self.posting)
@@ -67,6 +71,7 @@ class ApplicationRecommendationTest(unittest.TestCase):
         result = match_job_requirements(self.profile, posting)
 
         self.assertEqual("조건부 지원", result["application_recommendation"]["decision"])
+        self.assertEqual("HOLD", result["application_recommendation"]["status"])
 
     def test_conditional_eligibility_makes_recommendation_conditional(self) -> None:
         posting = deepcopy(self.posting)
@@ -91,6 +96,9 @@ class ApplicationRecommendationTest(unittest.TestCase):
         self.assertEqual(
             "현재는 우선순위 낮음",
             result["application_recommendation"]["decision"],
+        )
+        self.assertEqual(
+            "NOT_RECOMMEND", result["application_recommendation"]["status"]
         )
 
     def test_unknown_responsibility_lowers_active_to_recommended(self) -> None:

@@ -345,18 +345,20 @@
 예시:
 
     application_recommendation:
+      status: "RECOMMEND"
       decision: "적극 지원"
       confidence: "high"
       reasons:
         - "세 가지 필수 조건 모두 프로젝트 증거가 있음"
         - "확인된 지원 불가 조건이 없음"
+      recommendation_reason: "세 가지 필수 조건 모두 프로젝트 증거가 있음"
       cautions:
         - "Docker와 AWS 경험은 추가 확인 필요"
       next_steps:
         - "실제 공고의 상세 업무와 기술 사용 비중 확인"
       interpretation: "현재 프로필과 공고 조건의 비교 결과이며 합격 가능성 예측이 아님"
 
-`decision` 값은 `docs/MATCHING_RULES.md`의 지원 판단 목록만 사용한다.
+`status`는 자동 처리에 사용하는 안정된 값이며 `RECOMMEND`, `HOLD`, `NOT_RECOMMEND` 중 하나다. `decision`은 사용자에게 보여주는 한국어 설명이며 `docs/MATCHING_RULES.md`의 지원 판단 목록만 사용한다. `recommendation_reason`은 `reasons`의 첫 번째 핵심 근거를 함께 제공한다.
 
 `confidence`는 합격 확률이 아니라 입력과 판정 근거의 명확성을 나타낸다. `interpretation`에는 이 결과가 합격 가능성 예측이 아니라는 경계를 명시한다.
 

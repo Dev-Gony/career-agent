@@ -19,7 +19,7 @@ from .responsibility import ResponsibilityMatchError, match_responsibilities
 from .technology import TechnologyMatchError, match_technology_requirements
 
 
-MATCHING_RULES_VERSION = "0.4"
+MATCHING_RULES_VERSION = "0.5"
 
 
 class RequirementMatchError(ValueError):
@@ -201,6 +201,7 @@ def match_job_requirements(
             required_matches,
             preferred_matches,
             eligibility,
+            job_posting_information=job_posting_information,
             responsibility_matches=responsibility["responsibility_matches"],
             responsibilities_evaluated=True,
         )

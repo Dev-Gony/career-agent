@@ -11,6 +11,7 @@ class RecommendationError(ValueError):
 
 _MATCH_RESULTS = {"strong_match", "match", "partial", "gap", "unknown"}
 _ELIGIBILITY_STATUSES = {"eligible", "conditional", "ineligible", "unknown"}
+_INFORMATION_LEVELS = {"sufficient", "partial", "insufficient"}
 
 
 def _require_match_list(value: Any, name: str) -> list[dict[str, Any]]:
@@ -45,6 +46,15 @@ def _require_eligibility(value: Any) -> dict[str, Any]:
     if not isinstance(conditions, list):
         raise RecommendationError("eligibility.conditions 배열이 필요합니다.")
     return value
+
+
+def _require_information_level(value: Any) -> str:
+    if not isinstance(value, dict):
+        raise RecommendationError("'job_posting_information' 객체가 필요합니다.")
+    level = value.get("level")
+    if level not in _INFORMATION_LEVELS:
+        raise RecommendationError(f"공고 정보 충분도를 해석할 수 없습니다: {level}")
+    return str(level)
 
 
 def _names_with_result(matches: list[dict[str, Any]], results: set[str]) -> list[str]:
@@ -164,6 +174,7 @@ def build_application_recommendation(
     preferred_matches: Any,
     eligibility: Any,
     *,
+    job_posting_information: Any,
     responsibility_matches: Any = None,
     responsibilities_evaluated: bool = False,
 ) -> dict[str, Any]:
@@ -172,6 +183,7 @@ def build_application_recommendation(
     required = _require_match_list(required_matches, "required_matches")
     preferred = _require_match_list(preferred_matches, "preferred_matches")
     eligibility_result = _require_eligibility(eligibility)
+    information_level = _require_information_level(job_posting_information)
     responsibilities = (
         _require_match_list(responsibility_matches, "responsibility_matches")
         if responsibilities_evaluated
@@ -202,10 +214,32 @@ def build_application_recommendation(
         cautions.append("공고의 주요 업무 적합도는 아직 별도로 평가하지 않았습니다.")
         next_steps.append("주요 업무와 사용자 프로젝트·경력 증거를 추가로 비교합니다.")
 
+    if decision in {"현재는 우선순위 낮음", "역량 보완 후 지원"}:
+        status = "NOT_RECOMMEND"
+    elif information_level in {"partial", "insufficient"}:
+        status = "HOLD"
+        decision = "판단 보류"
+        confidence = "low" if information_level == "insufficient" else "medium"
+        reasons.insert(
+            0,
+            (
+                "공고의 주요 업무와 필수 조건을 확인할 수 없어 추천을 확정하지 않습니다."
+                if information_level == "insufficient"
+                else "공고의 핵심 정보가 일부 부족해 확인 전에는 추천을 확정하지 않습니다."
+            ),
+        )
+        next_steps.insert(0, "공고 원문에서 누락된 핵심 조건을 먼저 확인합니다.")
+    elif decision == "조건부 지원":
+        status = "HOLD"
+    else:
+        status = "RECOMMEND"
+
     return {
+        "status": status,
         "decision": decision,
         "confidence": confidence,
         "reasons": reasons,
+        "recommendation_reason": reasons[0],
         "cautions": cautions,
         "next_steps": next_steps,
         "interpretation": "현재 프로필과 공고 조건의 비교 결과이며 합격 가능성 예측이 아닙니다.",
