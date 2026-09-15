@@ -58,7 +58,7 @@ Slack 파일 ID, 파일명, 확장자, MIME 형식과 크기를 먼저 확인한
 
 다운로드 어댑터는 최소 권한 `files:read`로 `files.info`를 호출해 최초 이벤트의 파일 ID·이름·형식·크기와 다시 대조한다. `https://files.slack.com/files-pri/` 아래의 인증 URL만 허용하고 리디렉션을 따르지 않으며, Bot Token은 Authorization 헤더에만 넣는다. 내려받은 바이트 수와 문서 형식을 다시 검증한 뒤 기존 `private-data/profile-documents/` 저장소에 `source_type: slack_attachment`, `processing_status: stored_unparsed`로 저장한다. 다운로드 URL과 Token은 manifest에 남기지 않는다.
 
-코드와 합성 응답 테스트는 준비됐지만 실제 앱에는 아직 `files:read` 권한을 다시 승인하지 않았다. 권한 승인과 실제 다운로드 확인 전에는 수신기를 실행하지 않는다.
+2026-09-15 실제 개인 Slack 앱에 `files:read`를 승인하고 DOCX 한 개의 인증 다운로드와 비공개 저장을 확인했다. 요청과 manifest의 시각·형식·크기가 일치했고 수신기 오류는 없었다. 원본 내용은 확인 과정에서 열거나 작업일지에 기록하지 않았다.
 
 ## 5. 로컬 파일 실행
 
@@ -81,7 +81,6 @@ Slack 파일 ID, 파일명, 확장자, MIME 형식과 크기를 먼저 확인한
 - UTF-8 TXT와 Markdown만 제목 기반 프로필 후보 추출을 지원한다.
 - PDF와 DOCX의 본문 텍스트를 추출하지 않는다.
 - 추출 후보의 승인·거부, 승인 후보 갱신안, 기술 후보 매핑, 세부정보 확인, 완성된 기술 추가안, 최종 승인·거부와 승인 기술의 새 프로필 버전 적용을 지원한다. 기술 이외의 프로필 영역 반영은 아직 지원하지 않는다.
-- Slack 다운로드 어댑터는 준비됐지만 실제 워크스페이스의 `files:read` 권한과 실제 파일 저장은 아직 확인하지 않았다.
 - Slack에서 저장한 문서를 프로필 후보 추출과 사용자 승인 흐름으로 자동 연결하지 않는다.
 - Telegram 첨부파일 입력은 아직 없다.
 

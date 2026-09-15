@@ -130,6 +130,8 @@ Slack은 이벤트 수신 확인이 늦거나 실패하면 같은 이벤트를 �
 
 기존에 설치한 앱은 manifest 파일 변경만으로 권한이 갱신되지 않는다. `OAuth & Permissions`의 Bot Token Scopes에 `files:read`를 추가한 뒤 워크스페이스에 앱을 다시 설치하거나 재승인해야 한다. 실제 승인 전까지 다운로드 기능은 사용할 수 없다.
 
+2026-09-15 개인 워크스페이스에서 `files:read` 재승인, 기존 파일의 `files.info` 조회와 새 DOCX 첨부파일의 인증 다운로드·비공개 저장을 확인했다. 요청과 저장 manifest에는 파일 내용과 다운로드 URL을 남기지 않았고 수신기 오류는 없었다.
+
 사용자가 Slack에서 확인할 순서는 다음과 같다.
 
 1. https://api.slack.com/apps 에 로그인한다.
