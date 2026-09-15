@@ -100,6 +100,10 @@ def _repository() -> tempfile.TemporaryDirectory:
         "# test placeholder\n",
         encoding="utf-8",
     )
+    (scripts / "build_greenhouse_review_queue.py").write_text(
+        "# test placeholder\n",
+        encoding="utf-8",
+    )
     return directory
 
 
@@ -170,6 +174,49 @@ class SlackActionsTest(unittest.TestCase):
 
         self.assertEqual("failed", result["status"])
         self.assertNotIn(secret_error, result["public_message"])
+
+    def test_rebuilds_stale_queue_once_and_retries_analysis(self) -> None:
+        calls: list[str] = []
+
+        with _repository() as directory:
+            analysis_path = _save_analysis(directory)
+            responses = iter(
+                [
+                    subprocess.CompletedProcess(
+                        [],
+                        1,
+                        "",
+                        "매칭 규칙이 바뀌었음. 검토 큐를 다시 생성해야 함",
+                    ),
+                    subprocess.CompletedProcess([], 0, "큐 생성 완료", ""),
+                    subprocess.CompletedProcess(
+                        [],
+                        0,
+                        _success_output(analysis_path),
+                        "",
+                    ),
+                ]
+            )
+
+            def run_process(command, **_options):
+                calls.append(Path(command[1]).name)
+                return next(responses)
+
+            result = run_slack_career_action(
+                "analyze_next_greenhouse_review",
+                repository_root=directory,
+                run_process=run_process,
+            )
+
+        self.assertEqual("completed", result["status"])
+        self.assertEqual(
+            [
+                "analyze_next_greenhouse_review.py",
+                "build_greenhouse_review_queue.py",
+                "analyze_next_greenhouse_review.py",
+            ],
+            calls,
+        )
 
     def test_returns_normal_message_when_no_candidate_is_available(self) -> None:
         output = """Greenhouse 다음 검토 공고 없음

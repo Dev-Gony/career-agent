@@ -16,6 +16,7 @@ ANALYZE_NEXT_REVIEW_ACTION = "analyze_next_greenhouse_review"
 MAX_ACTION_OUTPUT_CHARS = 32 * 1024
 MAX_ANALYSIS_FILE_BYTES = 2 * 1024 * 1024
 NO_CANDIDATE_MARKER = "Greenhouse 다음 검토 공고 없음"
+STALE_QUEUE_MARKER = "검토 큐를 다시 생성해야 함"
 
 _RESULT_LABELS = (
     "선택",
@@ -352,9 +353,10 @@ def run_slack_career_action(
     script_path = root / "scripts" / "analyze_next_greenhouse_review.py"
     if not script_path.is_file():
         raise SlackEventError("다음 공고 분석 실행 파일을 찾을 수 없음")
-    try:
-        completed = run_process(
-            [sys.executable, str(script_path)],
+
+    def run_script(path: Path) -> Any:
+        return run_process(
+            [sys.executable, str(path)],
             cwd=root,
             capture_output=True,
             text=True,
@@ -363,6 +365,31 @@ def run_slack_career_action(
             timeout=float(timeout_seconds),
             check=False,
         )
+
+    try:
+        completed = run_script(script_path)
+        initial_stderr = (
+            completed.stderr if isinstance(completed.stderr, str) else ""
+        )
+        if completed.returncode != 0 and STALE_QUEUE_MARKER in initial_stderr:
+            queue_script = root / "scripts" / "build_greenhouse_review_queue.py"
+            if not queue_script.is_file():
+                raise SlackEventError("검토 큐 생성 실행 파일을 찾을 수 없음")
+            rebuilt = run_script(queue_script)
+            rebuild_output = "".join(
+                value
+                for value in (rebuilt.stdout, rebuilt.stderr)
+                if isinstance(value, str)
+            )
+            if (
+                rebuilt.returncode != 0
+                or len(rebuild_output) > MAX_ACTION_OUTPUT_CHARS
+            ):
+                return {
+                    "status": "failed",
+                    "public_message": "공고 검토 목록을 갱신하지 못했습니다. 로컬 실행 이력을 확인해주세요.",
+                }
+            completed = run_script(script_path)
     except subprocess.TimeoutExpired:
         return {
             "status": "failed",
