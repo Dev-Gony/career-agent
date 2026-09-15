@@ -238,7 +238,9 @@ class SlackActionsTest(unittest.TestCase):
 
         self.assertEqual("no_candidate", result["status"])
         self.assertIn("현재 조건에 맞는 새 공고가 없습니다", result["public_message"])
-        self.assertIn("분석 완료: 1개 / 분석 필요: 3개", result["public_message"])
+        self.assertIn("분석 완료: 1개", result["public_message"])
+        self.assertIn("미분석이지만 조건 불일치: 3개", result["public_message"])
+        self.assertIn("현재 분석 가능: 0", result["public_message"])
 
     def test_returns_fixed_failure_for_timeout_and_invalid_output(self) -> None:
         def timeout_process(*_args, **_options):

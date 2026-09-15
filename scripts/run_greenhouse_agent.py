@@ -85,6 +85,40 @@ def _analysis_id(document: dict) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
+def _save_discovery_snapshot(
+    result: dict,
+    directory: Path,
+    *,
+    executed_at: datetime,
+) -> Path:
+    discovery = result.get("discovery")
+    if not isinstance(discovery, dict):
+        raise GreenhouseAgentError("저장할 Greenhouse 발견 결과가 없음")
+    timestamp = executed_at.strftime("%Y%m%dT%H%M%S%f%z")
+    path = directory / f"discovery-greenhouse-{timestamp}.json"
+    if path.exists():
+        raise GreenhouseAgentError(f"발견 스냅샷이 이미 존재함: {path}")
+    document = {
+        "status": "discovered",
+        "workflow": "greenhouse_discovery_snapshot",
+        "discovery": discovery,
+        "selection": result.get("selection"),
+        "analysis": None,
+        "reuse": result.get("reuse"),
+        "metadata": {
+            "created_at": executed_at.isoformat(timespec="seconds"),
+            "contains_profile_content": False,
+            "contains_job_description_content": False,
+        },
+    }
+    directory.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(document, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
 def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -112,6 +146,13 @@ def main() -> int:
                 error["board_token"] for error in discovery["board_errors"]
             )
             print(f"- 목록 조회 실패 보드: {failed_boards}")
+        discovery_snapshot_path: Path | None = None
+        if result["status"] in {"reused", "no_high_candidate"}:
+            discovery_snapshot_path = _save_discovery_snapshot(
+                result,
+                args.run_directory,
+                executed_at=execution_time,
+            )
         if result["status"] == "no_high_candidate":
             execution_path = save_execution_record(
                 build_greenhouse_execution_record(
@@ -122,6 +163,7 @@ def main() -> int:
                 args.execution_directory,
             )
             print("현재 Greenhouse 보드들에 high 후보가 없어 상세 분석을 실행하지 않았습니다.")
+            print(f"- 발견 스냅샷: {discovery_snapshot_path}")
             print(f"- 실행 이력: {execution_path}")
             return 0
 
@@ -170,6 +212,7 @@ def main() -> int:
     if result["status"] == "reused":
         print("Greenhouse 자동 발견 완료, 기존 상세 분석 재사용")
         print(f"- 재사용 이유: {result['reuse']['reason']}")
+        print(f"- 발견 스냅샷: {discovery_snapshot_path}")
     else:
         print("Greenhouse 자동 발견·분석 완료")
     print(f"- 선택: {selection['company']} / {selection['title']}")

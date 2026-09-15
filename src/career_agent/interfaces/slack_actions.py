@@ -160,7 +160,9 @@ def _public_no_candidate_message(stdout: str) -> str:
             ),
             "",
             "*검토 큐*",
-            f"- 분석 완료: {analyzed} / 분석 필요: {remaining}",
+            f"- 분석 완료: {analyzed}",
+            f"- 미분석이지만 조건 불일치: {remaining}",
+            "- 현재 분석 가능: 0",
             "",
             "새 공고 목록이 갱신되면 다시 확인할 수 있습니다.",
         ]
