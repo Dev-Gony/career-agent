@@ -33,6 +33,19 @@ PROFILE_DOCUMENT_IMPORT_COMPLETED_REPLY = (
     "첨부파일을 비공개 문서 저장소에 저장했습니다. "
     "아직 개인 프로필에는 반영하지 않았습니다."
 )
+PROFILE_DOCUMENT_EXTRACTION_EMPTY_REPLY = (
+    "첨부파일 본문을 확인했지만 프로필 검토 후보를 찾지 못했습니다. "
+    "개인 프로필은 변경하지 않았습니다."
+)
+PROFILE_DOCUMENT_EXTRACTION_UNSUPPORTED_REPLY = (
+    "첨부파일은 비공개 문서 저장소에 저장했습니다. "
+    "현재 PDF 본문 추출은 아직 지원하지 않습니다. "
+    "개인 프로필은 변경하지 않았습니다."
+)
+PROFILE_DOCUMENT_EXTRACTION_FAILED_REPLY = (
+    "첨부파일은 저장했지만 본문에서 프로필 검토 후보를 만들지 못했습니다. "
+    "로컬 실행 이력을 확인해주세요. 개인 프로필은 변경하지 않았습니다."
+)
 PROFILE_DOCUMENT_IMPORT_FAILED_REPLY = (
     "첨부파일을 가져오지 못했습니다. 로컬 실행 이력을 확인해주세요."
 )
@@ -44,6 +57,59 @@ PROFILE_DOCUMENT_COUNT_REPLY = "현재는 한 번에 첨부파일 1개만 확인
 UNEXPECTED_FILE_REPLY = (
     "첨부자료를 분석하려면 `프로필 분석해줘`라고 호출해주세요."
 )
+
+_PROFILE_SECTION_LABELS = {
+    "career_history": "경력",
+    "projects": "프로젝트",
+    "skills": "기술",
+    "education": "교육",
+    "target_roles": "관심 직무",
+    "work_preferences": "근무 조건",
+}
+
+
+def _profile_extraction_reply(result: Mapping[str, Any]) -> str:
+    status = result.get("status")
+    if status == "unsupported" and result.get("document_format") == "pdf":
+        return PROFILE_DOCUMENT_EXTRACTION_UNSUPPORTED_REPLY
+    if status not in {"extracted", "reused"}:
+        raise SlackEventError("프로필 문서 추출 결과 상태가 올바르지 않음")
+    summary = result.get("summary")
+    if not isinstance(summary, Mapping):
+        raise SlackEventError("프로필 문서 추출 요약이 없음")
+    candidate_count = summary.get("candidate_count")
+    section_counts = summary.get("section_counts")
+    if (
+        isinstance(candidate_count, bool)
+        or not isinstance(candidate_count, int)
+        or candidate_count < 0
+        or not isinstance(section_counts, Mapping)
+    ):
+        raise SlackEventError("프로필 문서 추출 요약 형식이 올바르지 않음")
+    normalized_counts: list[tuple[str, int]] = []
+    for section, count in section_counts.items():
+        if (
+            section not in _PROFILE_SECTION_LABELS
+            or isinstance(count, bool)
+            or not isinstance(count, int)
+            or count < 0
+        ):
+            raise SlackEventError("프로필 문서 섹션 요약 형식이 올바르지 않음")
+        if count:
+            normalized_counts.append((section, count))
+    if sum(count for _, count in normalized_counts) != candidate_count:
+        raise SlackEventError("프로필 문서 후보 합계가 일치하지 않음")
+    if candidate_count == 0:
+        return PROFILE_DOCUMENT_EXTRACTION_EMPTY_REPLY
+    details = "\n".join(
+        f"- {_PROFILE_SECTION_LABELS[section]}: {count}개"
+        for section, count in normalized_counts
+    )
+    return (
+        f"첨부파일에서 프로필 검토 후보 {candidate_count}개를 찾았습니다.\n"
+        f"{details}\n"
+        "아직 개인 프로필에는 반영하지 않았습니다."
+    )
 
 
 def _reply_text(request: Mapping[str, Any], *, created: bool) -> str | None:
@@ -101,6 +167,9 @@ def register_slack_app_mention_listener(
     profile_document_importer: (
         Callable[[Mapping[str, Any], datetime], Mapping[str, Any]] | None
     ) = None,
+    profile_document_extractor: (
+        Callable[[Mapping[str, Any], datetime], Mapping[str, Any]] | None
+    ) = None,
 ) -> Callable[..., None]:
     """Register the single supported Bolt event listener and return it for tests."""
 
@@ -133,6 +202,7 @@ def register_slack_app_mention_listener(
                 text=PROFILE_DOCUMENT_IMPORT_STARTED_REPLY,
                 thread_ts=request["source"]["event_ts"],
             )
+            document_stored = False
             try:
                 import_result = profile_document_importer(
                     request["profile_document"],
@@ -143,10 +213,24 @@ def register_slack_app_mention_listener(
                     or import_result.get("status") not in {"stored", "reused"}
                 ):
                     raise SlackEventError("Slack 첨부파일 저장 결과가 올바르지 않음")
-                reply_text = PROFILE_DOCUMENT_IMPORT_COMPLETED_REPLY
+                document_stored = True
+                if profile_document_extractor is None:
+                    reply_text = PROFILE_DOCUMENT_IMPORT_COMPLETED_REPLY
+                else:
+                    extraction_result = profile_document_extractor(
+                        import_result,
+                        received_at,
+                    )
+                    if not isinstance(extraction_result, Mapping):
+                        raise SlackEventError("프로필 문서 추출 결과가 올바르지 않음")
+                    reply_text = _profile_extraction_reply(extraction_result)
             except SlackEventError as error:
-                logger.warning("Slack 첨부파일 가져오기 실패: %s", error)
-                reply_text = PROFILE_DOCUMENT_IMPORT_FAILED_REPLY
+                logger.warning("Slack 첨부파일 처리 실패: %s", error)
+                reply_text = (
+                    PROFILE_DOCUMENT_EXTRACTION_FAILED_REPLY
+                    if document_stored
+                    else PROFILE_DOCUMENT_IMPORT_FAILED_REPLY
+                )
             say(
                 text=reply_text,
                 thread_ts=request["source"]["event_ts"],

@@ -205,6 +205,141 @@ class SlackSocketTest(unittest.TestCase):
         self.assertNotIn("private download details", replies[1]["text"])
         self.assertEqual(1, len(logger.messages))
 
+    def test_registered_listener_reports_profile_candidate_counts(self) -> None:
+        app = _FakeApp()
+        replies: list[dict] = []
+        logger = _FakeLogger()
+
+        def import_document(_reference, _imported_at):
+            return {"status": "stored", "document_id": "safe-document-id"}
+
+        def extract_document(import_result, extracted_at):
+            self.assertEqual("safe-document-id", import_result["document_id"])
+            self.assertEqual(RECEIVED_AT, extracted_at)
+            return {
+                "status": "extracted",
+                "document_format": "docx",
+                "summary": {
+                    "candidate_count": 3,
+                    "section_counts": {"career_history": 2, "skills": 1},
+                },
+            }
+
+        with tempfile.TemporaryDirectory() as directory:
+            listener = register_slack_app_mention_listener(
+                app,
+                _config(),
+                output_directory=directory,
+                now=lambda: RECEIVED_AT,
+                profile_document_importer=import_document,
+                profile_document_extractor=extract_document,
+            )
+            listener(
+                _profile_event(),
+                lambda **values: replies.append(values),
+                logger,
+            )
+
+        self.assertEqual(2, len(replies))
+        self.assertIn("검토 후보 3개", replies[1]["text"])
+        self.assertIn("경력: 2개", replies[1]["text"])
+        self.assertIn("기술: 1개", replies[1]["text"])
+        self.assertNotIn("safe-document-id", replies[1]["text"])
+        self.assertIn("아직 개인 프로필에는 반영하지 않았습니다", replies[1]["text"])
+        self.assertEqual([], logger.messages)
+
+    def test_registered_listener_reports_empty_profile_extraction(self) -> None:
+        app = _FakeApp()
+        replies: list[dict] = []
+        logger = _FakeLogger()
+
+        with tempfile.TemporaryDirectory() as directory:
+            listener = register_slack_app_mention_listener(
+                app,
+                _config(),
+                output_directory=directory,
+                now=lambda: RECEIVED_AT,
+                profile_document_importer=lambda _reference, _at: {
+                    "status": "stored",
+                    "document_id": "safe-document-id",
+                },
+                profile_document_extractor=lambda _result, _at: {
+                    "status": "extracted",
+                    "document_format": "docx",
+                    "summary": {"candidate_count": 0, "section_counts": {}},
+                },
+            )
+            listener(
+                _profile_event(),
+                lambda **values: replies.append(values),
+                logger,
+            )
+
+        self.assertIn("후보를 찾지 못했습니다", replies[1]["text"])
+        self.assertIn("프로필은 변경하지 않았습니다", replies[1]["text"])
+        self.assertEqual([], logger.messages)
+
+    def test_registered_listener_keeps_unsupported_pdf_stored(self) -> None:
+        app = _FakeApp()
+        replies: list[dict] = []
+        logger = _FakeLogger()
+
+        with tempfile.TemporaryDirectory() as directory:
+            listener = register_slack_app_mention_listener(
+                app,
+                _config(),
+                output_directory=directory,
+                now=lambda: RECEIVED_AT,
+                profile_document_importer=lambda _reference, _at: {
+                    "status": "stored",
+                    "document_id": "safe-document-id",
+                },
+                profile_document_extractor=lambda _result, _at: {
+                    "status": "unsupported",
+                    "document_format": "pdf",
+                },
+            )
+            listener(
+                _profile_event(),
+                lambda **values: replies.append(values),
+                logger,
+            )
+
+        self.assertIn("저장했습니다", replies[1]["text"])
+        self.assertIn("PDF 본문 추출", replies[1]["text"])
+        self.assertNotIn("가져오지 못했습니다", replies[1]["text"])
+        self.assertEqual([], logger.messages)
+
+    def test_registered_listener_reports_safe_profile_extraction_failure(self) -> None:
+        app = _FakeApp()
+        replies: list[dict] = []
+        logger = _FakeLogger()
+
+        def fail_extraction(_result, _at):
+            raise SlackEventError("private extraction details")
+
+        with tempfile.TemporaryDirectory() as directory:
+            listener = register_slack_app_mention_listener(
+                app,
+                _config(),
+                output_directory=directory,
+                now=lambda: RECEIVED_AT,
+                profile_document_importer=lambda _reference, _at: {
+                    "status": "stored",
+                    "document_id": "safe-document-id",
+                },
+                profile_document_extractor=fail_extraction,
+            )
+            listener(
+                _profile_event(),
+                lambda **values: replies.append(values),
+                logger,
+            )
+
+        self.assertIn("첨부파일은 저장했지만", replies[1]["text"])
+        self.assertNotIn("private extraction details", replies[1]["text"])
+        self.assertEqual(1, len(logger.messages))
+
     def test_disallowed_user_is_recorded_without_reply(self) -> None:
         event = _event()
         event["event"]["user"] = "U11111111"
