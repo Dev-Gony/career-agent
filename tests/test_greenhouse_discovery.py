@@ -72,6 +72,31 @@ class GreenhouseDiscoveryTest(unittest.TestCase):
         )
         self.assertNotIn("content", records[0])
 
+    def test_demotes_explicit_talent_pool_title(self) -> None:
+        result = build_greenhouse_discovery_records(
+            [
+                _job(
+                    103,
+                    "Expression of Interest(채용관심등록): Software Engineer - Korea",
+                ),
+                _job(104, "Software Engineer"),
+            ],
+            self.search_plan,
+            board_token="example",
+            discovered_at=self.execution_time,
+            policy_checked_at=date(2026, 9, 14),
+            is_example=True,
+        )
+
+        talent_pool, active_opening = result["records"]
+        self.assertEqual("low", talent_pool["profile_relevance"]["priority"])
+        self.assertEqual("high", talent_pool["profile_relevance"]["confidence"])
+        self.assertIn(
+            "자동 상세 분석 대상에서 제외",
+            talent_pool["profile_relevance"]["reason"],
+        )
+        self.assertNotEqual("low", active_opening["profile_relevance"]["priority"])
+
     def test_keeps_valid_job_and_reports_invalid_job(self) -> None:
         result = build_greenhouse_discovery_records(
             [_job(100, "AI Agent Engineer"), {"id": 101}],

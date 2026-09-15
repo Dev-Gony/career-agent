@@ -157,6 +157,36 @@ class GreenhouseReviewQueueTest(unittest.TestCase):
         self.assertEqual("not_reviewed", queue["items"][0]["human_review"]["status"])
         self.assertEqual(3, queue["summary"]["eligible_current_candidates"])
 
+    def test_excludes_legacy_talent_pool_record_from_queue(self) -> None:
+        talent_pool = _record(
+            "500",
+            "review",
+            "2026-09-17T10:00:00+09:00",
+            title="Expression of Interest: Software Engineer - Korea",
+        )
+        active_opening = _record(
+            "600",
+            "review",
+            "2026-09-16T10:00:00+09:00",
+            title="Software Engineer - Korea",
+        )
+        self.discovery["board_results"][0]["current_records"] = [
+            talent_pool,
+            active_opening,
+        ]
+
+        queue = build_greenhouse_review_queue(
+            self.discovery,
+            [],
+            self.profile,
+            self.search_plan,
+            created_at=datetime(2026, 9, 14, 12, tzinfo=timezone.utc),
+            source_run_filename="source.json",
+        )
+
+        self.assertEqual(1, queue["summary"]["eligible_current_candidates"])
+        self.assertEqual("600", queue["items"][0]["external_job_id"])
+
     def test_deduplicates_candidate_and_applies_limit(self) -> None:
         duplicate = _record("300", "review", "2026-09-16T10:00:00+09:00")
         self.discovery["board_results"][0]["current_records"].append(duplicate)

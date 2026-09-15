@@ -12,6 +12,7 @@ import re
 import tempfile
 from typing import Any, Mapping
 
+from career_agent.discovery.ranking import non_opening_title_signal
 from career_agent.matching import MATCHING_RULES_VERSION
 from career_agent.workflows import ANALYSIS_PIPELINE_VERSION, profile_content_sha256
 
@@ -90,6 +91,10 @@ def _source_timestamp(record: Mapping[str, Any]) -> float:
 
 
 def _priority(record: Mapping[str, Any]) -> str | None:
+    summary = _mapping(record.get("summary"), "record.summary")
+    title = summary.get("title")
+    if isinstance(title, str) and non_opening_title_signal(title) is not None:
+        return None
     relevance = _mapping(record.get("profile_relevance"), "profile_relevance")
     value = relevance.get("priority")
     return value if isinstance(value, str) and value in _PRIORITY_ORDER else None

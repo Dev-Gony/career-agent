@@ -24,6 +24,24 @@ _LOCATION_TERMS = {
     "경기": ("경기", "gyeonggi"),
     "인천": ("인천", "incheon"),
 }
+_NON_OPENING_TITLE_TERMS = (
+    "expression of interest",
+    "채용관심등록",
+    "talent pool",
+    "talent community",
+    "general application",
+    "인재풀",
+)
+
+
+def non_opening_title_signal(title: str | None) -> str | None:
+    """Return an explicit title signal for talent pools or general applications."""
+
+    normalized = (title or "").casefold()
+    return next(
+        (term for term in _NON_OPENING_TITLE_TERMS if term in normalized),
+        None,
+    )
 
 
 def build_profile_relevance(
@@ -33,6 +51,7 @@ def build_profile_relevance(
 
     plan = search_plan.get("job_search_plan", search_plan)
     title = (summary.get("title") or "").casefold()
+    non_opening_signal = non_opening_title_signal(summary.get("title"))
     related_role_ids: list[str] = []
     matched_terms: list[str] = []
     matched_priorities: list[int | str] = []
@@ -63,6 +82,10 @@ def build_profile_relevance(
     )
     confidence = "medium" if matched_terms else "low"
 
+    if non_opening_signal is not None:
+        priority = "low"
+        confidence = "high"
+
     positive_signals = [
         f"제목에 검색 확장어 '{term}'가 포함됨" for term in matched_terms
     ]
@@ -71,8 +94,17 @@ def build_profile_relevance(
         low_preference_signals.append("명시된 근무 지역이 현재 선호 지역 밖임")
     if employment_assessment == "mismatch":
         low_preference_signals.append("명시된 고용 형태가 현재 선호와 다름")
+    if non_opening_signal is not None:
+        low_preference_signals.append(
+            "제목상 현재 모집 포지션이 아닌 인재풀 또는 채용 관심 등록임"
+        )
 
-    if priority == "high" and location_assessment == "match":
+    if non_opening_signal is not None:
+        reason = (
+            f"제목에 비정기 모집 신호 '{non_opening_signal}'가 명시되어 "
+            "자동 상세 분석 대상에서 제외함"
+        )
+    elif priority == "high" and location_assessment == "match":
         reason = "최우선 목표 직무 표현이 제목에 직접 나타나고 선호 지역과 일치함"
     elif matched_terms and employment_assessment == "mismatch":
         reason = "목표 직무 표현이 제목에 있으나 명시된 고용 형태가 현재 선호와 다름"
