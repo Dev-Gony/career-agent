@@ -26,6 +26,16 @@ PROFILE_DOCUMENT_METADATA_REPLY = (
     "첨부파일 1개의 형식과 크기를 확인했습니다. 현재는 안전한 입력 검증 단계이며 "
     "파일 내용은 아직 내려받거나 분석하지 않았습니다."
 )
+PROFILE_DOCUMENT_IMPORT_STARTED_REPLY = (
+    "첨부파일을 확인했습니다. 비공개 문서 저장소로 가져옵니다."
+)
+PROFILE_DOCUMENT_IMPORT_COMPLETED_REPLY = (
+    "첨부파일을 비공개 문서 저장소에 저장했습니다. "
+    "아직 개인 프로필에는 반영하지 않았습니다."
+)
+PROFILE_DOCUMENT_IMPORT_FAILED_REPLY = (
+    "첨부파일을 가져오지 못했습니다. 로컬 실행 이력을 확인해주세요."
+)
 PROFILE_DOCUMENT_MISSING_REPLY = (
     "`프로필 분석해줘`와 함께 이력서, 포트폴리오, 경력기술서 또는 "
     "직무분석표 파일 1개를 첨부해주세요."
@@ -88,17 +98,21 @@ def register_slack_app_mention_listener(
     output_directory: str | Path,
     now: Callable[[], datetime] | None = None,
     action_runner: Callable[[str], Mapping[str, str]] | None = None,
+    profile_document_importer: (
+        Callable[[Mapping[str, Any], datetime], Mapping[str, Any]] | None
+    ) = None,
 ) -> Callable[..., None]:
     """Register the single supported Bolt event listener and return it for tests."""
 
     clock = now or (lambda: datetime.now().astimezone())
 
     def handle_app_mention(body: Mapping[str, Any], say: Any, logger: Any) -> None:
+        received_at = clock()
         try:
             result = process_slack_app_mention(
                 body,
                 config,
-                received_at=clock(),
+                received_at=received_at,
                 output_directory=output_directory,
             )
         except SlackEventError as error:
@@ -109,6 +123,34 @@ def register_slack_app_mention_listener(
         root = request["slack_command_request"]
         reply_text = result["reply_text"]
         if reply_text is None:
+            return
+        if (
+            root.get("command_name") == "submit_profile_document"
+            and root.get("routing_status") == "input_validated"
+            and profile_document_importer is not None
+        ):
+            say(
+                text=PROFILE_DOCUMENT_IMPORT_STARTED_REPLY,
+                thread_ts=request["source"]["event_ts"],
+            )
+            try:
+                import_result = profile_document_importer(
+                    request["profile_document"],
+                    received_at,
+                )
+                if (
+                    not isinstance(import_result, Mapping)
+                    or import_result.get("status") not in {"stored", "reused"}
+                ):
+                    raise SlackEventError("Slack 첨부파일 저장 결과가 올바르지 않음")
+                reply_text = PROFILE_DOCUMENT_IMPORT_COMPLETED_REPLY
+            except SlackEventError as error:
+                logger.warning("Slack 첨부파일 가져오기 실패: %s", error)
+                reply_text = PROFILE_DOCUMENT_IMPORT_FAILED_REPLY
+            say(
+                text=reply_text,
+                thread_ts=request["source"]["event_ts"],
+            )
             return
         if action_runner is not None and root["action"] is not None:
             reply_text = ACTION_STARTED_REPLY

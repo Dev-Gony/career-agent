@@ -54,9 +54,11 @@ Slack의 `app_mention` 이벤트에 포함된 `files` 배열에서 파일 한 �
 
     @career_break 프로필 분석해줘 + 첨부파일 1개
 
-현재는 Slack 파일 ID, 파일명, 확장자, MIME 형식, 크기와 `hosted` 여부만 확인한다. 메시지 원문, 파일 내용과 인증이 필요한 다운로드 URL은 `private-data/slack-command-requests/`에 저장하지 않는다. 검증 성공 응답에도 파일명을 다시 노출하지 않는다.
+Slack 파일 ID, 파일명, 확장자, MIME 형식과 크기를 먼저 확인한다. PDF와 DOCX는 `hosted`, TXT와 Markdown은 Slack이 일반 파일 또는 텍스트 조각으로 처리할 수 있으므로 `hosted`와 `snippet`을 허용한다. 메시지 원문, 파일 내용과 인증이 필요한 다운로드 URL은 `private-data/slack-command-requests/`에 저장하지 않는다. 검증 성공 응답에도 파일명을 다시 노출하지 않는다.
 
-파일 내용 다운로드는 아직 하지 않는다. 다음 단계에서 최소 권한 `files:read`를 추가하고 사용자가 앱 권한을 다시 승인한 뒤, Bot Token을 Authorization 헤더로 보내는 Slack 인증 다운로드만 허용한다.
+다운로드 어댑터는 최소 권한 `files:read`로 `files.info`를 호출해 최초 이벤트의 파일 ID·이름·형식·크기와 다시 대조한다. `https://files.slack.com/files-pri/` 아래의 인증 URL만 허용하고 리디렉션을 따르지 않으며, Bot Token은 Authorization 헤더에만 넣는다. 내려받은 바이트 수와 문서 형식을 다시 검증한 뒤 기존 `private-data/profile-documents/` 저장소에 `source_type: slack_attachment`, `processing_status: stored_unparsed`로 저장한다. 다운로드 URL과 Token은 manifest에 남기지 않는다.
+
+코드와 합성 응답 테스트는 준비됐지만 실제 앱에는 아직 `files:read` 권한을 다시 승인하지 않았다. 권한 승인과 실제 다운로드 확인 전에는 수신기를 실행하지 않는다.
 
 ## 5. 로컬 파일 실행
 
@@ -79,7 +81,8 @@ Slack의 `app_mention` 이벤트에 포함된 `files` 배열에서 파일 한 �
 - UTF-8 TXT와 Markdown만 제목 기반 프로필 후보 추출을 지원한다.
 - PDF와 DOCX의 본문 텍스트를 추출하지 않는다.
 - 추출 후보의 승인·거부, 승인 후보 갱신안, 기술 후보 매핑, 세부정보 확인, 완성된 기술 추가안, 최종 승인·거부와 승인 기술의 새 프로필 버전 적용을 지원한다. 기술 이외의 프로필 영역 반영은 아직 지원하지 않는다.
-- Slack 첨부파일 메타데이터 검증은 지원하지만 파일 다운로드 어댑터는 아직 없다.
+- Slack 다운로드 어댑터는 준비됐지만 실제 워크스페이스의 `files:read` 권한과 실제 파일 저장은 아직 확인하지 않았다.
+- Slack에서 저장한 문서를 프로필 후보 추출과 사용자 승인 흐름으로 자동 연결하지 않는다.
 - Telegram 첨부파일 입력은 아직 없다.
 
 텍스트 추출 결과 구조와 개인정보 제외 기준은 `docs/PROFILE_EXTRACTION_SCHEMA.md`에서 정의한다.

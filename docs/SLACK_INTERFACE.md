@@ -60,9 +60,9 @@ Slack은 이벤트 수신 확인이 늦거나 실패하면 같은 이벤트를 �
 - 경로 문자가 없는 파일명
 - `.txt`, `.md`, `.pdf`, `.docx` 확장자와 대응 MIME 형식
 - 1바이트 이상 10MB 이하 크기
-- Slack에 직접 올린 `hosted` 파일인지 여부
+- PDF·DOCX의 `hosted`, TXT·Markdown의 `hosted` 또는 `snippet` 저장 방식
 
-검증된 요청의 상태는 `input_validated`, 처리 상태는 `metadata_validated_download_not_started`다. 파일 내용과 `url_private` 다운로드 URL은 읽거나 요청 기록에 저장하지 않는다. 외부 드라이브 파일과 Slack Connect에서 추가 확인이 필요한 파일은 현재 지원하지 않는다.
+검증된 요청의 상태는 `input_validated`, 요청 기록 시점의 처리 상태는 `metadata_validated_download_not_started`다. 파일 내용과 `url_private` 다운로드 URL은 요청 기록에 저장하지 않는다. 실제 수신기는 별도 다운로드 어댑터로 파일 정보를 다시 조회하고 비공개 문서 저장소에 넣는다. 외부 드라이브 파일과 Slack Connect에서 추가 확인이 필요한 파일은 현재 지원하지 않는다.
 
 ## 5. 내부 요청 구조
 
@@ -122,10 +122,13 @@ Slack은 이벤트 수신 확인이 늦거나 실패하면 같은 이벤트를 �
 
 - `app_mentions:read`: 봇을 호출한 채널 메시지 수신
 - `chat:write`: 처리 결과를 채널에 답변
+- `files:read`: 사용자가 첨부한 파일 정보 조회와 인증 다운로드
 - `app_mention`: 구독 이벤트
 - `connections:write`: manifest의 Bot Token Scope가 아니라 별도로 만드는 Socket Mode App Token의 권한
 
-현재 첨부파일 메타데이터 검증은 `app_mention` 이벤트의 `files` 배열만 사용하고 별도 파일 API를 호출하지 않는다. 다음 다운로드 단계에는 Bot Token의 `files:read` 권한이 필요하며, 권한을 manifest에 추가한 뒤 사용자가 앱을 다시 승인해야 한다. 파일은 Slack의 인증이 필요한 `url_private`에서 Bearer 인증 헤더로만 내려받고 공개 URL로 전환하지 않는다.
+첨부파일 메타데이터 검증은 `app_mention` 이벤트의 `files` 배열을 사용한다. 실제 다운로드 직전에 `files.info`로 동일 파일인지 다시 확인하고, Slack의 인증이 필요한 비공개 URL에 Bearer 인증 헤더를 붙여 내려받는다. 공개 URL로 전환하거나 외부 호스트 리디렉션을 허용하지 않는다.
+
+기존에 설치한 앱은 manifest 파일 변경만으로 권한이 갱신되지 않는다. `OAuth & Permissions`의 Bot Token Scopes에 `files:read`를 추가한 뒤 워크스페이스에 앱을 다시 설치하거나 재승인해야 한다. 실제 승인 전까지 다운로드 기능은 사용할 수 없다.
 
 사용자가 Slack에서 확인할 순서는 다음과 같다.
 

@@ -17,7 +17,8 @@
     "scopes": {
       "bot": [
         "app_mentions:read",
-        "chat:write"
+        "chat:write",
+        "files:read"
       ]
     }
   },

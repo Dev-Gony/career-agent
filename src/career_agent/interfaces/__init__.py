@@ -3,8 +3,10 @@
 from .slack_events import (
     SLACK_COMMAND_REQUEST_SCHEMA_VERSION,
     SlackEventError,
+    build_slack_profile_document_reference,
     build_slack_command_request,
     save_slack_command_request,
+    validate_slack_profile_document_reference,
     validate_slack_interface_config,
 )
 from .slack_setup import (
@@ -28,13 +30,16 @@ from .slack_socket import (
     register_slack_app_mention_listener,
     run_slack_socket_mode,
 )
+from .slack_files import import_slack_profile_document
 from .slack_actions import run_slack_career_action
 
 __all__ = [
     "SLACK_COMMAND_REQUEST_SCHEMA_VERSION",
     "SlackEventError",
+    "build_slack_profile_document_reference",
     "build_slack_command_request",
     "save_slack_command_request",
+    "validate_slack_profile_document_reference",
     "validate_slack_interface_config",
     "check_slack_setup",
     "load_slack_interface_config",
@@ -49,5 +54,6 @@ __all__ = [
     "process_slack_app_mention",
     "register_slack_app_mention_listener",
     "run_slack_socket_mode",
+    "import_slack_profile_document",
     "run_slack_career_action",
 ]

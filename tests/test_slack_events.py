@@ -144,6 +144,27 @@ class SlackEventsTest(unittest.TestCase):
             request["slack_command_request"]["reason"],
         )
 
+    def test_accepts_slack_text_snippet_mode(self) -> None:
+        event = _event("<@U01234567> 프로필 분석해줘")
+        event["event"]["files"] = [
+            _profile_file(
+                name="profile.txt",
+                mimetype="text/plain",
+                mode="snippet",
+            )
+        ]
+
+        request = build_slack_command_request(
+            event,
+            _config(),
+            received_at=RECEIVED_AT,
+        )
+
+        self.assertEqual(
+            "input_validated",
+            request["slack_command_request"]["routing_status"],
+        )
+
     def test_reports_missing_or_multiple_profile_documents(self) -> None:
         missing = build_slack_command_request(
             _event("<@U01234567> 프로필 분석해줘"),

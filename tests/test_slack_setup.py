@@ -24,7 +24,7 @@ class SlackSetupTest(unittest.TestCase):
 
         self.assertEqual(1, manifest["_metadata"]["major_version"])
         self.assertEqual(
-            ["app_mentions:read", "chat:write"],
+            ["app_mentions:read", "chat:write", "files:read"],
             manifest["oauth_config"]["scopes"]["bot"],
         )
         self.assertEqual(

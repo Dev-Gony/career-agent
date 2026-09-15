@@ -11,6 +11,7 @@ sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 from career_agent.interfaces import (  # noqa: E402
     SlackEventError,
     create_slack_bolt_app,
+    import_slack_profile_document,
     load_slack_interface_config,
     load_slack_tokens,
     register_slack_app_mention_listener,
@@ -23,6 +24,9 @@ DEFAULT_CONFIG = REPOSITORY_ROOT / "private-data/slack_interface.json"
 DEFAULT_ENV_FILE = REPOSITORY_ROOT / ".env"
 DEFAULT_OUTPUT_DIRECTORY = (
     REPOSITORY_ROOT / "private-data/slack-command-requests"
+)
+DEFAULT_PROFILE_DOCUMENT_DIRECTORY = (
+    REPOSITORY_ROOT / "private-data/profile-documents"
 )
 
 
@@ -57,11 +61,20 @@ def main() -> int:
                 action,
                 repository_root=REPOSITORY_ROOT,
             ),
+            profile_document_importer=lambda reference, imported_at: (
+                import_slack_profile_document(
+                    reference,
+                    bot_token=bot_token,
+                    document_kind="other",
+                    imported_at=imported_at,
+                    directory=DEFAULT_PROFILE_DOCUMENT_DIRECTORY,
+                )
+            ),
         )
         print("Slack Socket Mode 수신기를 시작합니다.")
         print("- 지원 명령: @career_break 다음 공고 찾아줘")
         print("- 지원 입력: @career_break 프로필 분석해줘 + 첨부파일 1개")
-        print("- 현재 단계: 공고 1건 분석 또는 첨부파일 메타데이터 검증")
+        print("- 현재 단계: 공고 1건 분석 또는 첨부파일 비공개 저장")
         print("- 종료: Ctrl+C")
         print("주의: 메시지 원문과 Token은 콘솔에 출력하지 않습니다.")
         run_slack_socket_mode(app, app_token)

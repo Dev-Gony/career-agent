@@ -141,6 +141,70 @@ class SlackSocketTest(unittest.TestCase):
         self.assertIn("아직", result["reply_text"])
         self.assertIsNone(result["request"]["slack_command_request"]["action"])
 
+    def test_registered_listener_imports_profile_document_once(self) -> None:
+        app = _FakeApp()
+        replies: list[dict] = []
+        imports: list[tuple] = []
+        logger = _FakeLogger()
+
+        def import_document(reference, imported_at):
+            imports.append((reference, imported_at))
+            return {"status": "stored"}
+
+        with tempfile.TemporaryDirectory() as directory:
+            listener = register_slack_app_mention_listener(
+                app,
+                _config(),
+                output_directory=directory,
+                now=lambda: RECEIVED_AT,
+                profile_document_importer=import_document,
+            )
+            listener(
+                _profile_event(),
+                lambda **values: replies.append(values),
+                logger,
+            )
+            listener(
+                _profile_event(),
+                lambda **values: replies.append(values),
+                logger,
+            )
+
+        self.assertEqual(1, len(imports))
+        self.assertEqual("F01234567", imports[0][0]["file_id"])
+        self.assertEqual(RECEIVED_AT, imports[0][1])
+        self.assertEqual(2, len(replies))
+        self.assertIn("비공개 문서 저장소", replies[0]["text"])
+        self.assertIn("프로필에는 반영하지 않았습니다", replies[1]["text"])
+        self.assertEqual([], logger.messages)
+
+    def test_registered_listener_reports_safe_profile_import_failure(self) -> None:
+        app = _FakeApp()
+        replies: list[dict] = []
+        logger = _FakeLogger()
+
+        def fail_import(_reference, _imported_at):
+            raise SlackEventError("private download details")
+
+        with tempfile.TemporaryDirectory() as directory:
+            listener = register_slack_app_mention_listener(
+                app,
+                _config(),
+                output_directory=directory,
+                now=lambda: RECEIVED_AT,
+                profile_document_importer=fail_import,
+            )
+            listener(
+                _profile_event(),
+                lambda **values: replies.append(values),
+                logger,
+            )
+
+        self.assertEqual(2, len(replies))
+        self.assertIn("가져오지 못했습니다", replies[1]["text"])
+        self.assertNotIn("private download details", replies[1]["text"])
+        self.assertEqual(1, len(logger.messages))
+
     def test_disallowed_user_is_recorded_without_reply(self) -> None:
         event = _event()
         event["event"]["user"] = "U11111111"

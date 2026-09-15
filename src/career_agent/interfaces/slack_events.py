@@ -39,6 +39,12 @@ _PROFILE_DOCUMENT_MIME_TYPES = {
     ".pdf": frozenset({"application/pdf"}),
     ".txt": frozenset({"text/plain"}),
 }
+_PROFILE_DOCUMENT_MODES = {
+    ".docx": frozenset({"hosted"}),
+    ".md": frozenset({"hosted", "snippet"}),
+    ".pdf": frozenset({"hosted"}),
+    ".txt": frozenset({"hosted", "snippet"}),
+}
 
 
 class SlackEventError(ValueError):
@@ -130,7 +136,7 @@ def _normalized_command(text: str, bot_user_id: str) -> str:
     return " ".join(without_mention.casefold().split())
 
 
-def _profile_document_reference(value: Any) -> dict[str, Any]:
+def build_slack_profile_document_reference(value: Any) -> dict[str, Any]:
     file_object = _mapping(value, "event.files[0]")
     file_id = _identifier(
         file_object.get("id"),
@@ -166,11 +172,10 @@ def _profile_document_reference(value: Any) -> dict[str, Any]:
         raise SlackEventError(
             f"Slack 첨부파일 크기는 1 이상 {MAX_DOCUMENT_BYTES}바이트 이하여야 함"
         )
-    if (
-        file_object.get("mode") != "hosted"
-        or file_object.get("is_external") is not False
-    ):
-        raise SlackEventError("현재는 Slack에 직접 업로드한 파일만 지원함")
+    if file_object.get("mode") not in _PROFILE_DOCUMENT_MODES[extension]:
+        raise SlackEventError("Slack 첨부파일 저장 형식이 지원 범위가 아님")
+    if file_object.get("is_external") is not False:
+        raise SlackEventError("현재는 Slack 내부에 저장된 파일만 지원함")
     if file_object.get("file_access") == "check_file_info":
         raise SlackEventError("추가 권한 확인이 필요한 Slack Connect 파일은 지원하지 않음")
     return {
@@ -184,7 +189,7 @@ def _profile_document_reference(value: Any) -> dict[str, Any]:
     }
 
 
-def _validate_profile_document_reference(value: Any) -> None:
+def validate_slack_profile_document_reference(value: Any) -> None:
     reference = _mapping(value, "profile_document")
     _identifier(
         reference.get("file_id"),
@@ -306,7 +311,7 @@ def build_slack_command_request(
                 elif file_count > 1:
                     reason = "profile_document_count_not_supported"
                 else:
-                    profile_document = _profile_document_reference(files[0])
+                    profile_document = build_slack_profile_document_reference(files[0])
                     reason = "profile_document_metadata_validated"
             elif file_count > 0:
                 reason = "unexpected_file_for_command"
@@ -407,7 +412,7 @@ def save_slack_command_request(
         raise SlackEventError("Slack 요청 라우팅 상태가 올바르지 않음")
     profile_document = request.get("profile_document")
     if profile_document is not None:
-        _validate_profile_document_reference(profile_document)
+        validate_slack_profile_document_reference(profile_document)
         if root.get("routing_status") != "input_validated":
             raise SlackEventError("Slack 첨부파일과 라우팅 상태가 일치하지 않음")
         if root.get("command_name") != "submit_profile_document":
