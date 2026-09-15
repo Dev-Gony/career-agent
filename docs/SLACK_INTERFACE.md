@@ -183,7 +183,7 @@ Bot Token은 별도 Scope가 필요 없는 Slack 공식 `auth.test`로 인증하
 
 실제 이벤트는 `network_request_verified: true`, 합성 로컬 이벤트는 `local_validation_only: true`로 구분한다. 두 경로 모두 현재 `execution_status`는 `not_executed`이므로 공고 조회나 분석을 시작하지 않는다. 메시지 원문은 저장하지 않는다.
 
-2026-09-14 공식 SDK 설치와 실제 Socket Mode 연결 성공까지 확인했다. 실제 채널에서 보낸 이벤트 수신과 답변 표시는 사용자 확인 전이다.
+2026-09-15 실제 지정 채널에서 보낸 이벤트 수신, 허용 검사, 명령 변환과 스레드 답변 표시를 사용자가 확인했다.
 
 ## 10. 현재 보안 경계와 다음 단계
 
