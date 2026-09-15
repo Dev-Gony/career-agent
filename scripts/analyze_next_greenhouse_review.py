@@ -17,6 +17,7 @@ from career_agent.execution import (  # noqa: E402
 )
 from career_agent.review import (  # noqa: E402
     GreenhouseReviewQueueError,
+    NoGreenhouseReviewCandidateError,
     build_greenhouse_review_analysis_run,
     build_greenhouse_review_queue,
     save_greenhouse_review_analysis_run,
@@ -130,7 +131,32 @@ def main() -> int:
         profile = _load_json(args.profile)
         search_plan = _load_json(args.search_plan)
         queue_path, queue = _latest_queue(args.queue_directory)
-        candidate = select_next_greenhouse_review_candidate(queue, profile)
+        try:
+            candidate = select_next_greenhouse_review_candidate(queue, profile)
+        except NoGreenhouseReviewCandidateError:
+            execution_path = save_execution_record(
+                build_greenhouse_execution_record(
+                    executed_at=execution_time,
+                    status="no_eligible_candidate",
+                ),
+                args.execution_directory,
+            )
+            statuses = queue.get("summary", {}).get("analysis_statuses", {})
+            print("Greenhouse 다음 검토 공고 없음")
+            print(
+                "- 현재 큐 분석 완료: "
+                f"{statuses.get('analyzed_current', 0)}개"
+            )
+            print(
+                "- 현재 큐 분석 필요: "
+                f"{statuses.get('needs_analysis', 0)}개"
+            )
+            print(f"- 실행 이력: {execution_path}")
+            print(
+                "안내: 프로필 직무 근거와 지역·고용 조건을 함께 만족하는 "
+                "새 후보가 없습니다."
+            )
+            return 0
         source_path, source_run = _source_run(queue, args.run_directory)
         runs_with_paths = _load_documents(args.run_directory)
         reviews_with_paths = _load_optional_documents(args.review_directory)

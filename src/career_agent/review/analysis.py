@@ -14,6 +14,10 @@ from career_agent.workflows import ANALYSIS_PIPELINE_VERSION, profile_content_sh
 from .queue import REVIEW_QUEUE_SCHEMA_VERSION, GreenhouseReviewQueueError
 
 
+class NoGreenhouseReviewCandidateError(GreenhouseReviewQueueError):
+    """Raised when a valid queue has no unanalyzed candidate without a mismatch."""
+
+
 def _mapping(value: Any, name: str) -> Mapping[str, Any]:
     if not isinstance(value, Mapping):
         raise GreenhouseReviewQueueError(f"{name} 객체가 필요함")
@@ -70,7 +74,7 @@ def select_next_greenhouse_review_candidate(
             f"items[{position}].external_job_id",
         )
         return dict(candidate)
-    raise GreenhouseReviewQueueError(
+    raise NoGreenhouseReviewCandidateError(
         "현재 검토 큐에 분석 가능한 needs_analysis 후보가 없음"
     )
 

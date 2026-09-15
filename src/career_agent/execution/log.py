@@ -11,7 +11,13 @@ from typing import Any, Mapping
 
 
 EXECUTION_SCHEMA_VERSION = "1.0"
-ALLOWED_STATUSES = {"analyzed", "reused", "no_high_candidate", "failed"}
+ALLOWED_STATUSES = {
+    "analyzed",
+    "reused",
+    "no_high_candidate",
+    "no_eligible_candidate",
+    "failed",
+}
 
 
 class ExecutionLogError(ValueError):

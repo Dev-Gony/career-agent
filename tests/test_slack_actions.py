@@ -141,6 +141,28 @@ class SlackActionsTest(unittest.TestCase):
         self.assertEqual("failed", result["status"])
         self.assertNotIn(secret_error, result["public_message"])
 
+    def test_returns_normal_message_when_no_candidate_is_available(self) -> None:
+        output = """Greenhouse 다음 검토 공고 없음
+- 현재 큐 분석 완료: 1개
+- 현재 큐 분석 필요: 3개
+"""
+
+        with _repository() as directory:
+            result = run_slack_career_action(
+                "analyze_next_greenhouse_review",
+                repository_root=directory,
+                run_process=lambda command, **_options: subprocess.CompletedProcess(
+                    command,
+                    0,
+                    output,
+                    "",
+                ),
+            )
+
+        self.assertEqual("no_candidate", result["status"])
+        self.assertIn("현재 조건에 맞는 새 공고가 없습니다", result["public_message"])
+        self.assertIn("분석 완료: 1개 / 분석 필요: 3개", result["public_message"])
+
     def test_returns_fixed_failure_for_timeout_and_invalid_output(self) -> None:
         def timeout_process(*_args, **_options):
             raise subprocess.TimeoutExpired("command", 180)

@@ -80,6 +80,18 @@ class ExecutionLogTest(unittest.TestCase):
                 status="failed",
             )
 
+    def test_allows_no_eligible_candidate_as_normal_status(self) -> None:
+        actual = build_greenhouse_execution_record(
+            executed_at=self.executed_at,
+            status="no_eligible_candidate",
+        )
+
+        self.assertEqual(
+            "no_eligible_candidate",
+            actual["execution"]["status"],
+        )
+        self.assertIsNone(actual["error"])
+
 
 if __name__ == "__main__":
     unittest.main()

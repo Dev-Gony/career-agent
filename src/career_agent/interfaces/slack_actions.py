@@ -15,6 +15,7 @@ from .slack_events import SlackEventError
 ANALYZE_NEXT_REVIEW_ACTION = "analyze_next_greenhouse_review"
 MAX_ACTION_OUTPUT_CHARS = 32 * 1024
 MAX_ANALYSIS_FILE_BYTES = 2 * 1024 * 1024
+NO_CANDIDATE_MARKER = "Greenhouse 다음 검토 공고 없음"
 
 _RESULT_LABELS = (
     "선택",
@@ -103,9 +104,7 @@ def _load_analysis(stdout: str, repository_root: Path) -> Mapping[str, Any]:
     return root
 
 
-def _summary_values(stdout: str) -> dict[str, str]:
-    if "Greenhouse 다음 검토 공고 1건 분석 완료" not in stdout.splitlines():
-        raise SlackEventError("다음 공고 분석 출력의 완료 표시가 없음")
+def _result_values(stdout: str) -> dict[str, str]:
     values: dict[str, str] = {}
     for line in stdout.splitlines():
         if not line.startswith("- "):
@@ -114,6 +113,36 @@ def _summary_values(stdout: str) -> dict[str, str]:
         if separator and label in _RESULT_LABELS and value.strip():
             values[label] = _safe_slack_text(value)
     return values
+
+
+def _summary_values(stdout: str) -> dict[str, str]:
+    if "Greenhouse 다음 검토 공고 1건 분석 완료" not in stdout.splitlines():
+        raise SlackEventError("다음 공고 분석 출력의 완료 표시가 없음")
+    return _result_values(stdout)
+
+
+def _public_no_candidate_message(stdout: str) -> str:
+    if NO_CANDIDATE_MARKER not in stdout.splitlines():
+        raise SlackEventError("다음 공고 없음 출력의 완료 표시가 없음")
+    values = _result_values(stdout)
+    analyzed = values.get("현재 큐 분석 완료")
+    remaining = values.get("현재 큐 분석 필요")
+    if analyzed is None or remaining is None:
+        raise SlackEventError("다음 공고 없음 출력의 큐 상태가 없음")
+    return "\n".join(
+        [
+            "*현재 조건에 맞는 새 공고가 없습니다.*",
+            (
+                "현재 등록된 공식 채용 소스에서 프로필 직무 근거와 "
+                "지역·고용 조건을 함께 만족하는 미분석 공고를 찾지 못했습니다."
+            ),
+            "",
+            "*검토 큐*",
+            f"- 분석 완료: {analyzed} / 분석 필요: {remaining}",
+            "",
+            "새 공고 목록이 갱신되면 다시 확인할 수 있습니다.",
+        ]
+    )
 
 
 def _strength_lines(value: Any) -> list[str]:
@@ -278,6 +307,11 @@ def run_slack_career_action(
             "public_message": "공고 분석에 실패했습니다. 로컬 실행 이력을 확인해주세요.",
         }
     try:
+        if NO_CANDIDATE_MARKER in stdout.splitlines():
+            return {
+                "status": "no_candidate",
+                "public_message": _public_no_candidate_message(stdout),
+            }
         analysis_document = _load_analysis(stdout, root)
         message = _public_success_message(stdout, analysis_document)
     except SlackEventError:

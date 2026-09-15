@@ -1,6 +1,7 @@
 """Human-review sample preparation for actual job analyses."""
 
 from .analysis import (
+    NoGreenhouseReviewCandidateError,
     build_greenhouse_review_analysis_run,
     save_greenhouse_review_analysis_run,
     select_next_greenhouse_review_candidate,
@@ -20,6 +21,7 @@ from .queue import (
 __all__ = [
     "FIT_ASSESSMENTS",
     "HUMAN_REVIEW_SCHEMA_VERSION",
+    "NoGreenhouseReviewCandidateError",
     "build_greenhouse_human_review",
     "build_greenhouse_review_analysis_run",
     "save_greenhouse_review_analysis_run",

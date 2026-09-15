@@ -13,6 +13,7 @@ sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 from career_agent.matching import MATCHING_RULES_VERSION  # noqa: E402
 from career_agent.review import (  # noqa: E402
     GreenhouseReviewQueueError,
+    NoGreenhouseReviewCandidateError,
     build_greenhouse_review_analysis_run,
     save_greenhouse_review_analysis_run,
     select_next_greenhouse_review_candidate,
@@ -92,6 +93,17 @@ class GreenhouseReviewAnalysisTest(unittest.TestCase):
                 self.queue,
                 changed_profile,
             )
+
+    def test_reports_no_candidate_when_all_unanalyzed_items_mismatch(self) -> None:
+        self.queue["items"] = [
+            {
+                **self.candidate,
+                "employment_assessment": "mismatch",
+            }
+        ]
+
+        with self.assertRaises(NoGreenhouseReviewCandidateError):
+            select_next_greenhouse_review_candidate(self.queue, self.profile)
 
     def test_packages_analysis_with_queue_reference_and_no_review_claim(self) -> None:
         run = build_greenhouse_review_analysis_run(
