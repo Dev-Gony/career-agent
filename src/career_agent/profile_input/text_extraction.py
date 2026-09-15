@@ -1,23 +1,38 @@
-"""Extract reviewable profile candidates from a stored UTF-8 text document."""
+"""Extract reviewable profile candidates from a stored career document."""
 
 from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime
 from hashlib import sha256
+from io import BytesIO
 import json
 import os
 from pathlib import Path
 import re
 import tempfile
 from typing import Any, Mapping
+from xml.etree import ElementTree
+from zipfile import BadZipFile, ZipFile
 
 from .document_store import PROFILE_DOCUMENT_SCHEMA_VERSION, ProfileDocumentError
 
 
 PROFILE_TEXT_EXTRACTION_SCHEMA_VERSION = "0.1"
-PROFILE_TEXT_EXTRACTION_RULES_VERSION = "0.1"
-_SUPPORTED_FORMATS = {"plain_text", "markdown"}
+PROFILE_TEXT_EXTRACTION_RULES_VERSION = "0.2"
+MAX_DOCX_DOCUMENT_XML_BYTES = 8 * 1024 * 1024
+MAX_DOCX_PARAGRAPHS = 20_000
+_SUPPORTED_FORMATS = {"plain_text", "markdown", "docx"}
+_WORDPROCESSINGML_NAMESPACE = (
+    "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+)
+_WORD_PARAGRAPH_TAG = f"{{{_WORDPROCESSINGML_NAMESPACE}}}p"
+_WORD_TEXT_TAG = f"{{{_WORDPROCESSINGML_NAMESPACE}}}t"
+_WORD_TAB_TAG = f"{{{_WORDPROCESSINGML_NAMESPACE}}}tab"
+_WORD_BREAK_TAGS = {
+    f"{{{_WORDPROCESSINGML_NAMESPACE}}}br",
+    f"{{{_WORDPROCESSINGML_NAMESPACE}}}cr",
+}
 _HEADING_SECTIONS = {
     "경력": "career_history",
     "경력사항": "career_history",
@@ -129,6 +144,81 @@ def _candidate_text(line: str) -> str:
     return re.sub(r"\s+", " ", value).strip()
 
 
+def _utf8_lines(content: bytes) -> list[str]:
+    try:
+        body = content.decode("utf-8-sig")
+    except UnicodeDecodeError as error:
+        raise ProfileDocumentError("텍스트 문서는 UTF-8이어야 함") from error
+    return body.splitlines()
+
+
+def _read_docx_document_xml(content: bytes) -> bytes:
+    try:
+        with ZipFile(BytesIO(content)) as archive:
+            info = archive.getinfo("word/document.xml")
+            if info.flag_bits & 0x1:
+                raise ProfileDocumentError("암호화된 DOCX 본문은 추출할 수 없음")
+            if not 0 < info.file_size <= MAX_DOCX_DOCUMENT_XML_BYTES:
+                raise ProfileDocumentError("DOCX 본문 XML 크기가 허용 범위를 벗어남")
+            with archive.open(info) as document_file:
+                document_xml = document_file.read(MAX_DOCX_DOCUMENT_XML_BYTES + 1)
+    except KeyError as error:
+        raise ProfileDocumentError("DOCX에 word/document.xml이 없음") from error
+    except BadZipFile as error:
+        raise ProfileDocumentError("DOCX ZIP 구조를 읽을 수 없음") from error
+    if len(document_xml) > MAX_DOCX_DOCUMENT_XML_BYTES:
+        raise ProfileDocumentError("DOCX 본문 XML이 허용 크기를 초과함")
+    return document_xml
+
+
+def _docx_lines(content: bytes) -> list[str]:
+    document_xml = _read_docx_document_xml(content)
+    upper_xml = document_xml.upper()
+    if b"<!DOCTYPE" in upper_xml or b"<!ENTITY" in upper_xml:
+        raise ProfileDocumentError("DOCX 본문 XML의 DTD 또는 ENTITY는 허용하지 않음")
+    try:
+        root = ElementTree.fromstring(document_xml)
+    except ElementTree.ParseError as error:
+        raise ProfileDocumentError("DOCX 본문 XML을 해석할 수 없음") from error
+
+    lines: list[str] = []
+    paragraph_count = 0
+    for paragraph in root.iter(_WORD_PARAGRAPH_TAG):
+        paragraph_count += 1
+        if paragraph_count > MAX_DOCX_PARAGRAPHS:
+            raise ProfileDocumentError("DOCX 문단 수가 허용 범위를 초과함")
+        parts: list[str] = []
+        for node in paragraph.iter():
+            if node.tag == _WORD_TEXT_TAG and node.text:
+                parts.append(node.text)
+            elif node.tag == _WORD_TAB_TAG:
+                parts.append("\t")
+            elif node.tag in _WORD_BREAK_TAGS:
+                parts.append("\n")
+        paragraph_text = "".join(parts)
+        lines.extend(paragraph_text.splitlines() or [paragraph_text])
+    return lines
+
+
+def _document_lines(
+    document_format: str,
+    content: bytes,
+) -> tuple[list[str], str, str]:
+    if document_format in {"plain_text", "markdown"}:
+        return (
+            _utf8_lines(content),
+            "heading_based_text",
+            "UTF-8 문서에서 인식된 섹션 제목과 원문 줄 위치만 사용함",
+        )
+    if document_format == "docx":
+        return (
+            _docx_lines(content),
+            "heading_based_docx",
+            "DOCX 본문의 문단 순서와 인식된 섹션 제목만 사용함",
+        )
+    raise ProfileDocumentError("현재는 UTF-8 TXT, Markdown와 DOCX만 추출할 수 있음")
+
+
 def build_profile_text_extraction(
     manifest: Mapping[str, Any],
     content: bytes,
@@ -145,16 +235,18 @@ def build_profile_text_extraction(
         raise ProfileDocumentError("현재 버전의 문서 manifest가 아님")
     document_format = document.get("document_format")
     if document_format not in _SUPPORTED_FORMATS:
-        raise ProfileDocumentError("현재는 UTF-8 TXT와 Markdown 문서만 추출할 수 있음")
+        raise ProfileDocumentError(
+            "현재는 UTF-8 TXT, Markdown와 DOCX만 추출할 수 있음"
+        )
     expected_hash = _text(
         document.get("content_sha256"), "profile_document.content_sha256"
     )
     if sha256(content).hexdigest() != expected_hash:
         raise ProfileDocumentError("추출할 원본의 내용 해시가 manifest와 다름")
-    try:
-        body = content.decode("utf-8-sig")
-    except UnicodeDecodeError as error:
-        raise ProfileDocumentError("텍스트 문서는 UTF-8이어야 함") from error
+    lines, extraction_method, extraction_fact = _document_lines(
+        document_format,
+        content,
+    )
 
     document_id = _text(document.get("document_id"), "profile_document.document_id")
     candidates: list[dict[str, Any]] = []
@@ -162,7 +254,7 @@ def build_profile_text_extraction(
     sensitive_count = 0
     unclassified_count = 0
     oversized_count = 0
-    for line_number, raw_line in enumerate(body.splitlines(), start=1):
+    for line_number, raw_line in enumerate(lines, start=1):
         if not raw_line.strip():
             continue
         section, inline_text, is_heading = _heading(raw_line)
@@ -213,7 +305,7 @@ def build_profile_text_extraction(
         "profile_extraction": {
             "extraction_id": extraction_id,
             "extracted_at": extracted_at.isoformat(timespec="microseconds"),
-            "method": "heading_based_text",
+            "method": extraction_method,
             "rules_version": PROFILE_TEXT_EXTRACTION_RULES_VERSION,
             "status": "needs_review",
         },
@@ -233,7 +325,7 @@ def build_profile_text_extraction(
         "candidates": candidates,
         "analysis_notes": {
             "facts": [
-                "UTF-8 문서에서 인식된 섹션 제목과 원문 줄 위치만 사용함",
+                extraction_fact,
                 "연락처 형태의 줄은 후보 내용에 포함하지 않음",
             ],
             "unknowns": unknowns,

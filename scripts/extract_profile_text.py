@@ -23,7 +23,7 @@ DEFAULT_EXTRACTION_DIRECTORY = REPOSITORY_ROOT / "private-data/profile-extractio
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="저장된 UTF-8 경력 문서에서 검토용 프로필 후보를 추출합니다."
+        description="저장된 경력 문서에서 검토용 프로필 후보를 추출합니다."
     )
     parser.add_argument("--document-id", required=True)
     parser.add_argument(
@@ -59,7 +59,7 @@ def main() -> int:
             args.extraction_directory,
         )
     except ProfileDocumentError as error:
-        print(f"사용자 텍스트 문서 추출 실패: {error}", file=sys.stderr)
+        print(f"사용자 문서 추출 실패: {error}", file=sys.stderr)
         return 1
 
     summary = extraction["summary"]
