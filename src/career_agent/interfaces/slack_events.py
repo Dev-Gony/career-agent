@@ -11,12 +11,15 @@ import re
 import tempfile
 from typing import Any, Mapping
 
+from career_agent.profile_input import MAX_DOCUMENT_BYTES
+
 
 SLACK_COMMAND_REQUEST_SCHEMA_VERSION = "0.1"
 SLACK_INTERFACE_CONFIG_SCHEMA_VERSION = "0.1"
 MAX_SLACK_MESSAGE_CHARS = 4000
 NEXT_JOB_COMMAND = "다음 공고 찾아줘"
 NEXT_JOB_ACTION = "analyze_next_greenhouse_review"
+PROFILE_DOCUMENT_COMMAND = "프로필 분석해줘"
 
 _EVENT_ID_PATTERN = re.compile(r"^Ev[A-Za-z0-9]{6,62}$")
 _TEAM_ID_PATTERN = re.compile(r"^T[A-Za-z0-9]{6,31}$")
@@ -25,6 +28,17 @@ _USER_ID_PATTERN = re.compile(r"^[UW][A-Za-z0-9]{6,31}$")
 _CHANNEL_ID_PATTERN = re.compile(r"^[CGD][A-Za-z0-9]{6,31}$")
 _EVENT_TS_PATTERN = re.compile(r"^[0-9]{1,20}(?:\.[0-9]{1,20})?$")
 _REQUEST_ID_PATTERN = re.compile(r"^slack-command-request-[0-9a-f]{24}$")
+_FILE_ID_PATTERN = re.compile(r"^F[A-Za-z0-9]{6,31}$")
+_PROFILE_DOCUMENT_MIME_TYPES = {
+    ".docx": frozenset(
+        {
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        }
+    ),
+    ".md": frozenset({"text/markdown", "text/plain"}),
+    ".pdf": frozenset({"application/pdf"}),
+    ".txt": frozenset({"text/plain"}),
+}
 
 
 class SlackEventError(ValueError):
@@ -116,6 +130,98 @@ def _normalized_command(text: str, bot_user_id: str) -> str:
     return " ".join(without_mention.casefold().split())
 
 
+def _profile_document_reference(value: Any) -> dict[str, Any]:
+    file_object = _mapping(value, "event.files[0]")
+    file_id = _identifier(
+        file_object.get("id"),
+        "event.files[0].id",
+        _FILE_ID_PATTERN,
+    )
+    filename = _text(file_object.get("name"), "event.files[0].name")
+    if (
+        len(filename) > 255
+        or Path(filename).name != filename
+        or "/" in filename
+        or "\\" in filename
+        or "\x00" in filename
+    ):
+        raise SlackEventError("Slack 첨부파일 이름이 안전하지 않음")
+    extension = Path(filename).suffix.casefold()
+    allowed_mime_types = _PROFILE_DOCUMENT_MIME_TYPES.get(extension)
+    if allowed_mime_types is None:
+        allowed = ", ".join(sorted(_PROFILE_DOCUMENT_MIME_TYPES))
+        raise SlackEventError(f"Slack 첨부파일 허용 확장자: {allowed}")
+    mimetype = _text(
+        file_object.get("mimetype"),
+        "event.files[0].mimetype",
+    ).casefold()
+    if mimetype not in allowed_mime_types:
+        raise SlackEventError("Slack 첨부파일 확장자와 MIME 형식이 일치하지 않음")
+    size_bytes = file_object.get("size")
+    if (
+        isinstance(size_bytes, bool)
+        or not isinstance(size_bytes, int)
+        or not 1 <= size_bytes <= MAX_DOCUMENT_BYTES
+    ):
+        raise SlackEventError(
+            f"Slack 첨부파일 크기는 1 이상 {MAX_DOCUMENT_BYTES}바이트 이하여야 함"
+        )
+    if (
+        file_object.get("mode") != "hosted"
+        or file_object.get("is_external") is not False
+    ):
+        raise SlackEventError("현재는 Slack에 직접 업로드한 파일만 지원함")
+    if file_object.get("file_access") == "check_file_info":
+        raise SlackEventError("추가 권한 확인이 필요한 Slack Connect 파일은 지원하지 않음")
+    return {
+        "file_id": file_id,
+        "filename": filename,
+        "extension": extension,
+        "mimetype": mimetype,
+        "size_bytes": size_bytes,
+        "source_type": "slack_attachment",
+        "processing_status": "metadata_validated_download_not_started",
+    }
+
+
+def _validate_profile_document_reference(value: Any) -> None:
+    reference = _mapping(value, "profile_document")
+    _identifier(
+        reference.get("file_id"),
+        "profile_document.file_id",
+        _FILE_ID_PATTERN,
+    )
+    filename = _text(reference.get("filename"), "profile_document.filename")
+    if (
+        len(filename) > 255
+        or Path(filename).name != filename
+        or "/" in filename
+        or "\\" in filename
+        or "\x00" in filename
+    ):
+        raise SlackEventError("profile_document.filename이 안전하지 않음")
+    extension = reference.get("extension")
+    allowed_mime_types = _PROFILE_DOCUMENT_MIME_TYPES.get(extension)
+    if allowed_mime_types is None or Path(filename).suffix.casefold() != extension:
+        raise SlackEventError("profile_document 확장자가 올바르지 않음")
+    if reference.get("mimetype") not in allowed_mime_types:
+        raise SlackEventError("profile_document MIME 형식이 올바르지 않음")
+    size_bytes = reference.get("size_bytes")
+    if (
+        isinstance(size_bytes, bool)
+        or not isinstance(size_bytes, int)
+        or not 1 <= size_bytes <= MAX_DOCUMENT_BYTES
+    ):
+        raise SlackEventError("profile_document 크기가 올바르지 않음")
+    if reference.get("source_type") != "slack_attachment":
+        raise SlackEventError("profile_document 입력 출처가 올바르지 않음")
+    if (
+        reference.get("processing_status")
+        != "metadata_validated_download_not_started"
+    ):
+        raise SlackEventError("profile_document 처리 상태가 올바르지 않음")
+
+
 def build_slack_command_request(
     event_payload: Mapping[str, Any],
     config: Mapping[str, Any],
@@ -153,6 +259,7 @@ def build_slack_command_request(
     action: str | None
     command_name: str | None
     user_id: str | None
+    profile_document: dict[str, Any] | None = None
     if event.get("bot_id") is not None or event.get("bot_profile") is not None:
         reason = "bot_event"
         action = None
@@ -183,16 +290,39 @@ def build_slack_command_request(
                     f"event.text는 {MAX_SLACK_MESSAGE_CHARS}자 이하여야 함"
                 )
             command = _normalized_command(raw_text, settings["bot_user_id"])
-            if command == NEXT_JOB_COMMAND.casefold():
+            files = event.get("files")
+            if files is not None and not isinstance(files, list):
+                raise SlackEventError("event.files는 배열이어야 함")
+            file_count = len(files) if isinstance(files, list) else 0
+            if command == NEXT_JOB_COMMAND.casefold() and file_count == 0:
                 reason = "supported_command"
                 action = NEXT_JOB_ACTION
                 command_name = "find_next_job"
+            elif command in {"", PROFILE_DOCUMENT_COMMAND.casefold()}:
+                action = None
+                command_name = "submit_profile_document"
+                if file_count == 0:
+                    reason = "profile_document_missing"
+                elif file_count > 1:
+                    reason = "profile_document_count_not_supported"
+                else:
+                    profile_document = _profile_document_reference(files[0])
+                    reason = "profile_document_metadata_validated"
+            elif file_count > 0:
+                reason = "unexpected_file_for_command"
+                action = None
+                command_name = None
             else:
                 reason = "unsupported_command"
                 action = None
                 command_name = None
 
-    routing_status = "action_identified" if action is not None else "ignored"
+    if action is not None:
+        routing_status = "action_identified"
+    elif profile_document is not None:
+        routing_status = "input_validated"
+    else:
+        routing_status = "ignored"
     request_key = f"{team_id}|{event_id}"
     request_id = "slack-command-request-" + sha256(
         request_key.encode("utf-8")
@@ -216,6 +346,11 @@ def build_slack_command_request(
             "user_id": user_id,
             "channel_id": channel_id,
         },
+        **(
+            {"profile_document": profile_document}
+            if profile_document is not None
+            else {}
+        ),
         "metadata": {
             "schema_version": SLACK_COMMAND_REQUEST_SCHEMA_VERSION,
             "contains_message_text": False,
@@ -223,6 +358,14 @@ def build_slack_command_request(
             "git_tracking_allowed": False,
             "network_request_verified": network_request_verified,
             "local_validation_only": not network_request_verified,
+            **(
+                {
+                    "contains_file_content": False,
+                    "contains_download_url": False,
+                }
+                if profile_document is not None
+                else {}
+            ),
         },
     }
 
@@ -256,8 +399,29 @@ def save_slack_command_request(
         raise SlackEventError("Slack 명령 요청의 전송 경로 표시가 서로 모순됨")
     if root.get("execution_status") != "not_executed":
         raise SlackEventError("로컬 Slack 요청은 실행 상태일 수 없음")
-    if root.get("routing_status") not in {"action_identified", "ignored"}:
+    if root.get("routing_status") not in {
+        "action_identified",
+        "input_validated",
+        "ignored",
+    }:
         raise SlackEventError("Slack 요청 라우팅 상태가 올바르지 않음")
+    profile_document = request.get("profile_document")
+    if profile_document is not None:
+        _validate_profile_document_reference(profile_document)
+        if root.get("routing_status") != "input_validated":
+            raise SlackEventError("Slack 첨부파일과 라우팅 상태가 일치하지 않음")
+        if root.get("command_name") != "submit_profile_document":
+            raise SlackEventError("Slack 첨부파일 명령이 올바르지 않음")
+        if root.get("action") is not None:
+            raise SlackEventError("Slack 첨부파일 검증 단계는 실행 동작일 수 없음")
+        if root.get("reason") != "profile_document_metadata_validated":
+            raise SlackEventError("Slack 첨부파일 검증 이유가 올바르지 않음")
+        if metadata.get("contains_file_content") is not False:
+            raise SlackEventError("Slack 요청에 파일 내용 제외 표시가 없음")
+        if metadata.get("contains_download_url") is not False:
+            raise SlackEventError("Slack 요청에 다운로드 URL 제외 표시가 없음")
+    elif root.get("routing_status") == "input_validated":
+        raise SlackEventError("검증된 Slack 첨부파일 요청에 파일 정보가 없음")
 
     output_directory = Path(directory)
     output_directory.mkdir(parents=True, exist_ok=True)

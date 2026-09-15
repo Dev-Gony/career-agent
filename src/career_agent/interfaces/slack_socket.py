@@ -18,7 +18,22 @@ SUPPORTED_COMMAND_REPLY = (
     "공고 분석은 아직 실행하지 않았습니다."
 )
 ACTION_STARTED_REPLY = "요청을 확인했습니다. 다음 공고 1건 분석을 시작합니다."
-UNSUPPORTED_COMMAND_REPLY = "현재 지원하는 명령은 `다음 공고 찾아줘`입니다."
+UNSUPPORTED_COMMAND_REPLY = (
+    "현재 지원하는 명령은 `다음 공고 찾아줘`와 첨부파일 1개를 포함한 "
+    "`프로필 분석해줘`입니다."
+)
+PROFILE_DOCUMENT_METADATA_REPLY = (
+    "첨부파일 1개의 형식과 크기를 확인했습니다. 현재는 안전한 입력 검증 단계이며 "
+    "파일 내용은 아직 내려받거나 분석하지 않았습니다."
+)
+PROFILE_DOCUMENT_MISSING_REPLY = (
+    "`프로필 분석해줘`와 함께 이력서, 포트폴리오, 경력기술서 또는 "
+    "직무분석표 파일 1개를 첨부해주세요."
+)
+PROFILE_DOCUMENT_COUNT_REPLY = "현재는 한 번에 첨부파일 1개만 확인할 수 있습니다."
+UNEXPECTED_FILE_REPLY = (
+    "첨부자료를 분석하려면 `프로필 분석해줘`라고 호출해주세요."
+)
 
 
 def _reply_text(request: Mapping[str, Any], *, created: bool) -> str | None:
@@ -29,6 +44,14 @@ def _reply_text(request: Mapping[str, Any], *, created: bool) -> str | None:
         raise SlackEventError("slack_command_request 객체가 필요함")
     if root.get("routing_status") == "action_identified":
         return SUPPORTED_COMMAND_REPLY
+    if root.get("reason") == "profile_document_metadata_validated":
+        return PROFILE_DOCUMENT_METADATA_REPLY
+    if root.get("reason") == "profile_document_missing":
+        return PROFILE_DOCUMENT_MISSING_REPLY
+    if root.get("reason") == "profile_document_count_not_supported":
+        return PROFILE_DOCUMENT_COUNT_REPLY
+    if root.get("reason") == "unexpected_file_for_command":
+        return UNEXPECTED_FILE_REPLY
     if root.get("reason") == "unsupported_command":
         return UNSUPPORTED_COMMAND_REPLY
     return None

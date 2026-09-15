@@ -42,16 +42,27 @@ Slack은 이벤트 수신 확인이 늦거나 실패하면 같은 이벤트를 �
 
 ## 4. 지원 명령
 
-현재 지원하는 사용자 문장은 하나다.
+현재 지원하는 사용자 입력은 두 가지다.
 
     <@봇사용자ID> 다음 공고 찾아줘
+    <@봇사용자ID> 프로필 분석해줘 + 첨부파일 1개
 
-공백과 봇 호출 위치만 정규화한다. 비슷한 다른 문장을 Agent가 같은 뜻이라고 임의로 추정하지 않는다.
+첨부파일 1개와 봇 호출만 보내도 프로필 자료 입력으로 인식한다. 공고 검색 명령은 공백과 봇 호출 위치만 정규화하며 비슷한 다른 문장을 Agent가 같은 뜻이라고 임의로 추정하지 않는다.
 
     command_name: "find_next_job"
     action: "analyze_next_greenhouse_review"
 
 이 동작은 기존 `scripts/analyze_next_greenhouse_review.py`의 “검토 큐에서 다음 공고 1건 분석” 기능을 가리킨다. 로컬 합성 이벤트 변환기는 동작 이름만 식별하고 실행하지 않으며, 실제 Socket Mode 수신기만 허용된 동작을 고정 인자 프로세스로 실행한다.
+
+프로필 자료 입력은 이번 단계에서 다음 메타데이터만 검증한다.
+
+- Slack 파일 ID
+- 경로 문자가 없는 파일명
+- `.txt`, `.md`, `.pdf`, `.docx` 확장자와 대응 MIME 형식
+- 1바이트 이상 10MB 이하 크기
+- Slack에 직접 올린 `hosted` 파일인지 여부
+
+검증된 요청의 상태는 `input_validated`, 처리 상태는 `metadata_validated_download_not_started`다. 파일 내용과 `url_private` 다운로드 URL은 읽거나 요청 기록에 저장하지 않는다. 외부 드라이브 파일과 Slack Connect에서 추가 확인이 필요한 파일은 현재 지원하지 않는다.
 
 ## 5. 내부 요청 구조
 
@@ -79,6 +90,19 @@ Slack은 이벤트 수신 확인이 늦거나 실패하면 같은 이벤트를 �
 
 사용자가 쓴 메시지 원문은 저장하지 않는다. 결과는 `private-data/slack-command-requests/`에 저장한다.
 
+프로필 자료 입력이면 다음 객체가 추가된다.
+
+    profile_document:
+      file_id: "F01234567"
+      filename: "resume.pdf"
+      extension: ".pdf"
+      mimetype: "application/pdf"
+      size_bytes: 1024
+      source_type: "slack_attachment"
+      processing_status: "metadata_validated_download_not_started"
+
+이때 metadata의 `contains_file_content`와 `contains_download_url`은 모두 `false`여야 한다.
+
 ## 6. 로컬 확인
 
     python scripts/parse_slack_event.py
@@ -100,6 +124,8 @@ Slack은 이벤트 수신 확인이 늦거나 실패하면 같은 이벤트를 �
 - `chat:write`: 처리 결과를 채널에 답변
 - `app_mention`: 구독 이벤트
 - `connections:write`: manifest의 Bot Token Scope가 아니라 별도로 만드는 Socket Mode App Token의 권한
+
+현재 첨부파일 메타데이터 검증은 `app_mention` 이벤트의 `files` 배열만 사용하고 별도 파일 API를 호출하지 않는다. 다음 다운로드 단계에는 Bot Token의 `files:read` 권한이 필요하며, 권한을 manifest에 추가한 뒤 사용자가 앱을 다시 승인해야 한다. 파일은 Slack의 인증이 필요한 `url_private`에서 Bearer 인증 헤더로만 내려받고 공개 URL로 전환하지 않는다.
 
 사용자가 Slack에서 확인할 순서는 다음과 같다.
 

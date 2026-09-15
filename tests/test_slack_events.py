@@ -53,6 +53,21 @@ def _event(text: str = "<@U01234567> 다음 공고 찾아줘") -> dict:
     }
 
 
+def _profile_file(**changes) -> dict:
+    file_object = {
+        "id": "F01234567",
+        "name": "resume.pdf",
+        "mimetype": "application/pdf",
+        "filetype": "pdf",
+        "size": 1024,
+        "mode": "hosted",
+        "is_external": False,
+        "url_private": "https://files.slack.com/files-pri/example/resume.pdf",
+    }
+    file_object.update(changes)
+    return file_object
+
+
 class SlackEventsTest(unittest.TestCase):
     def test_maps_supported_mention_without_storing_message_text(self) -> None:
         request = build_slack_command_request(
@@ -67,6 +82,7 @@ class SlackEventsTest(unittest.TestCase):
         self.assertEqual("analyze_next_greenhouse_review", root["action"])
         self.assertEqual("not_executed", root["execution_status"])
         self.assertFalse(request["metadata"]["network_request_verified"])
+        self.assertNotIn("profile_document", request)
         serialized = json.dumps(request, ensure_ascii=False)
         self.assertNotIn("다음 공고 찾아줘", serialized)
         self.assertNotIn("<@U01234567>", serialized)
@@ -81,6 +97,123 @@ class SlackEventsTest(unittest.TestCase):
             "analyze_next_greenhouse_review",
             request["slack_command_request"]["action"],
         )
+
+    def test_validates_one_profile_document_without_content_or_download_url(self) -> None:
+        event = _event("<@U01234567> 프로필 분석해줘")
+        event["event"]["files"] = [_profile_file()]
+
+        request = build_slack_command_request(
+            event,
+            _config(),
+            received_at=RECEIVED_AT,
+        )
+
+        root = request["slack_command_request"]
+        self.assertEqual("input_validated", root["routing_status"])
+        self.assertEqual("submit_profile_document", root["command_name"])
+        self.assertIsNone(root["action"])
+        self.assertEqual("F01234567", request["profile_document"]["file_id"])
+        serialized = json.dumps(request, ensure_ascii=False)
+        self.assertNotIn("url_private", serialized)
+        self.assertNotIn("files.slack.com", serialized)
+        self.assertFalse(request["metadata"]["contains_file_content"])
+        self.assertFalse(request["metadata"]["contains_download_url"])
+
+        with tempfile.TemporaryDirectory() as directory:
+            path, created = save_slack_command_request(request, directory)
+            saved = json.loads(path.read_text(encoding="utf-8"))
+
+        self.assertTrue(created)
+        self.assertEqual("F01234567", saved["profile_document"]["file_id"])
+        self.assertNotIn("url_private", json.dumps(saved))
+
+    def test_accepts_bare_mention_with_one_profile_document(self) -> None:
+        event = _event("<@U01234567>")
+        event["event"]["files"] = [
+            _profile_file(name="portfolio.md", mimetype="text/markdown")
+        ]
+
+        request = build_slack_command_request(
+            event,
+            _config(),
+            received_at=RECEIVED_AT,
+        )
+
+        self.assertEqual(
+            "profile_document_metadata_validated",
+            request["slack_command_request"]["reason"],
+        )
+
+    def test_reports_missing_or_multiple_profile_documents(self) -> None:
+        missing = build_slack_command_request(
+            _event("<@U01234567> 프로필 분석해줘"),
+            _config(),
+            received_at=RECEIVED_AT,
+        )
+        multiple_event = _event("<@U01234567> 프로필 분석해줘")
+        multiple_event["event"]["files"] = [
+            _profile_file(),
+            _profile_file(id="F99999999"),
+        ]
+        multiple = build_slack_command_request(
+            multiple_event,
+            _config(),
+            received_at=RECEIVED_AT,
+        )
+
+        self.assertEqual(
+            "profile_document_missing",
+            missing["slack_command_request"]["reason"],
+        )
+        self.assertEqual(
+            "profile_document_count_not_supported",
+            multiple["slack_command_request"]["reason"],
+        )
+
+    def test_rejects_unsafe_profile_document_metadata(self) -> None:
+        for changes in (
+            {"name": "resume.exe", "mimetype": "application/octet-stream"},
+            {"size": 10 * 1024 * 1024 + 1},
+            {"mode": "external", "is_external": True},
+            {"name": "../resume.pdf"},
+        ):
+            with self.subTest(changes=changes):
+                event = _event("<@U01234567> 프로필 분석해줘")
+                event["event"]["files"] = [_profile_file(**changes)]
+                with self.assertRaises(SlackEventError):
+                    build_slack_command_request(
+                        event,
+                        _config(),
+                        received_at=RECEIVED_AT,
+                    )
+
+    def test_rejects_tampered_profile_document_request_before_save(self) -> None:
+        event = _event("<@U01234567> 프로필 분석해줘")
+        event["event"]["files"] = [_profile_file()]
+        request = build_slack_command_request(
+            event,
+            _config(),
+            received_at=RECEIVED_AT,
+        )
+        request["profile_document"]["filename"] = "../resume.pdf"
+
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(SlackEventError):
+                save_slack_command_request(request, directory)
+
+    def test_rejects_validated_request_without_profile_document(self) -> None:
+        event = _event("<@U01234567> 프로필 분석해줘")
+        event["event"]["files"] = [_profile_file()]
+        request = build_slack_command_request(
+            event,
+            _config(),
+            received_at=RECEIVED_AT,
+        )
+        del request["profile_document"]
+
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaises(SlackEventError):
+                save_slack_command_request(request, directory)
 
     def test_ignores_unsupported_command(self) -> None:
         request = build_slack_command_request(

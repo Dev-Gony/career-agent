@@ -51,6 +51,21 @@ def _event(text: str = "<@U01234567> 다음 공고 찾아줘") -> dict:
     }
 
 
+def _profile_event() -> dict:
+    event = _event("<@U01234567> 프로필 분석해줘")
+    event["event"]["files"] = [
+        {
+            "id": "F01234567",
+            "name": "resume.pdf",
+            "mimetype": "application/pdf",
+            "size": 1024,
+            "mode": "hosted",
+            "is_external": False,
+        }
+    ]
+    return event
+
+
 class _FakeApp:
     def __init__(self) -> None:
         self.event_name: str | None = None
@@ -111,6 +126,19 @@ class SlackSocketTest(unittest.TestCase):
             )
 
         self.assertIn("다음 공고 찾아줘", result["reply_text"])
+        self.assertIsNone(result["request"]["slack_command_request"]["action"])
+
+    def test_profile_document_metadata_gets_non_execution_reply(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = process_slack_app_mention(
+                _profile_event(),
+                _config(),
+                received_at=RECEIVED_AT,
+                output_directory=directory,
+            )
+
+        self.assertIn("형식과 크기", result["reply_text"])
+        self.assertIn("아직", result["reply_text"])
         self.assertIsNone(result["request"]["slack_command_request"]["action"])
 
     def test_disallowed_user_is_recorded_without_reply(self) -> None:
