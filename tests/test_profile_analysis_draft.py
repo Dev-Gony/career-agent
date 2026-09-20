@@ -15,6 +15,7 @@ sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 from career_agent.profile_input import (  # noqa: E402
     ProfileDocumentError,
     build_profile_analysis_draft,
+    build_profile_analysis_request,
     profile_analysis_response_json_schema,
     save_profile_analysis_draft,
     validate_profile_analysis_response,
@@ -116,6 +117,9 @@ class ProfileAnalysisDraftTest(unittest.TestCase):
             extraction,
             _response(),
             analyzed_at=ANALYZED_AT,
+            provider_name="synthetic",
+            model_name="fixture-v1",
+            data_boundary="local",
         )
 
         self.assertEqual(original, extraction)
@@ -131,6 +135,24 @@ class ProfileAnalysisDraftTest(unittest.TestCase):
         )
         self.assertTrue(draft["metadata"]["provider_output_validated"])
         self.assertFalse(draft["metadata"]["profile_updated"])
+        self.assertEqual(
+            {
+                "provider": "synthetic",
+                "model": "fixture-v1",
+                "data_boundary": "local",
+            },
+            draft["analysis_source"],
+        )
+
+    def test_builds_minimal_provider_request_without_document_metadata(self) -> None:
+        request = build_profile_analysis_request(_extraction())
+        serialized = json.dumps(request, ensure_ascii=False)
+
+        self.assertEqual("0.1", request["contract_version"])
+        self.assertEqual(3, len(request["candidates"]))
+        self.assertNotIn("document_id", serialized)
+        self.assertNotIn("line_start", serialized)
+        self.assertNotIn("source_document", serialized)
 
     def test_rejects_reference_to_missing_candidate(self) -> None:
         response = _response()
@@ -168,6 +190,9 @@ class ProfileAnalysisDraftTest(unittest.TestCase):
                 _extraction(),
                 _response(),
                 analyzed_at=datetime(2026, 9, 20, 10),
+                provider_name="synthetic",
+                model_name="fixture-v1",
+                data_boundary="local",
             )
 
     def test_saves_and_reuses_identical_draft(self) -> None:
@@ -175,11 +200,17 @@ class ProfileAnalysisDraftTest(unittest.TestCase):
             _extraction(),
             _response(),
             analyzed_at=ANALYZED_AT,
+            provider_name="synthetic",
+            model_name="fixture-v1",
+            data_boundary="local",
         )
         later = build_profile_analysis_draft(
             _extraction(),
             _response(),
             analyzed_at=ANALYZED_AT + timedelta(minutes=5),
+            provider_name="synthetic",
+            model_name="fixture-v1",
+            data_boundary="local",
         )
 
         with tempfile.TemporaryDirectory() as directory:
@@ -195,6 +226,9 @@ class ProfileAnalysisDraftTest(unittest.TestCase):
             _extraction(),
             _response(),
             analyzed_at=ANALYZED_AT,
+            provider_name="synthetic",
+            model_name="fixture-v1",
+            data_boundary="local",
         )
         with tempfile.TemporaryDirectory() as directory:
             path, _ = save_profile_analysis_draft(draft, directory)

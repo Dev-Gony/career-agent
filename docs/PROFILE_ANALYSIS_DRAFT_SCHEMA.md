@@ -16,6 +16,8 @@
 
 현재 구현은 합성 공급자 응답으로 계약과 검증 경계만 확인한다. 실제 이력서 후보를 외부 API에 전송하지 않는다.
 
+공급자 요청에는 계약 버전과 후보 ID, 프로필 영역, 후보 문장만 포함한다. 문서 ID, 원문 파일명, 줄 번호와 저장 경로는 포함하지 않는다. 외부 전송 공급자는 실행 시 명시적 승인값이 없으면 호출 전에 거부한다.
+
 ## 3. 공급자 응답 계약
 
 최상위 필드는 다음 네 배열로 제한한다.
@@ -99,6 +101,11 @@
         "status": "needs_review"
       },
       "analysis": {},
+      "analysis_source": {
+        "provider": "synthetic",
+        "model": "fixture-v1",
+        "data_boundary": "local"
+      },
       "summary": {
         "career_evidence_count": 1,
         "achievement_evidence_count": 1,
@@ -119,7 +126,6 @@
 
 ## 6. 다음 단계
 
-1. 공급자에 의존하지 않는 분석 인터페이스를 추가한다.
-2. 합성 응답 공급자로 전체 호출 흐름을 확인한다.
-3. 사용자 동의와 API Key가 준비된 뒤에만 OpenAI Responses API 구현을 추가한다.
-4. Slack에서 초안을 보여주고 항목별 승인 또는 거부를 받는다.
+1. 저장된 추출 결과를 입력받는 로컬 실행 명령을 추가한다.
+2. 사용자 동의와 API Key가 준비된 뒤에만 OpenAI Responses API 구현을 추가한다.
+3. Slack에서 초안을 보여주고 항목별 승인 또는 거부를 받는다.

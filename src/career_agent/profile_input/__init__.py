@@ -72,12 +72,15 @@ from .skill_application import (
 from .analysis_draft import (
     PROFILE_ANALYSIS_CONFIDENCE_LEVELS,
     PROFILE_ANALYSIS_CONTRACT_VERSION,
+    PROFILE_ANALYSIS_DATA_BOUNDARIES,
     PROFILE_ANALYSIS_DRAFT_SCHEMA_VERSION,
     build_profile_analysis_draft,
+    build_profile_analysis_request,
     profile_analysis_response_json_schema,
     save_profile_analysis_draft,
     validate_profile_analysis_response,
 )
+from .analysis_service import ProfileAnalysisProvider, analyze_profile_extraction
 
 __all__ = [
     "DOCUMENT_KINDS",
@@ -131,9 +134,13 @@ __all__ = [
     "save_profile_evidence_summary",
     "PROFILE_ANALYSIS_CONFIDENCE_LEVELS",
     "PROFILE_ANALYSIS_CONTRACT_VERSION",
+    "PROFILE_ANALYSIS_DATA_BOUNDARIES",
     "PROFILE_ANALYSIS_DRAFT_SCHEMA_VERSION",
     "build_profile_analysis_draft",
+    "build_profile_analysis_request",
     "profile_analysis_response_json_schema",
     "save_profile_analysis_draft",
     "validate_profile_analysis_response",
+    "ProfileAnalysisProvider",
+    "analyze_profile_extraction",
 ]

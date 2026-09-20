@@ -19,6 +19,7 @@ from .text_extraction import PROFILE_TEXT_EXTRACTION_SCHEMA_VERSION
 PROFILE_ANALYSIS_DRAFT_SCHEMA_VERSION = "0.1"
 PROFILE_ANALYSIS_CONTRACT_VERSION = "0.1"
 PROFILE_ANALYSIS_CONFIDENCE_LEVELS = frozenset({"high", "medium", "low"})
+PROFILE_ANALYSIS_DATA_BOUNDARIES = frozenset({"local", "external"})
 
 _MAX_ITEMS_PER_CATEGORY = 50
 _MAX_CANDIDATE_REFERENCES = 10
@@ -228,6 +229,40 @@ def _candidate_index(extraction: Mapping[str, Any]) -> tuple[str, dict[str, str]
             max_chars=_MAX_EVIDENCE_TEXT_CHARS,
         )
     return extraction_id, index
+
+
+def build_profile_analysis_request(
+    extraction: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Build the minimal candidate payload accepted by an analysis provider."""
+
+    _, candidate_index = _candidate_index(extraction)
+    candidates = extraction.get("candidates")
+    if not isinstance(candidates, list):
+        raise ProfileDocumentError("candidates 배열이 필요함")
+    request_candidates: list[dict[str, str]] = []
+    for position, raw_candidate in enumerate(candidates):
+        candidate = _mapping(raw_candidate, f"candidates[{position}]")
+        candidate_id = _text(
+            candidate.get("candidate_id"),
+            f"candidates[{position}].candidate_id",
+            max_chars=100,
+        )
+        request_candidates.append(
+            {
+                "candidate_id": candidate_id,
+                "profile_section": _text(
+                    candidate.get("profile_section"),
+                    f"candidates[{position}].profile_section",
+                    max_chars=100,
+                ),
+                "text": candidate_index[candidate_id],
+            }
+        )
+    return {
+        "contract_version": PROFILE_ANALYSIS_CONTRACT_VERSION,
+        "candidates": request_candidates,
+    }
 
 
 def _candidate_ids(
@@ -464,11 +499,19 @@ def build_profile_analysis_draft(
     response: Mapping[str, Any],
     *,
     analyzed_at: datetime,
+    provider_name: str,
+    model_name: str,
+    data_boundary: str,
 ) -> dict[str, Any]:
     """Build a private, review-only draft from a validated provider response."""
 
     if analyzed_at.tzinfo is None or analyzed_at.utcoffset() is None:
         raise ProfileDocumentError("analyzed_at은 시간대가 포함되어야 함")
+    normalized_provider = _text(provider_name, "provider_name", max_chars=100)
+    normalized_model = _text(model_name, "model_name", max_chars=200)
+    if data_boundary not in PROFILE_ANALYSIS_DATA_BOUNDARIES:
+        allowed = ", ".join(sorted(PROFILE_ANALYSIS_DATA_BOUNDARIES))
+        raise ProfileDocumentError(f"data_boundary 허용값: {allowed}")
     extraction_id, _ = _candidate_index(extraction)
     analysis = validate_profile_analysis_response(extraction, response)
     canonical_analysis = json.dumps(
@@ -478,7 +521,14 @@ def build_profile_analysis_draft(
         separators=(",", ":"),
     )
     draft_key = "|".join(
-        [extraction_id, PROFILE_ANALYSIS_CONTRACT_VERSION, canonical_analysis]
+        [
+            extraction_id,
+            PROFILE_ANALYSIS_CONTRACT_VERSION,
+            normalized_provider,
+            normalized_model,
+            data_boundary,
+            canonical_analysis,
+        ]
     )
     draft_id = "profile-analysis-draft-" + sha256(
         draft_key.encode("utf-8")
@@ -492,6 +542,11 @@ def build_profile_analysis_draft(
             "status": "needs_review",
         },
         "analysis": analysis,
+        "analysis_source": {
+            "provider": normalized_provider,
+            "model": normalized_model,
+            "data_boundary": data_boundary,
+        },
         "summary": {
             "career_evidence_count": len(analysis["career_evidence"]),
             "achievement_evidence_count": len(analysis["achievement_evidence"]),
@@ -553,7 +608,7 @@ def save_profile_analysis_draft(
                 raise ProfileDocumentError(
                     f"같은 프로필 분석 초안 ID의 메타데이터가 일치하지 않음: {field}"
                 )
-        for field in ("analysis", "summary", "metadata"):
+        for field in ("analysis", "analysis_source", "summary", "metadata"):
             if existing.get(field) != draft.get(field):
                 raise ProfileDocumentError(
                     f"같은 프로필 분석 초안 ID의 내용이 일치하지 않음: {field}"
