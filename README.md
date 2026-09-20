@@ -397,6 +397,12 @@ Token을 입력한 뒤 실제 인증과 Socket Mode 사용 가능 여부만 확�
 
 `@career_break 프로필 분석해줘`와 함께 `.txt`, `.md`, `.pdf`, `.docx` 파일 1개를 첨부하거나 봇 호출과 파일만 보내면 파일 ID·형식·크기를 검증합니다. `files:read` 권한이 승인된 실제 수신기는 `files.info`로 파일 정보를 다시 확인하고 인증된 Slack 비공개 URL에서만 내려받아 `private-data/profile-documents/`에 저장합니다. TXT·Markdown·DOCX는 저장 직후 로컬 추출기를 실행하고 Slack에는 경력·프로젝트·기술 등 섹션별 검토 후보 개수와 기간, 수치, 실행·개선, 통제된 기술명 언급의 근거 신호 개수를 답변합니다. 이 응답은 최종 이력서 분석이 아닌 제목 및 표현 기반 1차 분류이며, 한 영역만 인식했거나 미분류 문단이 있으면 추가 구조화 필요 상태를 함께 표시합니다. 후보 문장 원문, 메시지 원문, 다운로드 URL과 Token은 Slack 응답이나 Git에 남기지 않습니다. PDF는 현재 비공개 저장까지만 지원하며 본문 추출 미지원 상태를 구분해 알립니다. 모든 후보와 근거 신호는 사용자 확인 전까지 개인 프로필에 반영하지 않습니다.
 
+로컬 합성 LLM 응답으로 프로필 분석 초안 계약을 확인합니다. 실제 네트워크 요청은 발생하지 않습니다.
+
+    python scripts/build_profile_analysis_draft.py --extraction-id profile-text-extraction-example --response-file data/profile_analysis_response.example.json
+
+합성 응답의 모든 사실 표현은 참조 후보 문장에 포함된 원문 구간이어야 합니다. 결과는 `private-data/profile-analysis-drafts/`에 `needs_review` 상태로 저장되며 사용자 프로필은 변경하지 않습니다. 예제 응답은 `data/profile_document.example.md`에서 만든 추출 결과와 함께 사용합니다.
+
 상세 분석된 공고에 사용자의 실제 판단을 별도 기록합니다. `fit`은 적합, `hold`는 보류, `not_fit`은 부적합입니다.
 
     python scripts/record_greenhouse_review.py --position 1 --fit hold --recommendation-useful yes --notes "직무는 관련 있지만 경력 조건 확인 필요"

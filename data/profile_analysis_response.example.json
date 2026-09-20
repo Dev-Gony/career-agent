@@ -1,0 +1,46 @@
+{
+  "career_evidence": [
+    {
+      "role_or_context": "AI 자동화 엔지니어",
+      "period_expression": null,
+      "responsibility_evidence": "웹 서비스 개발 및 유지보수",
+      "candidate_ids": [
+        "candidate-001",
+        "candidate-002"
+      ],
+      "confidence": "medium"
+    }
+  ],
+  "achievement_evidence": [
+    {
+      "problem_evidence": null,
+      "action_evidence": "기술 뉴스 수집과 요약을 자동화해 정기 전달",
+      "result_evidence": null,
+      "candidate_ids": [
+        "candidate-004"
+      ],
+      "confidence": "medium"
+    }
+  ],
+  "technology_evidence": [
+    {
+      "technology_name": "Python",
+      "usage_evidence": "Python",
+      "proficiency_status": "unconfirmed",
+      "candidate_ids": [
+        "candidate-005"
+      ],
+      "confidence": "low"
+    }
+  ],
+  "unknowns": [
+    {
+      "question": "Python을 어떤 업무와 프로젝트에서 어느 수준으로 사용했나요?",
+      "reason": "기술명만으로 사용 맥락과 숙련도를 확정할 수 없습니다.",
+      "candidate_ids": [
+        "candidate-005"
+      ],
+      "confidence": "high"
+    }
+  ]
+}

@@ -126,6 +126,13 @@
 
 ## 6. 다음 단계
 
-1. 저장된 추출 결과를 입력받는 로컬 실행 명령을 추가한다.
-2. 사용자 동의와 API Key가 준비된 뒤에만 OpenAI Responses API 구현을 추가한다.
-3. Slack에서 초안을 보여주고 항목별 승인 또는 거부를 받는다.
+저장된 추출 결과와 로컬 합성 응답으로 전체 경계를 확인할 수 있다.
+
+    python scripts/build_profile_analysis_draft.py --extraction-id profile-text-extraction-example --response-file data/profile_analysis_response.example.json
+
+이 명령은 네트워크를 사용하지 않으며 후보 문장을 콘솔에 출력하지 않는다. 출력에는 항목별 개수, 검토 상태와 비공개 저장 경로만 포함한다.
+
+다음 구현 순서는 다음과 같다.
+
+1. 사용자 동의와 API Key가 준비된 뒤에만 OpenAI Responses API 구현을 추가한다.
+2. Slack에서 초안을 보여주고 항목별 승인 또는 거부를 받는다.
