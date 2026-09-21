@@ -282,6 +282,15 @@ def save_profile_analysis_review(
     return target_path
 
 
+def validate_profile_analysis_review(
+    review: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Validate one stored-shape review and return an isolated copy."""
+
+    _validated_review(review)
+    return deepcopy(dict(review))
+
+
 def load_profile_analysis_review(
     review_id: str,
     directory: str | Path,
