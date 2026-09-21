@@ -13,7 +13,9 @@ sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
 from career_agent.interfaces import (  # noqa: E402
     SlackEventError,
+    build_latest_slack_profile_analysis_review_item,
     build_latest_slack_profile_analysis_summary,
+    build_slack_profile_analysis_review_item,
     build_slack_profile_analysis_summary,
 )
 from career_agent.profile_input import (  # noqa: E402
@@ -196,6 +198,110 @@ class SlackProfileAnalysisTest(unittest.TestCase):
         self.assertIn("경력 근거: 1개", message)
         self.assertNotIn("QA Engineer", message)
         self.assertNotIn("API 테스트", message)
+
+    def test_review_item_shows_one_item_and_escapes_slack_control_text(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "resume.md"
+            source.write_text(
+                "## 경력\n- QA Engineer <!channel>로 API 테스트를 수행했습니다.\n",
+                encoding="utf-8",
+            )
+            manifest, content = build_profile_document_import(
+                source,
+                document_kind="resume",
+                imported_at=datetime(2026, 9, 21, 8, tzinfo=timezone.utc),
+            )
+            extraction = build_profile_text_extraction(
+                manifest,
+                content,
+                extracted_at=datetime(2026, 9, 21, 9, tzinfo=timezone.utc),
+            )
+            draft = build_profile_analysis_draft(
+                extraction,
+                {
+                    "career_evidence": [
+                        {
+                            "role_or_context": "QA Engineer <!channel>",
+                            "period_expression": None,
+                            "responsibility_evidence": "API 테스트를 수행했습니다.",
+                            "candidate_ids": ["candidate-001"],
+                            "confidence": "high",
+                        }
+                    ],
+                    "achievement_evidence": [],
+                    "technology_evidence": [],
+                    "unknowns": [],
+                },
+                analyzed_at=datetime(2026, 9, 21, 10, tzinfo=timezone.utc),
+                provider_name="synthetic",
+                model_name="fixture-v1",
+                data_boundary="local",
+            )
+            message = build_slack_profile_analysis_review_item(draft)
+
+        self.assertIn("프로필 분석 항목 1/1", message)
+        self.assertIn("유형: 경력 근거", message)
+        self.assertIn("QA Engineer &lt;!channel&gt;", message)
+        self.assertIn("API 테스트를 수행했습니다.", message)
+        self.assertIn("검토 항목: 경력 근거 1번", message)
+        self.assertIn("승인 또는 거부는 기록하지 않았습니다", message)
+        self.assertNotIn("<!channel>", message)
+        self.assertNotIn("candidate-", message)
+        self.assertNotIn("profile-analysis-draft-", message)
+        self.assertNotIn("synthetic", message)
+
+    def test_latest_review_item_loads_verified_current_draft(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "resume.md"
+            source.write_text(
+                "## 기술\n- Python으로 데이터 검증 도구를 개발했습니다.\n",
+                encoding="utf-8",
+            )
+            manifest, content = build_profile_document_import(
+                source,
+                document_kind="resume",
+                imported_at=datetime(2026, 9, 21, 8, tzinfo=timezone.utc),
+            )
+            extraction = build_profile_text_extraction(
+                manifest,
+                content,
+                extracted_at=datetime(2026, 9, 21, 9, tzinfo=timezone.utc),
+            )
+            extraction_directory = root / "extractions"
+            draft_directory = root / "drafts"
+            save_profile_text_extraction(extraction, extraction_directory)
+            draft = build_profile_analysis_draft(
+                extraction,
+                {
+                    "career_evidence": [],
+                    "achievement_evidence": [],
+                    "technology_evidence": [
+                        {
+                            "technology_name": "Python",
+                            "usage_evidence": "Python으로 데이터 검증 도구를 개발했습니다.",
+                            "proficiency_status": "unconfirmed",
+                            "candidate_ids": ["candidate-001"],
+                            "confidence": "high",
+                        }
+                    ],
+                    "unknowns": [],
+                },
+                analyzed_at=datetime(2026, 9, 21, 10, tzinfo=timezone.utc),
+                provider_name="synthetic",
+                model_name="fixture-v1",
+                data_boundary="local",
+            )
+            save_profile_analysis_draft(draft, draft_directory)
+            message = build_latest_slack_profile_analysis_review_item(
+                str(extraction_directory),
+                str(draft_directory),
+            )
+
+        self.assertIn("유형: 기술 사용 근거", message)
+        self.assertIn("Python", message)
+        self.assertIn("숙련도: 사용자 확인 전 미확정", message)
+        self.assertNotIn("candidate-001", message)
 
 
 if __name__ == "__main__":

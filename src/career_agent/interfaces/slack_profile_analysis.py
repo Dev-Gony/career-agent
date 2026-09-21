@@ -9,6 +9,7 @@ from career_agent.profile_input import (
     ProfileDocumentError,
     select_latest_profile_analysis_draft,
     select_latest_profile_text_extraction,
+    validate_profile_analysis_draft,
 )
 
 from .slack_events import SlackEventError
@@ -34,12 +35,118 @@ NO_PROFILE_ANALYSIS_DRAFT_REPLY = (
     "가장 최근 프로필 문서는 확인했지만 검증된 분석 초안이 아직 없습니다. "
     "현재 문단 분류 결과만 저장되어 있으며 개인 프로필에는 반영되지 않았습니다."
 )
+NO_PROFILE_ANALYSIS_ITEMS_REPLY = (
+    "최신 프로필 분석 초안에 검토할 항목이 없습니다. "
+    "개인 프로필과 검색 조건은 변경되지 않았습니다."
+)
+_REVIEW_ITEM_TYPES = (
+    "career_evidence",
+    "achievement_evidence",
+    "technology_evidence",
+    "unknowns",
+)
+_CONFIDENCE_LABELS = {"high": "높음", "medium": "보통", "low": "낮음"}
+_REVIEW_ITEM_TYPE_LABELS = {
+    "career_evidence": "경력 근거",
+    "achievement_evidence": "성과 근거",
+    "technology_evidence": "기술 사용 근거",
+    "unknowns": "추가 확인 질문",
+}
 
 
 def _mapping(value: Any, name: str) -> Mapping[str, Any]:
     if not isinstance(value, Mapping):
         raise SlackEventError(f"{name} 객체가 필요함")
     return value
+
+
+def _safe_slack_text(value: Any, name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise SlackEventError(f"{name} 문자열이 필요함")
+    normalized = " ".join(value.split())
+    return (
+        normalized.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
+def _optional_line(
+    lines: list[str],
+    item: Mapping[str, Any],
+    field: str,
+    label: str,
+) -> None:
+    value = item.get(field)
+    if value is not None:
+        lines.append(f"- {label}: {_safe_slack_text(value, field)}")
+
+
+def build_slack_profile_analysis_review_item(draft: Mapping[str, Any]) -> str:
+    """Render the first review item without exposing internal identifiers."""
+
+    try:
+        validated = validate_profile_analysis_draft(draft)
+    except ProfileDocumentError as error:
+        raise SlackEventError("프로필 분석 초안을 안전하게 검토할 수 없음") from error
+    root = _mapping(validated.get("profile_analysis_draft"), "profile_analysis_draft")
+    if root.get("status") != "needs_review":
+        raise SlackEventError("검토 대기 상태인 프로필 분석 초안이 아님")
+    analysis = _mapping(validated.get("analysis"), "analysis")
+    flattened: list[tuple[str, int, Mapping[str, Any]]] = []
+    for item_type in _REVIEW_ITEM_TYPES:
+        items = analysis.get(item_type)
+        if not isinstance(items, list):
+            raise SlackEventError(f"analysis.{item_type} 배열이 필요함")
+        for item_position, raw_item in enumerate(items, start=1):
+            flattened.append(
+                (
+                    item_type,
+                    item_position,
+                    _mapping(raw_item, f"analysis.{item_type}[{item_position - 1}]"),
+                )
+            )
+    if not flattened:
+        return NO_PROFILE_ANALYSIS_ITEMS_REPLY
+
+    item_type, item_position, item = flattened[0]
+    confidence = item.get("confidence")
+    confidence_label = _CONFIDENCE_LABELS.get(confidence)
+    if confidence_label is None:
+        raise SlackEventError("프로필 분석 항목 신뢰도가 올바르지 않음")
+    lines = [
+        f"프로필 분석 항목 1/{len(flattened)}",
+        "",
+    ]
+    if item_type == "career_evidence":
+        lines.append("유형: 경력 근거")
+        _optional_line(lines, item, "role_or_context", "역할 또는 맥락")
+        _optional_line(lines, item, "period_expression", "기간 표현")
+        _optional_line(lines, item, "responsibility_evidence", "수행 내용")
+    elif item_type == "achievement_evidence":
+        lines.append("유형: 성과 근거")
+        _optional_line(lines, item, "problem_evidence", "문제 또는 배경")
+        _optional_line(lines, item, "action_evidence", "행동")
+        _optional_line(lines, item, "result_evidence", "결과")
+    elif item_type == "technology_evidence":
+        lines.append("유형: 기술 사용 근거")
+        _optional_line(lines, item, "technology_name", "기술")
+        _optional_line(lines, item, "usage_evidence", "사용 근거")
+        lines.append("- 숙련도: 사용자 확인 전 미확정")
+    else:
+        lines.append("유형: 추가 확인 질문")
+        _optional_line(lines, item, "question", "질문")
+        _optional_line(lines, item, "reason", "확인 이유")
+    lines.extend(
+        [
+            f"- AI 판단 신뢰도: {confidence_label}",
+            "",
+            f"검토 항목: {_REVIEW_ITEM_TYPE_LABELS[item_type]} {item_position}번",
+            "현재는 내용 확인 단계이며 승인 또는 거부는 기록하지 않았습니다.",
+            "아직 개인 프로필과 공고 검색 조건에는 반영하지 않았습니다.",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def build_slack_profile_analysis_summary(draft: Mapping[str, Any]) -> str:
@@ -105,3 +212,25 @@ def build_latest_slack_profile_analysis_summary(
     if draft is None:
         return NO_PROFILE_ANALYSIS_DRAFT_REPLY
     return build_slack_profile_analysis_summary(draft)
+
+
+def build_latest_slack_profile_analysis_review_item(
+    extraction_directory: str,
+    draft_directory: str,
+) -> str:
+    """Load the latest verified draft and render its first review item."""
+
+    try:
+        extraction = select_latest_profile_text_extraction(extraction_directory)
+        if extraction is None:
+            return NO_PROFILE_EXTRACTION_REPLY
+        extraction_id = extraction["profile_extraction"]["extraction_id"]
+        draft = select_latest_profile_analysis_draft(
+            extraction_id,
+            draft_directory,
+        )
+    except ProfileDocumentError as error:
+        raise SlackEventError("저장된 프로필 분석 초안을 안전하게 확인할 수 없음") from error
+    if draft is None:
+        return NO_PROFILE_ANALYSIS_DRAFT_REPLY
+    return build_slack_profile_analysis_review_item(draft)

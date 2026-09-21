@@ -13,7 +13,9 @@ sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
 from career_agent.interfaces import (  # noqa: E402
     PROFILE_DRAFT_ACTION,
+    PROFILE_REVIEW_ACTION,
     SlackEventError,
+    build_latest_slack_profile_analysis_review_item,
     build_latest_slack_profile_analysis_summary,
     create_slack_bolt_app,
     import_slack_profile_document,
@@ -129,6 +131,14 @@ def _run_slack_action(action: str) -> Mapping[str, str]:
                 str(DEFAULT_PROFILE_ANALYSIS_DRAFT_DIRECTORY),
             ),
         }
+    if action == PROFILE_REVIEW_ACTION:
+        return {
+            "status": "completed",
+            "public_message": build_latest_slack_profile_analysis_review_item(
+                str(DEFAULT_PROFILE_EXTRACTION_DIRECTORY),
+                str(DEFAULT_PROFILE_ANALYSIS_DRAFT_DIRECTORY),
+            ),
+        }
     return run_slack_career_action(
         action,
         repository_root=REPOSITORY_ROOT,
@@ -163,6 +173,7 @@ def main() -> int:
         print("Slack Socket Mode 수신기를 시작합니다.")
         print("- 지원 명령: @career_break 다음 공고 찾아줘")
         print("- 지원 명령: @career_break 프로필 초안 보여줘")
+        print("- 지원 명령: @career_break 프로필 검토 시작")
         print("- 지원 입력: @career_break 프로필 분석해줘 + 첨부파일 1개")
         print("- 현재 단계: 공고 1건 분석 또는 첨부파일 저장과 검토 후보 추출")
         print("- 종료: Ctrl+C")

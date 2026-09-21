@@ -22,6 +22,8 @@ NEXT_JOB_ACTION = "analyze_next_greenhouse_review"
 PROFILE_DOCUMENT_COMMAND = "프로필 분석해줘"
 PROFILE_DRAFT_COMMAND = "프로필 초안 보여줘"
 PROFILE_DRAFT_ACTION = "show_latest_profile_analysis_draft"
+PROFILE_REVIEW_COMMAND = "프로필 검토 시작"
+PROFILE_REVIEW_ACTION = "show_next_profile_analysis_review_item"
 
 _EVENT_ID_PATTERN = re.compile(r"^Ev[A-Za-z0-9]{6,62}$")
 _TEAM_ID_PATTERN = re.compile(r"^T[A-Za-z0-9]{6,31}$")
@@ -309,6 +311,10 @@ def build_slack_command_request(
                 reason = "supported_command"
                 action = PROFILE_DRAFT_ACTION
                 command_name = "show_profile_analysis_draft"
+            elif command == PROFILE_REVIEW_COMMAND.casefold() and file_count == 0:
+                reason = "supported_command"
+                action = PROFILE_REVIEW_ACTION
+                command_name = "start_profile_analysis_review"
             elif command in {"", PROFILE_DOCUMENT_COMMAND.casefold()}:
                 action = None
                 command_name = "submit_profile_document"

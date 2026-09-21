@@ -8,6 +8,7 @@ from typing import Any, Callable, Mapping
 
 from .slack_events import (
     PROFILE_DRAFT_ACTION,
+    PROFILE_REVIEW_ACTION,
     SlackEventError,
     build_slack_command_request,
     save_slack_command_request,
@@ -20,9 +21,10 @@ SUPPORTED_COMMAND_REPLY = (
 )
 ACTION_STARTED_REPLY = "요청을 확인했습니다. 다음 공고 1건 분석을 시작합니다."
 PROFILE_DRAFT_STARTED_REPLY = "요청을 확인했습니다. 최신 프로필 분석 초안을 확인합니다."
+PROFILE_REVIEW_STARTED_REPLY = "요청을 확인했습니다. 검토할 프로필 분석 항목을 확인합니다."
 UNSUPPORTED_COMMAND_REPLY = (
-    "현재 지원하는 명령은 `다음 공고 찾아줘`, `프로필 초안 보여줘`와 "
-    "첨부파일 1개를 포함한 `프로필 분석해줘`입니다."
+    "현재 지원하는 명령은 `다음 공고 찾아줘`, `프로필 초안 보여줘`, "
+    "`프로필 검토 시작`과 첨부파일 1개를 포함한 `프로필 분석해줘`입니다."
 )
 PROFILE_DOCUMENT_METADATA_REPLY = (
     "첨부파일 1개의 형식과 크기를 확인했습니다. 현재는 안전한 입력 검증 단계이며 "
@@ -185,6 +187,8 @@ def _reply_text(request: Mapping[str, Any], *, created: bool) -> str | None:
 def _action_started_reply(action: str) -> str:
     if action == PROFILE_DRAFT_ACTION:
         return PROFILE_DRAFT_STARTED_REPLY
+    if action == PROFILE_REVIEW_ACTION:
+        return PROFILE_REVIEW_STARTED_REPLY
     return ACTION_STARTED_REPLY
 
 
@@ -308,7 +312,7 @@ def register_slack_app_mention_listener(
             logger.warning("Slack 내부 동작 실패: %s", error)
             public_message = (
                 "프로필 분석 초안을 확인하지 못했습니다. 로컬 실행 이력을 확인해주세요."
-                if root["action"] == PROFILE_DRAFT_ACTION
+                if root["action"] in {PROFILE_DRAFT_ACTION, PROFILE_REVIEW_ACTION}
                 else "공고 분석을 시작하지 못했습니다. 로컬 실행 이력을 확인해주세요."
             )
         say(
