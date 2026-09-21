@@ -20,6 +20,8 @@ MAX_SLACK_MESSAGE_CHARS = 4000
 NEXT_JOB_COMMAND = "다음 공고 찾아줘"
 NEXT_JOB_ACTION = "analyze_next_greenhouse_review"
 PROFILE_DOCUMENT_COMMAND = "프로필 분석해줘"
+PROFILE_DRAFT_COMMAND = "프로필 초안 보여줘"
+PROFILE_DRAFT_ACTION = "show_latest_profile_analysis_draft"
 
 _EVENT_ID_PATTERN = re.compile(r"^Ev[A-Za-z0-9]{6,62}$")
 _TEAM_ID_PATTERN = re.compile(r"^T[A-Za-z0-9]{6,31}$")
@@ -303,6 +305,10 @@ def build_slack_command_request(
                 reason = "supported_command"
                 action = NEXT_JOB_ACTION
                 command_name = "find_next_job"
+            elif command == PROFILE_DRAFT_COMMAND.casefold() and file_count == 0:
+                reason = "supported_command"
+                action = PROFILE_DRAFT_ACTION
+                command_name = "show_profile_analysis_draft"
             elif command in {"", PROFILE_DOCUMENT_COMMAND.casefold()}:
                 action = None
                 command_name = "submit_profile_document"

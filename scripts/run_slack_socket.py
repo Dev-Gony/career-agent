@@ -12,7 +12,9 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
 from career_agent.interfaces import (  # noqa: E402
+    PROFILE_DRAFT_ACTION,
     SlackEventError,
+    build_latest_slack_profile_analysis_summary,
     create_slack_bolt_app,
     import_slack_profile_document,
     load_slack_interface_config,
@@ -44,6 +46,9 @@ DEFAULT_PROFILE_EXTRACTION_DIRECTORY = (
 )
 DEFAULT_PROFILE_EVIDENCE_DIRECTORY = (
     REPOSITORY_ROOT / "private-data/profile-evidence-summaries"
+)
+DEFAULT_PROFILE_ANALYSIS_DRAFT_DIRECTORY = (
+    REPOSITORY_ROOT / "private-data/profile-analysis-drafts"
 )
 DEFAULT_PROFILE = REPOSITORY_ROOT / "data/user_profile.example.json"
 
@@ -115,6 +120,21 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _run_slack_action(action: str) -> Mapping[str, str]:
+    if action == PROFILE_DRAFT_ACTION:
+        return {
+            "status": "completed",
+            "public_message": build_latest_slack_profile_analysis_summary(
+                str(DEFAULT_PROFILE_EXTRACTION_DIRECTORY),
+                str(DEFAULT_PROFILE_ANALYSIS_DRAFT_DIRECTORY),
+            ),
+        }
+    return run_slack_career_action(
+        action,
+        repository_root=REPOSITORY_ROOT,
+    )
+
+
 def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -128,10 +148,7 @@ def main() -> int:
             app,
             config,
             output_directory=args.output_directory,
-            action_runner=lambda action: run_slack_career_action(
-                action,
-                repository_root=REPOSITORY_ROOT,
-            ),
+            action_runner=_run_slack_action,
             profile_document_importer=lambda reference, imported_at: (
                 import_slack_profile_document(
                     reference,
@@ -145,6 +162,7 @@ def main() -> int:
         )
         print("Slack Socket Mode 수신기를 시작합니다.")
         print("- 지원 명령: @career_break 다음 공고 찾아줘")
+        print("- 지원 명령: @career_break 프로필 초안 보여줘")
         print("- 지원 입력: @career_break 프로필 분석해줘 + 첨부파일 1개")
         print("- 현재 단계: 공고 1건 분석 또는 첨부파일 저장과 검토 후보 추출")
         print("- 종료: Ctrl+C")

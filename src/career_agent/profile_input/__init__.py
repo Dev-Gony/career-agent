@@ -19,6 +19,7 @@ from .text_extraction import (
     build_profile_text_extraction,
     load_profile_text_extraction,
     save_profile_text_extraction,
+    select_latest_profile_text_extraction,
 )
 from .update_proposal import (
     PROFILE_UPDATE_PROPOSAL_SCHEMA_VERSION,
@@ -99,6 +100,7 @@ __all__ = [
     "build_profile_text_extraction",
     "load_profile_text_extraction",
     "save_profile_text_extraction",
+    "select_latest_profile_text_extraction",
     "PROFILE_SKILL_MAPPING_RULES_VERSION",
     "PROFILE_SKILL_MAPPING_SCHEMA_VERSION",
     "build_profile_skill_mapping_proposal",

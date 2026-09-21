@@ -472,6 +472,40 @@ class SlackSocketTest(unittest.TestCase):
         self.assertEqual("공고 분석 완료", replies[1]["text"])
         self.assertEqual([], logger.messages)
 
+    def test_registered_listener_shows_profile_draft_in_original_thread(self) -> None:
+        app = _FakeApp()
+        replies: list[dict] = []
+        actions: list[str] = []
+        logger = _FakeLogger()
+
+        def run_action(action: str) -> dict[str, str]:
+            actions.append(action)
+            return {
+                "status": "completed",
+                "public_message": "프로필 분석 초안이 준비되었습니다.\n- 경력 근거: 1개",
+            }
+
+        with tempfile.TemporaryDirectory() as directory:
+            listener = register_slack_app_mention_listener(
+                app,
+                _config(),
+                output_directory=directory,
+                now=lambda: RECEIVED_AT,
+                action_runner=run_action,
+            )
+            listener(
+                _event("<@U01234567> 프로필 초안 보여줘"),
+                lambda **values: replies.append(values),
+                logger,
+            )
+
+        self.assertEqual(["show_latest_profile_analysis_draft"], actions)
+        self.assertEqual(2, len(replies))
+        self.assertIn("최신 프로필 분석 초안", replies[0]["text"])
+        self.assertIn("경력 근거: 1개", replies[1]["text"])
+        self.assertEqual("1789372800.000100", replies[1]["thread_ts"])
+        self.assertEqual([], logger.messages)
+
     def test_registered_listener_reports_safe_action_failure(self) -> None:
         app = _FakeApp()
         replies: list[dict] = []

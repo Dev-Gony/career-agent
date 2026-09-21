@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from datetime import datetime, timezone
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 
 
@@ -11,7 +13,15 @@ sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
 from career_agent.interfaces import (  # noqa: E402
     SlackEventError,
+    build_latest_slack_profile_analysis_summary,
     build_slack_profile_analysis_summary,
+)
+from career_agent.profile_input import (  # noqa: E402
+    build_profile_analysis_draft,
+    build_profile_document_import,
+    build_profile_text_extraction,
+    save_profile_analysis_draft,
+    save_profile_text_extraction,
 )
 
 
@@ -103,6 +113,89 @@ class SlackProfileAnalysisTest(unittest.TestCase):
                 draft["metadata"][field] = value
                 with self.assertRaisesRegex(SlackEventError, message):
                     build_slack_profile_analysis_summary(draft)
+
+    def test_latest_summary_distinguishes_missing_extraction_and_draft(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            extraction_directory = root / "extractions"
+            draft_directory = root / "drafts"
+            no_extraction = build_latest_slack_profile_analysis_summary(
+                str(extraction_directory),
+                str(draft_directory),
+            )
+
+            source = root / "resume.md"
+            source.write_text("## 기술\n- Python\n", encoding="utf-8")
+            manifest, content = build_profile_document_import(
+                source,
+                document_kind="resume",
+                imported_at=datetime(2026, 9, 21, 8, tzinfo=timezone.utc),
+            )
+            extraction = build_profile_text_extraction(
+                manifest,
+                content,
+                extracted_at=datetime(2026, 9, 21, 9, tzinfo=timezone.utc),
+            )
+            save_profile_text_extraction(extraction, extraction_directory)
+            no_draft = build_latest_slack_profile_analysis_summary(
+                str(extraction_directory),
+                str(draft_directory),
+            )
+
+        self.assertIn("추출 결과가 없습니다", no_extraction)
+        self.assertIn("분석 초안이 아직 없습니다", no_draft)
+
+    def test_latest_summary_uses_verified_draft_without_exposing_text(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "resume.md"
+            source.write_text(
+                "## 경력\n- QA Engineer로 API 테스트를 수행했습니다.\n",
+                encoding="utf-8",
+            )
+            manifest, content = build_profile_document_import(
+                source,
+                document_kind="resume",
+                imported_at=datetime(2026, 9, 21, 8, tzinfo=timezone.utc),
+            )
+            extraction = build_profile_text_extraction(
+                manifest,
+                content,
+                extracted_at=datetime(2026, 9, 21, 9, tzinfo=timezone.utc),
+            )
+            extraction_directory = root / "extractions"
+            draft_directory = root / "drafts"
+            save_profile_text_extraction(extraction, extraction_directory)
+            draft = build_profile_analysis_draft(
+                extraction,
+                {
+                    "career_evidence": [
+                        {
+                            "role_or_context": "QA Engineer",
+                            "period_expression": None,
+                            "responsibility_evidence": "API 테스트를 수행했습니다.",
+                            "candidate_ids": ["candidate-001"],
+                            "confidence": "high",
+                        }
+                    ],
+                    "achievement_evidence": [],
+                    "technology_evidence": [],
+                    "unknowns": [],
+                },
+                analyzed_at=datetime(2026, 9, 21, 10, tzinfo=timezone.utc),
+                provider_name="synthetic",
+                model_name="fixture-v1",
+                data_boundary="local",
+            )
+            save_profile_analysis_draft(draft, draft_directory)
+            message = build_latest_slack_profile_analysis_summary(
+                str(extraction_directory),
+                str(draft_directory),
+            )
+
+        self.assertIn("경력 근거: 1개", message)
+        self.assertNotIn("QA Engineer", message)
+        self.assertNotIn("API 테스트", message)
 
 
 if __name__ == "__main__":

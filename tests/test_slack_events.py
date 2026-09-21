@@ -98,6 +98,22 @@ class SlackEventsTest(unittest.TestCase):
             request["slack_command_request"]["action"],
         )
 
+    def test_maps_profile_draft_command_without_message_text(self) -> None:
+        request = build_slack_command_request(
+            _event("<@U01234567> 프로필 초안 보여줘"),
+            _config(),
+            received_at=RECEIVED_AT,
+        )
+
+        root = request["slack_command_request"]
+        self.assertEqual("action_identified", root["routing_status"])
+        self.assertEqual("show_profile_analysis_draft", root["command_name"])
+        self.assertEqual("show_latest_profile_analysis_draft", root["action"])
+        self.assertNotIn(
+            "프로필 초안 보여줘",
+            json.dumps(request, ensure_ascii=False),
+        )
+
     def test_validates_one_profile_document_without_content_or_download_url(self) -> None:
         event = _event("<@U01234567> 프로필 분석해줘")
         event["event"]["files"] = [_profile_file()]

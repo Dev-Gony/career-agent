@@ -22,6 +22,7 @@ PROFILE_TEXT_EXTRACTION_SCHEMA_VERSION = "0.1"
 PROFILE_TEXT_EXTRACTION_RULES_VERSION = "0.3"
 MAX_DOCX_DOCUMENT_XML_BYTES = 8 * 1024 * 1024
 MAX_DOCX_PARAGRAPHS = 20_000
+_MAX_STORED_EXTRACTION_FILES = 1000
 _SUPPORTED_FORMATS = {"plain_text", "markdown", "docx"}
 _WORDPROCESSINGML_NAMESPACE = (
     "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -432,6 +433,8 @@ def load_profile_text_extraction(
     if _EXTRACTION_ID_PATTERN.fullmatch(normalized_id) is None:
         raise ProfileDocumentError("extraction_id 형식이 올바르지 않음")
     path = Path(directory) / f"{normalized_id}.json"
+    if path.is_symlink():
+        raise ProfileDocumentError("프로필 추출 결과 심볼릭 링크는 읽을 수 없음")
     try:
         extraction = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
@@ -443,6 +446,19 @@ def load_profile_text_extraction(
     metadata = _mapping(extraction.get("metadata"), "metadata")
     if root.get("extraction_id") != normalized_id:
         raise ProfileDocumentError("추출 결과의 extraction_id가 요청과 일치하지 않음")
+    if root.get("rules_version") != PROFILE_TEXT_EXTRACTION_RULES_VERSION:
+        raise ProfileDocumentError("현재 규칙 버전의 프로필 추출 결과가 아님")
+    if root.get("status") != "needs_review":
+        raise ProfileDocumentError("검토 대기 상태인 프로필 추출 결과가 아님")
+    extracted_at_text = _text(
+        root.get("extracted_at"), "profile_extraction.extracted_at"
+    )
+    try:
+        extracted_at = datetime.fromisoformat(extracted_at_text)
+    except ValueError as error:
+        raise ProfileDocumentError("프로필 추출 시간이 올바르지 않음") from error
+    if extracted_at.tzinfo is None or extracted_at.utcoffset() is None:
+        raise ProfileDocumentError("프로필 추출 시간에 시간대가 필요함")
     if metadata.get("schema_version") != PROFILE_TEXT_EXTRACTION_SCHEMA_VERSION:
         raise ProfileDocumentError("현재 버전의 프로필 추출 결과가 아님")
     if metadata.get("git_tracking_allowed") is not False:
@@ -450,6 +466,11 @@ def load_profile_text_extraction(
     if metadata.get("profile_updated") is not False:
         raise ProfileDocumentError("검토 전 추출 결과는 프로필 갱신 상태일 수 없음")
     document_id = _text(source.get("document_id"), "source_document.document_id")
+    expected_id = "profile-text-extraction-" + sha256(
+        f"{document_id}|{PROFILE_TEXT_EXTRACTION_RULES_VERSION}".encode("utf-8")
+    ).hexdigest()[:24]
+    if normalized_id != expected_id:
+        raise ProfileDocumentError("프로필 추출 ID와 문서 지문이 일치하지 않음")
     candidates = extraction.get("candidates")
     if not isinstance(candidates, list):
         raise ProfileDocumentError("candidates 배열이 필요함")
@@ -490,4 +511,51 @@ def load_profile_text_extraction(
             raise ProfileDocumentError(
                 f"candidates[{position}]의 원문 줄 범위가 올바르지 않음"
             )
+    summary = _mapping(extraction.get("summary"), "summary")
+    candidate_count = summary.get("candidate_count")
+    if (
+        isinstance(candidate_count, bool)
+        or not isinstance(candidate_count, int)
+        or candidate_count != len(candidates)
+    ):
+        raise ProfileDocumentError("프로필 추출 후보 합계가 일치하지 않음")
     return extraction
+
+
+def select_latest_profile_text_extraction(
+    directory: str | Path,
+) -> dict[str, Any] | None:
+    """Select the newest verified extraction for the single-user local MVP."""
+
+    target_directory = Path(directory)
+    if not target_directory.exists():
+        return None
+    if not target_directory.is_dir() or target_directory.is_symlink():
+        raise ProfileDocumentError("프로필 추출 경로가 안전한 디렉터리가 아님")
+    paths = sorted(target_directory.glob("profile-text-extraction-*.json"))
+    if len(paths) > _MAX_STORED_EXTRACTION_FILES:
+        raise ProfileDocumentError("프로필 추출 파일이 허용 개수를 초과함")
+
+    verified: list[tuple[datetime, str, dict[str, Any]]] = []
+    for path in paths:
+        if path.is_symlink():
+            raise ProfileDocumentError("프로필 추출 결과 심볼릭 링크는 읽을 수 없음")
+        try:
+            stored = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise ProfileDocumentError(
+                f"프로필 추출 결과를 읽을 수 없음: {path}"
+            ) from error
+        stored_root = _mapping(
+            stored.get("profile_extraction"),
+            "profile_extraction",
+        )
+        if stored_root.get("rules_version") != PROFILE_TEXT_EXTRACTION_RULES_VERSION:
+            continue
+        extraction = load_profile_text_extraction(path.stem, target_directory)
+        extracted_at_text = extraction["profile_extraction"]["extracted_at"]
+        extracted_at = datetime.fromisoformat(extracted_at_text)
+        verified.append((extracted_at, path.stem, extraction))
+    if not verified:
+        return None
+    return max(verified, key=lambda item: (item[0], item[1]))[2]

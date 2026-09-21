@@ -21,6 +21,7 @@ from career_agent.profile_input import (  # noqa: E402
     load_profile_document_import,
     save_profile_document_import,
     save_profile_text_extraction,
+    select_latest_profile_text_extraction,
 )
 
 
@@ -320,6 +321,75 @@ class ProfileTextExtractionTest(unittest.TestCase):
 
             with self.assertRaisesRegex(ProfileDocumentError, "candidates"):
                 save_profile_text_extraction(extraction, directory)
+
+    def test_selects_latest_verified_extraction(self) -> None:
+        first_manifest, first_content = _text_manifest("## 기술\n- Python\n")
+        second_manifest, second_content = _text_manifest("## 기술\n- SQL\n")
+        first = build_profile_text_extraction(
+            first_manifest,
+            first_content,
+            extracted_at=EXTRACTED_AT,
+        )
+        second = build_profile_text_extraction(
+            second_manifest,
+            second_content,
+            extracted_at=datetime(2026, 9, 15, 15, tzinfo=timezone.utc),
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertIsNone(
+                select_latest_profile_text_extraction(Path(directory) / "missing")
+            )
+            save_profile_text_extraction(first, directory)
+            save_profile_text_extraction(second, directory)
+            selected = select_latest_profile_text_extraction(directory)
+
+        self.assertEqual(
+            second["profile_extraction"]["extraction_id"],
+            selected["profile_extraction"]["extraction_id"],
+        )
+
+    def test_latest_selector_rejects_tampered_extraction(self) -> None:
+        manifest, content = _text_manifest("## 기술\n- Python\n")
+        extraction = build_profile_text_extraction(
+            manifest,
+            content,
+            extracted_at=EXTRACTED_AT,
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            path, _ = save_profile_text_extraction(extraction, directory)
+            stored = json.loads(path.read_text(encoding="utf-8"))
+            stored["summary"]["candidate_count"] = 99
+            path.write_text(json.dumps(stored, ensure_ascii=False), encoding="utf-8")
+            with self.assertRaisesRegex(ProfileDocumentError, "후보 합계"):
+                select_latest_profile_text_extraction(directory)
+
+    def test_latest_selector_ignores_previous_rules_version(self) -> None:
+        manifest, content = _text_manifest("## 기술\n- Python\n")
+        extraction = build_profile_text_extraction(
+            manifest,
+            content,
+            extracted_at=EXTRACTED_AT,
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            path, _ = save_profile_text_extraction(extraction, directory)
+            previous = json.loads(path.read_text(encoding="utf-8"))
+            previous["profile_extraction"]["rules_version"] = "0.2"
+            previous_path = Path(directory) / (
+                "profile-text-extraction-aaaaaaaaaaaaaaaaaaaaaaaa.json"
+            )
+            previous_path.write_text(
+                json.dumps(previous, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            selected = select_latest_profile_text_extraction(directory)
+
+        self.assertEqual(
+            extraction["profile_extraction"]["extraction_id"],
+            selected["profile_extraction"]["extraction_id"],
+        )
 
 
 if __name__ == "__main__":

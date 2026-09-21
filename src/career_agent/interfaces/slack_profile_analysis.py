@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from career_agent.profile_input import PROFILE_ANALYSIS_DRAFT_SCHEMA_VERSION
+from career_agent.profile_input import (
+    PROFILE_ANALYSIS_DRAFT_SCHEMA_VERSION,
+    ProfileDocumentError,
+    select_latest_profile_analysis_draft,
+    select_latest_profile_text_extraction,
+)
 
 from .slack_events import SlackEventError
 
@@ -21,6 +26,14 @@ _ANALYSIS_FIELDS = {
     "technology_evidence_count": "technology_evidence",
     "unknown_count": "unknowns",
 }
+NO_PROFILE_EXTRACTION_REPLY = (
+    "아직 확인할 프로필 문서 추출 결과가 없습니다. "
+    "먼저 `프로필 분석해줘`와 함께 파일 1개를 첨부해주세요."
+)
+NO_PROFILE_ANALYSIS_DRAFT_REPLY = (
+    "가장 최근 프로필 문서는 확인했지만 검증된 분석 초안이 아직 없습니다. "
+    "현재 문단 분류 결과만 저장되어 있으며 개인 프로필에는 반영되지 않았습니다."
+)
 
 
 def _mapping(value: Any, name: str) -> Mapping[str, Any]:
@@ -70,3 +83,25 @@ def build_slack_profile_analysis_summary(draft: Mapping[str, Any]) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def build_latest_slack_profile_analysis_summary(
+    extraction_directory: str,
+    draft_directory: str,
+) -> str:
+    """Load the latest verified private draft and return a count-only summary."""
+
+    try:
+        extraction = select_latest_profile_text_extraction(extraction_directory)
+        if extraction is None:
+            return NO_PROFILE_EXTRACTION_REPLY
+        extraction_id = extraction["profile_extraction"]["extraction_id"]
+        draft = select_latest_profile_analysis_draft(
+            extraction_id,
+            draft_directory,
+        )
+    except ProfileDocumentError as error:
+        raise SlackEventError("저장된 프로필 분석 초안을 안전하게 확인할 수 없음") from error
+    if draft is None:
+        return NO_PROFILE_ANALYSIS_DRAFT_REPLY
+    return build_slack_profile_analysis_summary(draft)
