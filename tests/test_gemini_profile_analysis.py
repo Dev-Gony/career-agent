@@ -9,7 +9,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
@@ -123,25 +123,61 @@ class GeminiProfileAnalysisTest(unittest.TestCase):
         request, timeout = calls[0]
         self.assertEqual(
             "https://generativelanguage.googleapis.com/v1beta/models/"
-            "gemini-3.8-flash:generateContent",
+            "gemini-3.5-flash-lite:generateContent",
             request.full_url,
         )
         self.assertEqual(30.0, timeout)
         self.assertEqual(API_KEY, request.get_header("X-goog-api-key"))
         body = json.loads(request.data.decode("utf-8"))
-        self.assertIs(False, body["store"])
+        self.assertNotIn("store", body)
         self.assertNotIn("tools", body)
         self.assertEqual("application/json", body["generationConfig"]["responseMimeType"])
         self.assertEqual(
             {"thinkingLevel": "low"},
             body["generationConfig"]["thinkingConfig"],
         )
+        gemini_schema = body["generationConfig"]["responseJsonSchema"]
+        serialized_schema = json.dumps(gemini_schema)
+        for unsupported_key in (
+            "anyOf",
+            "minLength",
+            "maxLength",
+            "pattern",
+            "uniqueItems",
+            "minItems",
+            "maxItems",
+        ):
+            self.assertNotIn(f'"{unsupported_key}"', serialized_schema)
+        role_schema = gemini_schema["properties"]["career_evidence"]["items"][
+            "properties"
+        ]["role_or_context"]
+        self.assertEqual(["string", "null"], role_schema["type"])
         sent_request = json.loads(body["contents"][0]["parts"][0]["text"])
         self.assertEqual(_request(), sent_request)
         serialized = json.dumps(body, ensure_ascii=False)
         self.assertNotIn(API_KEY, serialized)
         self.assertNotIn("document_id", serialized)
         self.assertNotIn("extraction_id", serialized)
+
+    def test_uses_low_thinking_level_for_gemini_3_8(self) -> None:
+        calls = []
+
+        def open_url(request, *, timeout):
+            calls.append((request, timeout))
+            return _Response(_api_payload())
+
+        provider = GeminiDevelopmentProfileAnalysisProvider(
+            API_KEY,
+            model_name="gemini-3.8-flash",
+            open_url=open_url,
+        )
+        provider.analyze(_request(), profile_analysis_response_json_schema())
+
+        body = json.loads(calls[0][0].data.decode("utf-8"))
+        self.assertEqual(
+            {"thinkingLevel": "low"},
+            body["generationConfig"]["thinkingConfig"],
+        )
 
     def test_rejects_extra_request_fields_before_network_call(self) -> None:
         calls = []
@@ -178,6 +214,7 @@ class GeminiProfileAnalysisTest(unittest.TestCase):
         provider = GeminiDevelopmentProfileAnalysisProvider(
             API_KEY,
             open_url=fail_request,
+            max_retries=0,
         )
         with self.assertRaises(ProfileDocumentError) as raised:
             provider.analyze(_request(), profile_analysis_response_json_schema())
@@ -186,6 +223,48 @@ class GeminiProfileAnalysisTest(unittest.TestCase):
         self.assertIn("URLError", message)
         self.assertNotIn(API_KEY, message)
         self.assertNotIn("Python", message)
+
+    def test_retries_transient_http_errors_with_bounded_backoff(self) -> None:
+        calls = []
+        delays = []
+
+        def open_url(request, *, timeout):
+            calls.append((request, timeout))
+            if len(calls) < 3:
+                raise HTTPError(request.full_url, 503, "unavailable", {}, None)
+            return _Response(_api_payload())
+
+        provider = GeminiDevelopmentProfileAnalysisProvider(
+            API_KEY,
+            open_url=open_url,
+            sleep=delays.append,
+            jitter=lambda: 0.0,
+        )
+        result = provider.analyze(
+            _request(),
+            profile_analysis_response_json_schema(),
+        )
+
+        self.assertEqual(_structured_output(), result)
+        self.assertEqual(3, len(calls))
+        self.assertEqual([1.0, 2.0], delays)
+
+    def test_does_not_retry_permanent_http_error(self) -> None:
+        calls = []
+
+        def open_url(request, *, timeout):
+            calls.append((request, timeout))
+            raise HTTPError(request.full_url, 400, "bad request", {}, None)
+
+        provider = GeminiDevelopmentProfileAnalysisProvider(
+            API_KEY,
+            open_url=open_url,
+            sleep=lambda _delay: self.fail("영구 오류에서 재시도하면 안 됨"),
+        )
+        with self.assertRaisesRegex(ProfileDocumentError, "HTTP 400"):
+            provider.analyze(_request(), profile_analysis_response_json_schema())
+
+        self.assertEqual(1, len(calls))
 
     def test_loads_key_from_environment_or_private_env_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -242,7 +321,7 @@ class GeminiProfileAnalysisTest(unittest.TestCase):
 
         class SyntheticProvider:
             provider_name = "google-gemini-development"
-            model_name = "gemini-3.8-flash"
+            model_name = "gemini-3.5-flash-lite"
             sends_data_externally = True
 
             def __init__(self, api_key: str) -> None:

@@ -419,7 +419,7 @@ Gemini 무료 API는 기능 개발 테스트에만 사용합니다. 실제 이�
     python scripts/build_gemini_synthetic_profile_analysis_draft.py `
       --confirm-public-synthetic-data
 
-기본 모델은 `gemini-3.8-flash`, 추론 수준은 `low`, 응답 형식은 JSON Schema, 도구 사용은 없음으로 고정합니다. 결과는 일반 사용자 초안과 분리된 `private-data/gemini-development-drafts/`에 저장되고 개인 프로필은 변경하지 않습니다. Gemini 무료 등급에는 민감하거나 개인적인 자료를 전송하지 않습니다.
+기본 모델은 신규 사용자에게 제공되는 `gemini-3.5-flash-lite`, 추론 수준은 `low`, 응답 형식은 JSON Schema, 도구 사용은 없음으로 고정합니다. Gemini가 거부하는 일부 스키마 제약은 공급자 요청에서만 제거하고 더 엄격한 원문 근거·항목 수 검증은 로컬에서 다시 수행합니다. 결과는 일반 사용자 초안과 분리된 `private-data/gemini-development-drafts/`에 저장되고 개인 프로필은 변경하지 않습니다. Gemini 무료 등급에는 민감하거나 개인적인 자료를 전송하지 않습니다.
 
 상세 분석된 공고에 사용자의 실제 판단을 별도 기록합니다. `fit`은 적합, `hold`는 보류, `not_fit`은 부적합입니다.
 

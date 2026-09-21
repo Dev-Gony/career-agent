@@ -33,16 +33,16 @@ LLM 결과는 사용자 사실의 최종 확정값이 아니다. 모든 항목�
 - Gemini API 가격 및 무료 등급: https://ai.google.dev/gemini-api/docs/pricing
 - Gemini Generate Content API: https://ai.google.dev/api/generate-content
 - Gemini 구조화 출력: https://ai.google.dev/gemini-api/docs/structured-output
-- Gemini 3.8 Flash: https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash
+- Gemini 모델 목록: https://ai.google.dev/gemini-api/docs/models
+- Gemini API 오류 해결: https://ai.google.dev/gemini-api/docs/troubleshooting
 
 ## 4. 현재 개발용 구성
 
 - 공급자: Gemini API 무료 등급
 - 입력: Git에 포함된 공개 합성 문서 `data/profile_document.example.md`만 허용
-- 개발 모델: `gemini-3.8-flash`
+- 개발 모델: `gemini-3.5-flash-lite`
 - API: `generateContent`
 - 응답 형식: JSON Schema
-- 저장 옵션: `store: false`
 - reasoning effort: `low`
 - 외부 검색, 파일 검색, 코드 실행과 다른 도구: 사용하지 않음
 
@@ -83,6 +83,6 @@ OpenAI 어댑터는 공급자 중립 경계를 검증한 구현으로 보존하�
 
 OpenAI Responses API 어댑터와 로컬 실행 명령을 추가했다. 요청은 `https://api.openai.com/v1/responses` 한 곳만 사용하고 리디렉션을 따르지 않으며, `store: false`, strict JSON Schema, 도구 없음과 낮은 추론 수준을 고정한다. 후보 ID·프로필 섹션·후보 문장 외 필드가 공급자 요청에 들어가면 네트워크 호출 전에 거부한다. API 오류 본문, API Key와 후보 문장은 콘솔 오류에 출력하지 않는다.
 
-Gemini 개발 전용 어댑터와 실행 명령도 추가했다. `gemini-3.8-flash`, `thinkingLevel: low`, JSON Schema와 도구 없는 단일 요청을 사용한다. 실행 입력은 공개 합성 문서로 고정하고 별도 개발 초안 폴더에만 결과를 저장한다. 실제 이력서와 비공개 추출 결과를 선택하는 인자는 제공하지 않으며 공개 예제 요청 지문과 다른 후보 문장은 네트워크 호출 전에 거부한다.
+Gemini 개발 전용 어댑터와 실행 명령도 추가했다. 신규 사용자에게 제공되는 `gemini-3.5-flash-lite`, `thinkingLevel: low`, JSON Schema와 도구 없는 단일 요청을 사용한다. 실행 입력은 공개 합성 문서로 고정하고 별도 개발 초안 폴더에만 결과를 저장한다. 실제 이력서와 비공개 추출 결과를 선택하는 인자는 제공하지 않으며 공개 예제 요청 지문과 다른 후보 문장은 네트워크 호출 전에 거부한다. Gemini 요청에서 지원되지 않은 문자열·배열 제약은 제거하지만 동일한 제한과 원문 근거 검증은 로컬에서 다시 수행한다.
 
-현재 실제 Gemini 네트워크 호출은 확인 전이며 실제 이력서 전송과 과금은 발생하지 않았다. Slack 승인 대화는 아직 연결하지 않았다.
+공개 합성 문서의 실제 Gemini 호출과 비공개 개발 초안 저장을 확인했다. 실제 이력서 전송과 개인 프로필 변경은 발생하지 않았다. Slack 승인 대화는 아직 연결하지 않았다.

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import os
+import random
+import time
 from hashlib import sha256
 from pathlib import Path
 from typing import Any, Callable, Mapping
@@ -18,14 +20,28 @@ GEMINI_GENERATE_CONTENT_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
     "{model}:generateContent"
 )
-GEMINI_DEVELOPMENT_MODELS = frozenset({"gemini-3.8-flash"})
-DEFAULT_GEMINI_DEVELOPMENT_MODEL = "gemini-3.8-flash"
+GEMINI_DEVELOPMENT_MODELS = frozenset(
+    {"gemini-3.5-flash-lite", "gemini-3.8-flash"}
+)
+DEFAULT_GEMINI_DEVELOPMENT_MODEL = "gemini-3.5-flash-lite"
 MAX_GEMINI_RESPONSE_BYTES = 1024 * 1024
 MAX_GEMINI_ENV_FILE_BYTES = 16 * 1024
 _MAX_REQUEST_CANDIDATES = 50
 _MAX_CANDIDATE_TEXT_CHARS = 2000
+_TRANSIENT_HTTP_STATUSES = frozenset({408, 429, 500, 502, 503, 504})
+_DEFAULT_MAX_RETRIES = 2
 _PUBLIC_SYNTHETIC_REQUEST_SHA256 = (
     "f8cd84d82ec6b550e1c2627053706cb1abde94f05833c89d0a586496791f11bb"
+)
+_UNSUPPORTED_GEMINI_SCHEMA_KEYS = frozenset(
+    {
+        "minLength",
+        "maxLength",
+        "pattern",
+        "uniqueItems",
+        "minItems",
+        "maxItems",
+    }
 )
 
 _SYSTEM_INSTRUCTION = """당신은 공개 합성 경력 문서의 근거 추출기입니다.
@@ -183,6 +199,39 @@ def _output_text(payload: Mapping[str, Any]) -> str:
     return texts[0]
 
 
+def _gemini_response_schema(value: Any) -> Any:
+    """Convert the local strict schema to Gemini's documented JSON subset."""
+
+    if isinstance(value, list):
+        return [_gemini_response_schema(item) for item in value]
+    if not isinstance(value, Mapping):
+        return value
+    any_of = value.get("anyOf")
+    if isinstance(any_of, list) and len(any_of) == 2:
+        types = [
+            item.get("type")
+            for item in any_of
+            if isinstance(item, Mapping)
+            and (set(item) - _UNSUPPORTED_GEMINI_SCHEMA_KEYS) == {"type"}
+        ]
+        if set(types) == {"string", "null"}:
+            converted = {
+                key: _gemini_response_schema(item)
+                for key, item in value.items()
+                if key != "anyOf" and key not in _UNSUPPORTED_GEMINI_SCHEMA_KEYS
+            }
+            converted["type"] = ["string", "null"]
+            return converted
+    converted = {}
+    for key, item in value.items():
+        if key in _UNSUPPORTED_GEMINI_SCHEMA_KEYS:
+            continue
+        if key == "anyOf":
+            raise ProfileDocumentError("Gemini가 지원하지 않는 JSON Schema anyOf")
+        converted[key] = _gemini_response_schema(item)
+    return converted
+
+
 class GeminiDevelopmentProfileAnalysisProvider:
     """Call Gemini only for the repository's fixed public synthetic fixture."""
 
@@ -195,6 +244,9 @@ class GeminiDevelopmentProfileAnalysisProvider:
         *,
         model_name: str = DEFAULT_GEMINI_DEVELOPMENT_MODEL,
         open_url: Callable[..., Any] = _open_without_redirect,
+        sleep: Callable[[float], None] = time.sleep,
+        jitter: Callable[[], float] = random.random,
+        max_retries: int = _DEFAULT_MAX_RETRIES,
         timeout_seconds: float = 30.0,
     ) -> None:
         self._api_key = _valid_api_key(api_key)
@@ -206,8 +258,17 @@ class GeminiDevelopmentProfileAnalysisProvider:
             or not 0 < timeout_seconds <= 60
         ):
             raise ProfileDocumentError("Gemini 요청 제한 시간은 0초 초과 60초 이하여야 함")
+        if (
+            isinstance(max_retries, bool)
+            or not isinstance(max_retries, int)
+            or not 0 <= max_retries <= 3
+        ):
+            raise ProfileDocumentError("Gemini 재시도 횟수는 0 이상 3 이하여야 함")
         self.model_name = model_name
         self._open_url = open_url
+        self._sleep = sleep
+        self._jitter = jitter
+        self._max_retries = max_retries
         self._timeout_seconds = float(timeout_seconds)
 
     def analyze(
@@ -221,7 +282,6 @@ class GeminiDevelopmentProfileAnalysisProvider:
         if not isinstance(response_schema, Mapping):
             raise ProfileDocumentError("Gemini 응답 JSON Schema 객체가 필요함")
         body = {
-            "store": False,
             "systemInstruction": {"parts": [{"text": _SYSTEM_INSTRUCTION}]},
             "contents": [
                 {
@@ -241,7 +301,7 @@ class GeminiDevelopmentProfileAnalysisProvider:
                 "candidateCount": 1,
                 "maxOutputTokens": 8000,
                 "responseMimeType": "application/json",
-                "responseJsonSchema": dict(response_schema),
+                "responseJsonSchema": _gemini_response_schema(response_schema),
                 "thinkingConfig": {"thinkingLevel": "low"},
             },
         }
@@ -258,28 +318,50 @@ class GeminiDevelopmentProfileAnalysisProvider:
             },
             method="POST",
         )
-        try:
-            with self._open_url(
-                http_request,
-                timeout=self._timeout_seconds,
-            ) as response:
-                status = getattr(response, "status", None)
-                if status is None:
-                    status = response.getcode()
-                if status != 200:
-                    raise ProfileDocumentError(
-                        f"Gemini 프로필 분석 HTTP 상태가 올바르지 않음: {status}"
-                    )
-                content_type = response.headers.get("Content-Type", "")
-                if "application/json" not in content_type.casefold():
-                    raise ProfileDocumentError("Gemini 프로필 분석 응답이 JSON이 아님")
-                raw = response.read(MAX_GEMINI_RESPONSE_BYTES + 1)
-        except ProfileDocumentError:
-            raise
-        except (HTTPError, URLError, OSError) as error:
-            raise ProfileDocumentError(
-                f"Gemini 프로필 분석 요청 실패: {type(error).__name__}"
-            ) from error
+        raw: bytes | None = None
+        for attempt in range(self._max_retries + 1):
+            try:
+                with self._open_url(
+                    http_request,
+                    timeout=self._timeout_seconds,
+                ) as response:
+                    status = getattr(response, "status", None)
+                    if status is None:
+                        status = response.getcode()
+                    if status != 200:
+                        raise ProfileDocumentError(
+                            f"Gemini 프로필 분석 HTTP 상태가 올바르지 않음: {status}"
+                        )
+                    content_type = response.headers.get("Content-Type", "")
+                    if "application/json" not in content_type.casefold():
+                        raise ProfileDocumentError("Gemini 프로필 분석 응답이 JSON이 아님")
+                    raw = response.read(MAX_GEMINI_RESPONSE_BYTES + 1)
+                break
+            except ProfileDocumentError:
+                raise
+            except HTTPError as error:
+                status_code = error.code
+                error.close()
+                if (
+                    status_code in _TRANSIENT_HTTP_STATUSES
+                    and attempt < self._max_retries
+                ):
+                    delay = (2**attempt) + (min(max(self._jitter(), 0.0), 1.0) * 0.25)
+                    self._sleep(delay)
+                    continue
+                raise ProfileDocumentError(
+                    f"Gemini 프로필 분석 요청 실패: HTTP {status_code}"
+                ) from error
+            except (URLError, OSError) as error:
+                if attempt < self._max_retries:
+                    delay = (2**attempt) + (min(max(self._jitter(), 0.0), 1.0) * 0.25)
+                    self._sleep(delay)
+                    continue
+                raise ProfileDocumentError(
+                    f"Gemini 프로필 분석 요청 실패: {type(error).__name__}"
+                ) from error
+        if raw is None:
+            raise ProfileDocumentError("Gemini 프로필 분석 응답이 없음")
         if len(raw) > MAX_GEMINI_RESPONSE_BYTES:
             raise ProfileDocumentError("Gemini 프로필 분석 응답이 허용 크기를 초과함")
         try:
