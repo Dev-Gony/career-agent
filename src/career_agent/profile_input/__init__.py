@@ -84,6 +84,12 @@ from .analysis_draft import (
     validate_profile_analysis_response,
 )
 from .analysis_service import ProfileAnalysisProvider, analyze_profile_extraction
+from .openai_analysis import (
+    DEFAULT_OPENAI_PROFILE_ANALYSIS_MODEL,
+    OPENAI_PROFILE_ANALYSIS_MODELS,
+    OpenAIResponsesProfileAnalysisProvider,
+    load_openai_api_key,
+)
 
 __all__ = [
     "DOCUMENT_KINDS",
@@ -149,4 +155,8 @@ __all__ = [
     "validate_profile_analysis_response",
     "ProfileAnalysisProvider",
     "analyze_profile_extraction",
+    "DEFAULT_OPENAI_PROFILE_ANALYSIS_MODEL",
+    "OPENAI_PROFILE_ANALYSIS_MODELS",
+    "OpenAIResponsesProfileAnalysisProvider",
+    "load_openai_api_key",
 ]

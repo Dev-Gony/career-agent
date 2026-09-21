@@ -406,6 +406,14 @@ Token을 입력한 뒤 실제 인증과 Socket Mode 사용 가능 여부만 확�
 
 합성 응답의 모든 사실 표현은 참조 후보 문장에 포함된 원문 구간이어야 합니다. 결과는 `private-data/profile-analysis-drafts/`에 `needs_review` 상태로 저장되며 사용자 프로필은 변경하지 않습니다. 예제 응답은 `data/profile_document.example.md`에서 만든 추출 결과와 함께 사용합니다.
 
+실제 OpenAI API 분석 명령도 구현되어 있지만 외부 전송 승인 없이는 실행 전에 중단됩니다. `.env`의 `OPENAI_API_KEY`와 명시적 `--approve-external-transfer`가 모두 있어야 연락처 형태를 제외한 후보 문장만 전송합니다. 파일, 문서 ID, 추출 ID와 로컬 경로는 보내지 않으며 Responses API 요청은 `store: false`, strict JSON Schema, 도구 없음, 기본 모델 `gpt-5.6-luna`, reasoning effort `low`로 고정합니다.
+
+    python scripts/build_openai_profile_analysis_draft.py `
+      --extraction-id profile-text-extraction-실제ID `
+      --approve-external-transfer
+
+이 플래그는 후보 문장이 OpenAI API로 전송되고 API 사용료가 발생할 수 있다는 점을 사용자가 확인했다는 의미입니다. API 응답은 기존 원문 근거 검증을 다시 통과해야만 비공개 `needs_review` 초안으로 저장됩니다. 현재 실제 사용자 문서로는 실행하지 않았습니다.
+
 상세 분석된 공고에 사용자의 실제 판단을 별도 기록합니다. `fit`은 적합, `hold`는 보류, `not_fit`은 부적합입니다.
 
     python scripts/record_greenhouse_review.py --position 1 --fit hold --recommendation-useful yes --notes "직무는 관련 있지만 경력 조건 확인 필요"
