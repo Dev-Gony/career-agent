@@ -25,7 +25,9 @@ _MAX_ITEMS_PER_CATEGORY = 50
 _MAX_CANDIDATE_REFERENCES = 10
 _MAX_EVIDENCE_TEXT_CHARS = 1000
 _MAX_UNKNOWN_TEXT_CHARS = 500
+_MAX_STORED_DRAFT_FILES = 1000
 _DRAFT_ID_PATTERN = re.compile(r"^profile-analysis-draft-[0-9a-f]{24}$")
+_EXTRACTION_ID_PATTERN = re.compile(r"^profile-text-extraction-[0-9a-f]{24}$")
 
 
 def _evidence_field_schema() -> dict[str, Any]:
@@ -494,6 +496,161 @@ def validate_profile_analysis_response(
     return normalized
 
 
+def _profile_analysis_draft_id(
+    extraction_id: str,
+    analysis: Mapping[str, Any],
+    *,
+    provider_name: str,
+    model_name: str,
+    data_boundary: str,
+) -> str:
+    canonical_analysis = json.dumps(
+        analysis,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    draft_key = "|".join(
+        [
+            extraction_id,
+            PROFILE_ANALYSIS_CONTRACT_VERSION,
+            provider_name,
+            model_name,
+            data_boundary,
+            canonical_analysis,
+        ]
+    )
+    return "profile-analysis-draft-" + sha256(
+        draft_key.encode("utf-8")
+    ).hexdigest()[:24]
+
+
+def _stored_draft(
+    draft: Mapping[str, Any],
+    *,
+    expected_draft_id: str | None = None,
+) -> tuple[Mapping[str, Any], datetime]:
+    _exact_keys(
+        draft,
+        {
+            "profile_analysis_draft",
+            "analysis",
+            "analysis_source",
+            "summary",
+            "metadata",
+        },
+        "profile_analysis_draft_document",
+    )
+    root = _mapping(draft.get("profile_analysis_draft"), "profile_analysis_draft")
+    _exact_keys(
+        root,
+        {
+            "draft_id",
+            "analyzed_at",
+            "source_extraction_id",
+            "contract_version",
+            "status",
+        },
+        "profile_analysis_draft",
+    )
+    draft_id = _text(root.get("draft_id"), "profile_analysis_draft.draft_id", max_chars=200)
+    if _DRAFT_ID_PATTERN.fullmatch(draft_id) is None:
+        raise ProfileDocumentError("프로필 분석 초안 ID 형식이 올바르지 않음")
+    if expected_draft_id is not None and draft_id != expected_draft_id:
+        raise ProfileDocumentError("프로필 분석 초안 ID가 요청과 일치하지 않음")
+    extraction_id = _text(
+        root.get("source_extraction_id"),
+        "profile_analysis_draft.source_extraction_id",
+        max_chars=200,
+    )
+    if _EXTRACTION_ID_PATTERN.fullmatch(extraction_id) is None:
+        raise ProfileDocumentError("프로필 추출 ID 형식이 올바르지 않음")
+    if root.get("contract_version") != PROFILE_ANALYSIS_CONTRACT_VERSION:
+        raise ProfileDocumentError("현재 계약 버전의 프로필 분석 초안이 아님")
+    if root.get("status") != "needs_review":
+        raise ProfileDocumentError("검토 대기 상태인 프로필 분석 초안이 아님")
+    analyzed_at_text = _text(
+        root.get("analyzed_at"),
+        "profile_analysis_draft.analyzed_at",
+        max_chars=100,
+    )
+    try:
+        analyzed_at = datetime.fromisoformat(analyzed_at_text)
+    except ValueError as error:
+        raise ProfileDocumentError("프로필 분석 초안 시간이 올바르지 않음") from error
+    if analyzed_at.tzinfo is None or analyzed_at.utcoffset() is None:
+        raise ProfileDocumentError("프로필 분석 초안 시간에 시간대가 필요함")
+
+    source = _mapping(draft.get("analysis_source"), "analysis_source")
+    _exact_keys(source, {"provider", "model", "data_boundary"}, "analysis_source")
+    provider_name = _text(source.get("provider"), "analysis_source.provider", max_chars=100)
+    model_name = _text(source.get("model"), "analysis_source.model", max_chars=200)
+    data_boundary = source.get("data_boundary")
+    if data_boundary not in PROFILE_ANALYSIS_DATA_BOUNDARIES:
+        raise ProfileDocumentError("프로필 분석 초안 데이터 경계가 올바르지 않음")
+
+    analysis = _mapping(draft.get("analysis"), "analysis")
+    analysis_fields = {
+        "career_evidence",
+        "achievement_evidence",
+        "technology_evidence",
+        "unknowns",
+    }
+    _exact_keys(analysis, analysis_fields, "analysis")
+    summary = _mapping(draft.get("summary"), "summary")
+    summary_fields = {
+        "career_evidence_count": "career_evidence",
+        "achievement_evidence_count": "achievement_evidence",
+        "technology_evidence_count": "technology_evidence",
+        "unknown_count": "unknowns",
+    }
+    _exact_keys(summary, set(summary_fields), "summary")
+    for summary_field, analysis_field in summary_fields.items():
+        items = analysis.get(analysis_field)
+        count = summary.get(summary_field)
+        if not isinstance(items, list) or len(items) > _MAX_ITEMS_PER_CATEGORY:
+            raise ProfileDocumentError(f"analysis.{analysis_field} 배열이 올바르지 않음")
+        if isinstance(count, bool) or not isinstance(count, int) or count != len(items):
+            raise ProfileDocumentError(f"summary.{summary_field} 합계가 일치하지 않음")
+
+    metadata = _mapping(draft.get("metadata"), "metadata")
+    _exact_keys(
+        metadata,
+        {
+            "schema_version",
+            "contains_personal_data",
+            "contains_candidate_text",
+            "git_tracking_allowed",
+            "provider_output_validated",
+            "profile_updated",
+        },
+        "metadata",
+    )
+    if metadata.get("schema_version") != PROFILE_ANALYSIS_DRAFT_SCHEMA_VERSION:
+        raise ProfileDocumentError("현재 버전의 프로필 분석 초안이 아님")
+    if metadata.get("contains_personal_data") is not True:
+        raise ProfileDocumentError("프로필 분석 초안의 개인정보 표시가 없음")
+    if metadata.get("contains_candidate_text") is not True:
+        raise ProfileDocumentError("프로필 분석 초안의 후보 문장 표시가 없음")
+    if metadata.get("git_tracking_allowed") is not False:
+        raise ProfileDocumentError("프로필 분석 초안에 Git 제외 표시가 없음")
+    if metadata.get("provider_output_validated") is not True:
+        raise ProfileDocumentError("공급자 출력 검증이 완료되지 않음")
+    if metadata.get("profile_updated") is not False:
+        raise ProfileDocumentError("프로필 분석 초안은 프로필 갱신 상태일 수 없음")
+
+    expected_identity = _profile_analysis_draft_id(
+        extraction_id,
+        analysis,
+        provider_name=provider_name,
+        model_name=model_name,
+        data_boundary=data_boundary,
+    )
+    if draft_id != expected_identity:
+        raise ProfileDocumentError("프로필 분석 초안 ID와 내용 지문이 일치하지 않음")
+    return root, analyzed_at
+
+
 def build_profile_analysis_draft(
     extraction: Mapping[str, Any],
     response: Mapping[str, Any],
@@ -514,25 +671,13 @@ def build_profile_analysis_draft(
         raise ProfileDocumentError(f"data_boundary 허용값: {allowed}")
     extraction_id, _ = _candidate_index(extraction)
     analysis = validate_profile_analysis_response(extraction, response)
-    canonical_analysis = json.dumps(
+    draft_id = _profile_analysis_draft_id(
+        extraction_id,
         analysis,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
+        provider_name=normalized_provider,
+        model_name=normalized_model,
+        data_boundary=data_boundary,
     )
-    draft_key = "|".join(
-        [
-            extraction_id,
-            PROFILE_ANALYSIS_CONTRACT_VERSION,
-            normalized_provider,
-            normalized_model,
-            data_boundary,
-            canonical_analysis,
-        ]
-    )
-    draft_id = "profile-analysis-draft-" + sha256(
-        draft_key.encode("utf-8")
-    ).hexdigest()[:24]
     return {
         "profile_analysis_draft": {
             "draft_id": draft_id,
@@ -570,21 +715,8 @@ def save_profile_analysis_draft(
 ) -> tuple[Path, bool]:
     """Atomically save or reuse one immutable private analysis draft."""
 
-    root = _mapping(draft.get("profile_analysis_draft"), "profile_analysis_draft")
-    metadata = _mapping(draft.get("metadata"), "metadata")
-    if metadata.get("schema_version") != PROFILE_ANALYSIS_DRAFT_SCHEMA_VERSION:
-        raise ProfileDocumentError("현재 버전의 프로필 분석 초안이 아님")
-    if metadata.get("git_tracking_allowed") is not False:
-        raise ProfileDocumentError("프로필 분석 초안에 Git 제외 표시가 없음")
-    if metadata.get("provider_output_validated") is not True:
-        raise ProfileDocumentError("공급자 출력 검증이 완료되지 않음")
-    if metadata.get("profile_updated") is not False:
-        raise ProfileDocumentError("프로필 분석 초안은 프로필 갱신 상태일 수 없음")
-    draft_id = _text(
-        root.get("draft_id"), "profile_analysis_draft.draft_id", max_chars=200
-    )
-    if _DRAFT_ID_PATTERN.fullmatch(draft_id) is None:
-        raise ProfileDocumentError("프로필 분석 초안 ID 형식이 올바르지 않음")
+    root, _ = _stored_draft(draft)
+    draft_id = str(root["draft_id"])
 
     target_directory = Path(directory)
     target_directory.mkdir(parents=True, exist_ok=True)
@@ -598,6 +730,7 @@ def save_profile_analysis_draft(
         existing_root = _mapping(
             existing.get("profile_analysis_draft"), "profile_analysis_draft"
         )
+        _stored_draft(existing, expected_draft_id=draft_id)
         for field in (
             "draft_id",
             "source_extraction_id",
@@ -637,3 +770,58 @@ def save_profile_analysis_draft(
         if temporary_path is not None and temporary_path.exists():
             temporary_path.unlink()
     return target_path, True
+
+
+def load_profile_analysis_draft(
+    draft_id: str,
+    directory: str | Path,
+) -> dict[str, Any]:
+    """Load and verify one immutable private profile analysis draft."""
+
+    normalized_id = _text(draft_id, "draft_id", max_chars=200)
+    if _DRAFT_ID_PATTERN.fullmatch(normalized_id) is None:
+        raise ProfileDocumentError("프로필 분석 초안 ID 형식이 올바르지 않음")
+    path = Path(directory) / f"{normalized_id}.json"
+    if path.is_symlink():
+        raise ProfileDocumentError("프로필 분석 초안 심볼릭 링크는 읽을 수 없음")
+    try:
+        draft = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ProfileDocumentError(f"프로필 분석 초안을 읽을 수 없음: {path}") from error
+    if not isinstance(draft, dict):
+        raise ProfileDocumentError("프로필 분석 초안 최상위 JSON은 객체여야 함")
+    _stored_draft(draft, expected_draft_id=normalized_id)
+    return draft
+
+
+def select_latest_profile_analysis_draft(
+    extraction_id: str,
+    directory: str | Path,
+) -> dict[str, Any] | None:
+    """Select the newest verified review draft for one profile extraction."""
+
+    normalized_extraction_id = _text(
+        extraction_id,
+        "extraction_id",
+        max_chars=200,
+    )
+    if _EXTRACTION_ID_PATTERN.fullmatch(normalized_extraction_id) is None:
+        raise ProfileDocumentError("프로필 추출 ID 형식이 올바르지 않음")
+    target_directory = Path(directory)
+    if not target_directory.exists():
+        return None
+    if not target_directory.is_dir() or target_directory.is_symlink():
+        raise ProfileDocumentError("프로필 분석 초안 경로가 안전한 디렉터리가 아님")
+    paths = sorted(target_directory.glob("profile-analysis-draft-*.json"))
+    if len(paths) > _MAX_STORED_DRAFT_FILES:
+        raise ProfileDocumentError("프로필 분석 초안 파일이 허용 개수를 초과함")
+
+    matches: list[tuple[datetime, str, dict[str, Any]]] = []
+    for path in paths:
+        draft = load_profile_analysis_draft(path.stem, target_directory)
+        root, analyzed_at = _stored_draft(draft, expected_draft_id=path.stem)
+        if root.get("source_extraction_id") == normalized_extraction_id:
+            matches.append((analyzed_at, path.stem, draft))
+    if not matches:
+        return None
+    return max(matches, key=lambda item: (item[0], item[1]))[2]

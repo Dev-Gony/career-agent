@@ -76,8 +76,10 @@ from .analysis_draft import (
     PROFILE_ANALYSIS_DRAFT_SCHEMA_VERSION,
     build_profile_analysis_draft,
     build_profile_analysis_request,
+    load_profile_analysis_draft,
     profile_analysis_response_json_schema,
     save_profile_analysis_draft,
+    select_latest_profile_analysis_draft,
     validate_profile_analysis_response,
 )
 from .analysis_service import ProfileAnalysisProvider, analyze_profile_extraction
@@ -138,8 +140,10 @@ __all__ = [
     "PROFILE_ANALYSIS_DRAFT_SCHEMA_VERSION",
     "build_profile_analysis_draft",
     "build_profile_analysis_request",
+    "load_profile_analysis_draft",
     "profile_analysis_response_json_schema",
     "save_profile_analysis_draft",
+    "select_latest_profile_analysis_draft",
     "validate_profile_analysis_response",
     "ProfileAnalysisProvider",
     "analyze_profile_extraction",

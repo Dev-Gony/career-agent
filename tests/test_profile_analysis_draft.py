@@ -16,8 +16,10 @@ from career_agent.profile_input import (  # noqa: E402
     ProfileDocumentError,
     build_profile_analysis_draft,
     build_profile_analysis_request,
+    load_profile_analysis_draft,
     profile_analysis_response_json_schema,
     save_profile_analysis_draft,
+    select_latest_profile_analysis_draft,
     validate_profile_analysis_response,
 )
 
@@ -238,8 +240,103 @@ class ProfileAnalysisDraftTest(unittest.TestCase):
                 json.dumps(stored, ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8",
             )
-            with self.assertRaisesRegex(ProfileDocumentError, "내용이 일치하지 않음"):
+            with self.assertRaisesRegex(ProfileDocumentError, "일치하지 않음"):
                 save_profile_analysis_draft(draft, directory)
+
+    def test_loads_verified_draft_and_selects_latest_for_extraction(self) -> None:
+        first = build_profile_analysis_draft(
+            _extraction(),
+            _response(),
+            analyzed_at=ANALYZED_AT,
+            provider_name="synthetic",
+            model_name="fixture-v1",
+            data_boundary="local",
+        )
+        later = build_profile_analysis_draft(
+            _extraction(),
+            _response(),
+            analyzed_at=ANALYZED_AT + timedelta(minutes=5),
+            provider_name="synthetic",
+            model_name="fixture-v2",
+            data_boundary="local",
+        )
+        other_extraction = _extraction()
+        other_extraction["profile_extraction"]["extraction_id"] = (
+            "profile-text-extraction-eeeeeeeeeeeeeeeeeeeeeeee"
+        )
+        other = build_profile_analysis_draft(
+            other_extraction,
+            _response(),
+            analyzed_at=ANALYZED_AT + timedelta(minutes=10),
+            provider_name="synthetic",
+            model_name="fixture-v3",
+            data_boundary="local",
+        )
+        extraction_id = _extraction()["profile_extraction"]["extraction_id"]
+
+        with tempfile.TemporaryDirectory() as directory:
+            first_path, _ = save_profile_analysis_draft(first, directory)
+            later_path, _ = save_profile_analysis_draft(later, directory)
+            save_profile_analysis_draft(other, directory)
+            loaded = load_profile_analysis_draft(first_path.stem, directory)
+            selected = select_latest_profile_analysis_draft(extraction_id, directory)
+
+        self.assertEqual(first, loaded)
+        self.assertEqual(later_path.stem, selected["profile_analysis_draft"]["draft_id"])
+
+    def test_selector_returns_none_for_missing_directory_or_extraction(self) -> None:
+        extraction_id = _extraction()["profile_extraction"]["extraction_id"]
+        with tempfile.TemporaryDirectory() as directory:
+            missing = Path(directory) / "missing"
+            self.assertIsNone(
+                select_latest_profile_analysis_draft(extraction_id, missing)
+            )
+            self.assertIsNone(
+                select_latest_profile_analysis_draft(
+                    "profile-text-extraction-ffffffffffffffffffffffff",
+                    directory,
+                )
+            )
+
+    def test_load_rejects_draft_with_tampered_analysis_identity(self) -> None:
+        draft = build_profile_analysis_draft(
+            _extraction(),
+            _response(),
+            analyzed_at=ANALYZED_AT,
+            provider_name="synthetic",
+            model_name="fixture-v1",
+            data_boundary="local",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path, _ = save_profile_analysis_draft(draft, directory)
+            stored = json.loads(path.read_text(encoding="utf-8"))
+            stored["analysis"]["technology_evidence"][0]["technology_name"] = "Java"
+            path.write_text(
+                json.dumps(stored, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ProfileDocumentError, "내용 지문"):
+                load_profile_analysis_draft(path.stem, directory)
+
+    def test_load_rejects_draft_without_timezone(self) -> None:
+        draft = build_profile_analysis_draft(
+            _extraction(),
+            _response(),
+            analyzed_at=ANALYZED_AT,
+            provider_name="synthetic",
+            model_name="fixture-v1",
+            data_boundary="local",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path, _ = save_profile_analysis_draft(draft, directory)
+            stored = json.loads(path.read_text(encoding="utf-8"))
+            stored["profile_analysis_draft"]["analyzed_at"] = "2026-09-21T10:00:00"
+            path.write_text(
+                json.dumps(stored, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ProfileDocumentError, "시간대"):
+                load_profile_analysis_draft(path.stem, directory)
 
 
 if __name__ == "__main__":
