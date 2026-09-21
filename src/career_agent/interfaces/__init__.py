@@ -32,6 +32,7 @@ from .slack_socket import (
 )
 from .slack_files import import_slack_profile_document
 from .slack_actions import run_slack_career_action
+from .slack_profile_analysis import build_slack_profile_analysis_summary
 
 __all__ = [
     "SLACK_COMMAND_REQUEST_SCHEMA_VERSION",
@@ -56,4 +57,5 @@ __all__ = [
     "run_slack_socket_mode",
     "import_slack_profile_document",
     "run_slack_career_action",
+    "build_slack_profile_analysis_summary",
 ]
