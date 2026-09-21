@@ -90,6 +90,12 @@ from .openai_analysis import (
     OpenAIResponsesProfileAnalysisProvider,
     load_openai_api_key,
 )
+from .gemini_analysis import (
+    DEFAULT_GEMINI_DEVELOPMENT_MODEL,
+    GEMINI_DEVELOPMENT_MODELS,
+    GeminiDevelopmentProfileAnalysisProvider,
+    load_gemini_api_key,
+)
 
 __all__ = [
     "DOCUMENT_KINDS",
@@ -159,4 +165,8 @@ __all__ = [
     "OPENAI_PROFILE_ANALYSIS_MODELS",
     "OpenAIResponsesProfileAnalysisProvider",
     "load_openai_api_key",
+    "DEFAULT_GEMINI_DEVELOPMENT_MODEL",
+    "GEMINI_DEVELOPMENT_MODELS",
+    "GeminiDevelopmentProfileAnalysisProvider",
+    "load_gemini_api_key",
 ]

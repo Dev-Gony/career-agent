@@ -414,6 +414,13 @@ Token을 입력한 뒤 실제 인증과 Socket Mode 사용 가능 여부만 확�
 
 이 플래그는 후보 문장이 OpenAI API로 전송되고 API 사용료가 발생할 수 있다는 점을 사용자가 확인했다는 의미입니다. API 응답은 기존 원문 근거 검증을 다시 통과해야만 비공개 `needs_review` 초안으로 저장됩니다. 현재 실제 사용자 문서로는 실행하지 않았습니다.
 
+Gemini 무료 API는 기능 개발 테스트에만 사용합니다. 실제 이력서와 `private-data`를 선택하는 인자를 제공하지 않고, Git에 포함된 공개 합성 문서 `data/profile_document.example.md`만 전송할 수 있습니다. `.env`에 `GEMINI_API_KEY`를 저장한 뒤 다음 명령으로 구조화 출력과 로컬 근거 검증을 확인합니다.
+
+    python scripts/build_gemini_synthetic_profile_analysis_draft.py `
+      --confirm-public-synthetic-data
+
+기본 모델은 `gemini-3.8-flash`, 추론 수준은 `low`, 응답 형식은 JSON Schema, 도구 사용은 없음으로 고정합니다. 결과는 일반 사용자 초안과 분리된 `private-data/gemini-development-drafts/`에 저장되고 개인 프로필은 변경하지 않습니다. Gemini 무료 등급에는 민감하거나 개인적인 자료를 전송하지 않습니다.
+
 상세 분석된 공고에 사용자의 실제 판단을 별도 기록합니다. `fit`은 적합, `hold`는 보류, `not_fit`은 부적합입니다.
 
     python scripts/record_greenhouse_review.py --position 1 --fit hold --recommendation-useful yes --notes "직무는 관련 있지만 경력 조건 확인 필요"

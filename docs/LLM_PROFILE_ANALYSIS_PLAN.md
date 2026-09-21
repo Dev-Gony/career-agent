@@ -30,22 +30,25 @@ LLM 결과는 사용자 사실의 최종 확정값이 아니다. 모든 항목�
 - OpenAI API 모델 목록: https://developers.openai.com/api/docs/models
 - OpenAI GPT-5.6 Luna: https://developers.openai.com/api/docs/models/gpt-5.6-luna
 - Gemini API 추가 약관: https://ai.google.dev/gemini-api/terms
+- Gemini API 가격 및 무료 등급: https://ai.google.dev/gemini-api/docs/pricing
+- Gemini Generate Content API: https://ai.google.dev/api/generate-content
 - Gemini 구조화 출력: https://ai.google.dev/gemini-api/docs/structured-output
+- Gemini 3.8 Flash: https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash
 
-## 4. MVP 권고 구성
+## 4. 현재 개발용 구성
 
-- 공급자: OpenAI API
-- 개발 모델: `gpt-5.6-luna`
-- 품질 비교 모델: `gpt-5.6-terra`
-- API: Responses API
-- 응답 형식: strict JSON Schema
+- 공급자: Gemini API 무료 등급
+- 입력: Git에 포함된 공개 합성 문서 `data/profile_document.example.md`만 허용
+- 개발 모델: `gemini-3.8-flash`
+- API: `generateContent`
+- 응답 형식: JSON Schema
 - 저장 옵션: `store: false`
 - reasoning effort: `low`
 - 외부 검색, 파일 검색, 코드 실행과 다른 도구: 사용하지 않음
 
-`gpt-5.6-luna`는 공식 문서에서 비용 민감형 모델로 안내되고 Structured Outputs를 지원한다. 이력서 한 건의 구조화 품질이 부족하면 전체 시스템을 바꾸지 않고 같은 계약으로 `gpt-5.6-terra` 결과와 비교한다.
+이 구성은 API 호출 형식, 구조화 응답, 로컬 근거 검증과 오류 처리를 비용 없이 개발하기 위한 임시 구성이다. 실행 명령은 실제 이력서 경로와 추출 ID를 받지 않으며 어댑터도 공개 합성 요청 지문과 다른 입력을 거부하므로 `private-data`의 사용자 문서를 Gemini 무료 등급으로 보낼 수 없다.
 
-`store: false`는 Responses API의 애플리케이션 상태 저장을 줄이기 위한 설정이다. 일반 계정의 최대 30일 악용 방지 로그까지 제거하는 Zero Data Retention을 의미하지 않는다.
+OpenAI 어댑터는 공급자 중립 경계를 검증한 구현으로 보존하지만 현재 개발 테스트에는 사용하지 않는다. 실제 서비스 공급자, 장기 컨텍스트, 프롬프트 하네스와 개인정보 처리 조건은 배포 전 별도 결정한다.
 
 ## 5. 첫 JSON 출력 계약
 
@@ -64,15 +67,15 @@ LLM 결과는 사용자 사실의 최종 확정값이 아니다. 모든 항목�
 
 1. 합성 이력서 후보로 JSON Schema 검증과 근거 참조 검증이 통과한다.
 2. API Key가 없어도 전체 기존 테스트와 Slack 공고 분석은 정상 동작한다.
-3. 사용자가 외부 전송과 과금을 확인한 뒤에만 실제 API 호출을 활성화한다.
+3. Gemini 무료 API는 공개 합성 입력 확인 뒤에만 호출하고 실제 사용자 문서는 받지 않는다.
 4. 실제 이력서 결과를 Slack에 표시해 사용자가 승인하거나 거부할 수 있다.
 5. 승인 전 기존 사용자 프로필은 변경되지 않는다.
 
 ## 7. 아직 결정하지 않은 점
 
-- 사용자의 OpenAI API 결제 및 API Key 준비 여부
-- 일반 API의 최대 30일 악용 방지 로그를 개인 이력서 처리에 허용할지 여부
-- Luna와 Terra 중 실제 한국어 이력서에서 필요한 최소 모델
+- 실제 서비스에서 사용할 LLM 공급자와 모델
+- 실제 개인 문서를 외부 공급자에 보낼 때 적용할 데이터 처리 조건과 동의 방식
+- 장기 컨텍스트, 프롬프트 하네스와 평가 데이터 구성
 
 ## 8. 구현 현황
 
@@ -80,4 +83,6 @@ LLM 결과는 사용자 사실의 최종 확정값이 아니다. 모든 항목�
 
 OpenAI Responses API 어댑터와 로컬 실행 명령을 추가했다. 요청은 `https://api.openai.com/v1/responses` 한 곳만 사용하고 리디렉션을 따르지 않으며, `store: false`, strict JSON Schema, 도구 없음과 낮은 추론 수준을 고정한다. 후보 ID·프로필 섹션·후보 문장 외 필드가 공급자 요청에 들어가면 네트워크 호출 전에 거부한다. API 오류 본문, API Key와 후보 문장은 콘솔 오류에 출력하지 않는다.
 
-현재 실제 `.env`에는 `OPENAI_API_KEY`가 준비되지 않았고 실제 이력서 전송과 과금은 발생하지 않았다. 실제 호출 전에는 사용자가 일반 API의 최대 30일 악용 방지 로그 가능성과 비용을 확인하고 외부 전송에 명시적으로 동의해야 한다. Slack 승인 대화는 아직 연결하지 않았다.
+Gemini 개발 전용 어댑터와 실행 명령도 추가했다. `gemini-3.8-flash`, `thinkingLevel: low`, JSON Schema와 도구 없는 단일 요청을 사용한다. 실행 입력은 공개 합성 문서로 고정하고 별도 개발 초안 폴더에만 결과를 저장한다. 실제 이력서와 비공개 추출 결과를 선택하는 인자는 제공하지 않으며 공개 예제 요청 지문과 다른 후보 문장은 네트워크 호출 전에 거부한다.
+
+현재 실제 Gemini 네트워크 호출은 확인 전이며 실제 이력서 전송과 과금은 발생하지 않았다. Slack 승인 대화는 아직 연결하지 않았다.
