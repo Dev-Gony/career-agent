@@ -448,7 +448,7 @@ class SlackSocketTest(unittest.TestCase):
         actions: list[str] = []
         logger = _FakeLogger()
 
-        def run_action(action: str) -> dict[str, str]:
+        def run_action(action: str, _request: dict) -> dict[str, str]:
             actions.append(action)
             return {
                 "status": "completed",
@@ -478,7 +478,7 @@ class SlackSocketTest(unittest.TestCase):
         actions: list[str] = []
         logger = _FakeLogger()
 
-        def run_action(action: str) -> dict[str, str]:
+        def run_action(action: str, _request: dict) -> dict[str, str]:
             actions.append(action)
             return {
                 "status": "completed",
@@ -512,7 +512,7 @@ class SlackSocketTest(unittest.TestCase):
         actions: list[str] = []
         logger = _FakeLogger()
 
-        def run_action(action: str) -> dict[str, str]:
+        def run_action(action: str, _request: dict) -> dict[str, str]:
             actions.append(action)
             return {
                 "status": "completed",
@@ -540,12 +540,48 @@ class SlackSocketTest(unittest.TestCase):
         self.assertEqual("1789372800.000100", replies[1]["thread_ts"])
         self.assertEqual([], logger.messages)
 
+    def test_registered_listener_routes_review_answer_to_existing_thread(self) -> None:
+        app = _FakeApp()
+        replies: list[dict] = []
+        requests: list[dict] = []
+        logger = _FakeLogger()
+        event = _event("<@U01234567> 맞아")
+        event["event"]["thread_ts"] = "1789372700.000900"
+
+        def run_action(action: str, request: dict) -> dict[str, str]:
+            self.assertEqual(
+                "approve_active_profile_analysis_review_item",
+                action,
+            )
+            requests.append(request)
+            return {
+                "status": "completed",
+                "public_message": "표시된 항목을 승인했습니다.",
+            }
+
+        with tempfile.TemporaryDirectory() as directory:
+            listener = register_slack_app_mention_listener(
+                app,
+                _config(),
+                output_directory=directory,
+                now=lambda: RECEIVED_AT,
+                action_runner=run_action,
+            )
+            listener(event, lambda **values: replies.append(values), logger)
+
+        self.assertEqual(1, len(requests))
+        self.assertEqual("1789372700.000900", requests[0]["source"]["thread_ts"])
+        self.assertEqual(2, len(replies))
+        self.assertEqual("1789372700.000900", replies[0]["thread_ts"])
+        self.assertEqual("1789372700.000900", replies[1]["thread_ts"])
+        self.assertEqual([], logger.messages)
+
     def test_registered_listener_reports_safe_action_failure(self) -> None:
         app = _FakeApp()
         replies: list[dict] = []
         logger = _FakeLogger()
 
-        def fail_action(_action: str) -> dict[str, str]:
+        def fail_action(_action: str, _request: dict) -> dict[str, str]:
             raise SlackEventError("private failure details")
 
         with tempfile.TemporaryDirectory() as directory:

@@ -13,10 +13,13 @@ sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
 from career_agent.interfaces import (  # noqa: E402
     PROFILE_DRAFT_ACTION,
+    PROFILE_REVIEW_APPROVE_ACTION,
     PROFILE_REVIEW_ACTION,
+    PROFILE_REVIEW_REJECT_ACTION,
     SlackEventError,
-    build_latest_slack_profile_analysis_review_item,
+    build_latest_slack_profile_analysis_review_item_result,
     build_latest_slack_profile_analysis_summary,
+    build_slack_profile_review_session,
     create_slack_bolt_app,
     import_slack_profile_document,
     load_slack_interface_config,
@@ -24,12 +27,17 @@ from career_agent.interfaces import (  # noqa: E402
     register_slack_app_mention_listener,
     run_slack_career_action,
     run_slack_socket_mode,
+    save_slack_profile_review_session,
+    select_active_slack_profile_review_session,
 )
 from career_agent.profile_input import (  # noqa: E402
     ProfileDocumentError,
+    build_profile_analysis_review,
     build_profile_evidence_summary,
     build_profile_text_extraction,
     load_profile_document_import,
+    load_profile_analysis_draft,
+    save_profile_analysis_review,
     save_profile_evidence_summary,
     save_profile_text_extraction,
 )
@@ -51,6 +59,12 @@ DEFAULT_PROFILE_EVIDENCE_DIRECTORY = (
 )
 DEFAULT_PROFILE_ANALYSIS_DRAFT_DIRECTORY = (
     REPOSITORY_ROOT / "private-data/profile-analysis-drafts"
+)
+DEFAULT_PROFILE_ANALYSIS_REVIEW_DIRECTORY = (
+    REPOSITORY_ROOT / "private-data/profile-analysis-reviews"
+)
+DEFAULT_SLACK_PROFILE_REVIEW_SESSION_DIRECTORY = (
+    REPOSITORY_ROOT / "private-data/slack-profile-review-sessions"
 )
 DEFAULT_PROFILE = REPOSITORY_ROOT / "data/user_profile.example.json"
 
@@ -122,7 +136,82 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _run_slack_action(action: str) -> Mapping[str, str]:
+def _request_context(request: Mapping[str, Any]) -> tuple[Mapping[str, Any], datetime]:
+    root = request.get("slack_command_request")
+    source = request.get("source")
+    if not isinstance(root, Mapping) or not isinstance(source, Mapping):
+        raise SlackEventError("Slack 동작 요청 형식이 올바르지 않음")
+    received_at_text = root.get("received_at")
+    if not isinstance(received_at_text, str):
+        raise SlackEventError("Slack 동작 요청 시간이 없음")
+    try:
+        received_at = datetime.fromisoformat(received_at_text)
+    except ValueError as error:
+        raise SlackEventError("Slack 동작 요청 시간이 올바르지 않음") from error
+    if received_at.tzinfo is None or received_at.utcoffset() is None:
+        raise SlackEventError("Slack 동작 요청 시간에 시간대가 필요함")
+    return source, received_at
+
+
+def _run_profile_review_decision(
+    action: str,
+    request: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    source, reviewed_at = _request_context(request)
+    try:
+        session = select_active_slack_profile_review_session(
+            team_id=str(source["team_id"]),
+            channel_id=str(source["channel_id"]),
+            user_id=str(source["user_id"]),
+            thread_ts=str(source["thread_ts"]),
+            session_directory=DEFAULT_SLACK_PROFILE_REVIEW_SESSION_DIRECTORY,
+            review_directory=DEFAULT_PROFILE_ANALYSIS_REVIEW_DIRECTORY,
+        )
+        if session is None:
+            return {
+                "status": "no_active_review_session",
+                "public_message": (
+                    "이 스레드에 승인 또는 제외할 검토 항목이 없습니다. "
+                    "새 메시지에서 `프로필 검토 시작`을 호출해주세요."
+                ),
+            }
+        target = session["target"]
+        draft = load_profile_analysis_draft(
+            target["draft_id"],
+            DEFAULT_PROFILE_ANALYSIS_DRAFT_DIRECTORY,
+        )
+        decision = (
+            "approve" if action == PROFILE_REVIEW_APPROVE_ACTION else "reject"
+        )
+        review = build_profile_analysis_review(
+            draft,
+            item_type=target["item_type"],
+            item_position=target["item_position"],
+            decision=decision,
+            reviewed_at=reviewed_at,
+        )
+        save_profile_analysis_review(
+            review,
+            DEFAULT_PROFILE_ANALYSIS_REVIEW_DIRECTORY,
+        )
+    except (KeyError, TypeError, ProfileDocumentError) as error:
+        raise SlackEventError("Slack 프로필 검토 결정을 안전하게 저장할 수 없음") from error
+
+    outcome = "확인된 정보로 승인" if decision == "approve" else "프로필 후보에서 제외"
+    return {
+        "status": "completed",
+        "public_message": (
+            f"표시된 항목을 {outcome}했습니다. "
+            "아직 개인 프로필과 공고 검색 조건에는 반영하지 않았습니다. "
+            "다음 항목은 새 메시지에서 `프로필 검토 시작`을 호출해 확인할 수 있습니다."
+        ),
+    }
+
+
+def _run_slack_action(
+    action: str,
+    request: Mapping[str, Any],
+) -> Mapping[str, Any]:
     if action == PROFILE_DRAFT_ACTION:
         return {
             "status": "completed",
@@ -132,13 +221,42 @@ def _run_slack_action(action: str) -> Mapping[str, str]:
             ),
         }
     if action == PROFILE_REVIEW_ACTION:
+        source, created_at = _request_context(request)
+        result = build_latest_slack_profile_analysis_review_item_result(
+            str(DEFAULT_PROFILE_EXTRACTION_DIRECTORY),
+            str(DEFAULT_PROFILE_ANALYSIS_DRAFT_DIRECTORY),
+            str(DEFAULT_PROFILE_ANALYSIS_REVIEW_DIRECTORY),
+        )
+        target = result.get("review_target")
+        if target is not None:
+            try:
+                session = build_slack_profile_review_session(
+                    team_id=str(source["team_id"]),
+                    channel_id=str(source["channel_id"]),
+                    user_id=str(source["user_id"]),
+                    thread_ts=str(source["thread_ts"]),
+                    draft_id=target["draft_id"],
+                    extraction_id=target["extraction_id"],
+                    item_type=target["item_type"],
+                    item_position=target["item_position"],
+                    created_at=created_at,
+                )
+                save_slack_profile_review_session(
+                    session,
+                    DEFAULT_SLACK_PROFILE_REVIEW_SESSION_DIRECTORY,
+                )
+            except (KeyError, TypeError) as error:
+                raise SlackEventError("Slack 프로필 검토 세션을 만들 수 없음") from error
+            result["public_message"] += (
+                "\n\n이 항목이 맞으면 이 스레드에서 `@career_break 맞아`, "
+                "제외하려면 `@career_break 제외해줘`라고 답해주세요."
+            )
         return {
             "status": "completed",
-            "public_message": build_latest_slack_profile_analysis_review_item(
-                str(DEFAULT_PROFILE_EXTRACTION_DIRECTORY),
-                str(DEFAULT_PROFILE_ANALYSIS_DRAFT_DIRECTORY),
-            ),
+            "public_message": result["public_message"],
         }
+    if action in {PROFILE_REVIEW_APPROVE_ACTION, PROFILE_REVIEW_REJECT_ACTION}:
+        return _run_profile_review_decision(action, request)
     return run_slack_career_action(
         action,
         repository_root=REPOSITORY_ROOT,
@@ -174,6 +292,7 @@ def main() -> int:
         print("- 지원 명령: @career_break 다음 공고 찾아줘")
         print("- 지원 명령: @career_break 프로필 초안 보여줘")
         print("- 지원 명령: @career_break 프로필 검토 시작")
+        print("- 검토 스레드 답변: @career_break 맞아 또는 @career_break 제외해줘")
         print("- 지원 입력: @career_break 프로필 분석해줘 + 첨부파일 1개")
         print("- 현재 단계: 공고 1건 분석 또는 첨부파일 저장과 검토 후보 추출")
         print("- 종료: Ctrl+C")

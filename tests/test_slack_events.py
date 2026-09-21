@@ -130,6 +130,41 @@ class SlackEventsTest(unittest.TestCase):
             json.dumps(request, ensure_ascii=False),
         )
 
+    def test_maps_profile_review_answers_only_inside_a_thread(self) -> None:
+        for command, expected_action in (
+            ("맞아", "approve_active_profile_analysis_review_item"),
+            ("제외해줘", "reject_active_profile_analysis_review_item"),
+        ):
+            with self.subTest(command=command):
+                event = _event(f"<@U01234567> {command}")
+                event["event"]["thread_ts"] = "1789372700.000900"
+                request = build_slack_command_request(
+                    event,
+                    _config(),
+                    received_at=RECEIVED_AT,
+                )
+
+                self.assertEqual(
+                    expected_action,
+                    request["slack_command_request"]["action"],
+                )
+                self.assertEqual(
+                    "1789372700.000900",
+                    request["source"]["thread_ts"],
+                )
+                self.assertNotIn(command, json.dumps(request, ensure_ascii=False))
+
+        outside_thread = build_slack_command_request(
+            _event("<@U01234567> 맞아"),
+            _config(),
+            received_at=RECEIVED_AT,
+        )
+        self.assertEqual(
+            "profile_review_thread_required",
+            outside_thread["slack_command_request"]["reason"],
+        )
+        self.assertIsNone(outside_thread["slack_command_request"]["action"])
+
     def test_validates_one_profile_document_without_content_or_download_url(self) -> None:
         event = _event("<@U01234567> 프로필 분석해줘")
         event["event"]["files"] = [_profile_file()]

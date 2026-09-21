@@ -8,7 +8,9 @@ from typing import Any, Callable, Mapping
 
 from .slack_events import (
     PROFILE_DRAFT_ACTION,
+    PROFILE_REVIEW_APPROVE_ACTION,
     PROFILE_REVIEW_ACTION,
+    PROFILE_REVIEW_REJECT_ACTION,
     SlackEventError,
     build_slack_command_request,
     save_slack_command_request,
@@ -22,6 +24,11 @@ SUPPORTED_COMMAND_REPLY = (
 ACTION_STARTED_REPLY = "요청을 확인했습니다. 다음 공고 1건 분석을 시작합니다."
 PROFILE_DRAFT_STARTED_REPLY = "요청을 확인했습니다. 최신 프로필 분석 초안을 확인합니다."
 PROFILE_REVIEW_STARTED_REPLY = "요청을 확인했습니다. 검토할 프로필 분석 항목을 확인합니다."
+PROFILE_REVIEW_APPROVE_STARTED_REPLY = "요청을 확인했습니다. 표시된 항목의 승인을 기록합니다."
+PROFILE_REVIEW_REJECT_STARTED_REPLY = "요청을 확인했습니다. 표시된 항목의 제외를 기록합니다."
+PROFILE_REVIEW_THREAD_REQUIRED_REPLY = (
+    "승인 또는 제외 답변은 `프로필 검토 시작`으로 생성된 스레드 안에서 보내주세요."
+)
 UNSUPPORTED_COMMAND_REPLY = (
     "현재 지원하는 명령은 `다음 공고 찾아줘`, `프로필 초안 보여줘`, "
     "`프로필 검토 시작`과 첨부파일 1개를 포함한 `프로필 분석해줘`입니다."
@@ -181,6 +188,8 @@ def _reply_text(request: Mapping[str, Any], *, created: bool) -> str | None:
         return UNEXPECTED_FILE_REPLY
     if root.get("reason") == "unsupported_command":
         return UNSUPPORTED_COMMAND_REPLY
+    if root.get("reason") == "profile_review_thread_required":
+        return PROFILE_REVIEW_THREAD_REQUIRED_REPLY
     return None
 
 
@@ -189,6 +198,10 @@ def _action_started_reply(action: str) -> str:
         return PROFILE_DRAFT_STARTED_REPLY
     if action == PROFILE_REVIEW_ACTION:
         return PROFILE_REVIEW_STARTED_REPLY
+    if action == PROFILE_REVIEW_APPROVE_ACTION:
+        return PROFILE_REVIEW_APPROVE_STARTED_REPLY
+    if action == PROFILE_REVIEW_REJECT_ACTION:
+        return PROFILE_REVIEW_REJECT_STARTED_REPLY
     return ACTION_STARTED_REPLY
 
 
@@ -222,7 +235,7 @@ def register_slack_app_mention_listener(
     *,
     output_directory: str | Path,
     now: Callable[[], datetime] | None = None,
-    action_runner: Callable[[str], Mapping[str, str]] | None = None,
+    action_runner: Callable[[str, Mapping[str, Any]], Mapping[str, Any]] | None = None,
     profile_document_importer: (
         Callable[[Mapping[str, Any], datetime], Mapping[str, Any]] | None
     ) = None,
@@ -259,7 +272,7 @@ def register_slack_app_mention_listener(
         ):
             say(
                 text=PROFILE_DOCUMENT_IMPORT_STARTED_REPLY,
-                thread_ts=request["source"]["event_ts"],
+                thread_ts=request["source"]["thread_ts"],
             )
             document_stored = False
             try:
@@ -292,19 +305,19 @@ def register_slack_app_mention_listener(
                 )
             say(
                 text=reply_text,
-                thread_ts=request["source"]["event_ts"],
+                thread_ts=request["source"]["thread_ts"],
             )
             return
         if action_runner is not None and root["action"] is not None:
             reply_text = _action_started_reply(root["action"])
         say(
             text=reply_text,
-            thread_ts=request["source"]["event_ts"],
+            thread_ts=request["source"]["thread_ts"],
         )
         if action_runner is None or root["action"] is None:
             return
         try:
-            action_result = action_runner(root["action"])
+            action_result = action_runner(root["action"], request)
             public_message = action_result.get("public_message")
             if not isinstance(public_message, str) or not public_message.strip():
                 raise SlackEventError("Slack 동작 결과의 공개 메시지가 없음")
@@ -312,12 +325,18 @@ def register_slack_app_mention_listener(
             logger.warning("Slack 내부 동작 실패: %s", error)
             public_message = (
                 "프로필 분석 초안을 확인하지 못했습니다. 로컬 실행 이력을 확인해주세요."
-                if root["action"] in {PROFILE_DRAFT_ACTION, PROFILE_REVIEW_ACTION}
+                if root["action"]
+                in {
+                    PROFILE_DRAFT_ACTION,
+                    PROFILE_REVIEW_ACTION,
+                    PROFILE_REVIEW_APPROVE_ACTION,
+                    PROFILE_REVIEW_REJECT_ACTION,
+                }
                 else "공고 분석을 시작하지 못했습니다. 로컬 실행 이력을 확인해주세요."
             )
         say(
             text=public_message,
-            thread_ts=request["source"]["event_ts"],
+            thread_ts=request["source"]["thread_ts"],
         )
 
     app.event("app_mention")(handle_app_mention)

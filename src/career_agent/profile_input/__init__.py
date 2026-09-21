@@ -90,7 +90,9 @@ from .analysis_review import (
     PROFILE_ANALYSIS_REVIEW_DECISIONS,
     PROFILE_ANALYSIS_REVIEW_SCHEMA_VERSION,
     build_profile_analysis_review,
+    load_profile_analysis_review,
     save_profile_analysis_review,
+    select_latest_profile_analysis_reviews,
 )
 from .analysis_service import ProfileAnalysisProvider, analyze_profile_extraction
 from .openai_analysis import (
@@ -174,7 +176,9 @@ __all__ = [
     "PROFILE_ANALYSIS_REVIEW_DECISIONS",
     "PROFILE_ANALYSIS_REVIEW_SCHEMA_VERSION",
     "build_profile_analysis_review",
+    "load_profile_analysis_review",
     "save_profile_analysis_review",
+    "select_latest_profile_analysis_reviews",
     "ProfileAnalysisProvider",
     "analyze_profile_extraction",
     "DEFAULT_OPENAI_PROFILE_ANALYSIS_MODEL",

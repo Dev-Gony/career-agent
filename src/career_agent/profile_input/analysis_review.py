@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import datetime
 from hashlib import sha256
 import json
@@ -29,6 +30,7 @@ MAX_PROFILE_ANALYSIS_REVIEW_NOTES_CHARS = 1000
 _REVIEW_ID_PATTERN = re.compile(r"^profile-analysis-review-[0-9a-f]{24}$")
 _DRAFT_ID_PATTERN = re.compile(r"^profile-analysis-draft-[0-9a-f]{24}$")
 _EXTRACTION_ID_PATTERN = re.compile(r"^profile-text-extraction-[0-9a-f]{24}$")
+_MAX_STORED_REVIEW_FILES = 1000
 
 
 def _mapping(value: Any, name: str) -> Mapping[str, Any]:
@@ -64,7 +66,7 @@ def _reviewed_datetime(value: Any) -> tuple[str, datetime]:
     return normalized, parsed
 
 
-def _validated_review(review: Mapping[str, Any]) -> str:
+def _validated_review(review: Mapping[str, Any]) -> tuple[str, datetime]:
     _exact_keys(
         review,
         {"profile_analysis_review", "source", "metadata"},
@@ -111,7 +113,7 @@ def _validated_review(review: Mapping[str, Any]) -> str:
     review_id = _text(root.get("review_id"), "profile_analysis_review.review_id")
     if _REVIEW_ID_PATTERN.fullmatch(review_id) is None:
         raise ProfileDocumentError("프로필 분석 검토 ID가 올바르지 않음")
-    reviewed_timestamp, _ = _reviewed_datetime(root.get("reviewed_at"))
+    reviewed_timestamp, reviewed_at = _reviewed_datetime(root.get("reviewed_at"))
     decision = root.get("decision")
     if decision not in PROFILE_ANALYSIS_REVIEW_DECISIONS:
         raise ProfileDocumentError("프로필 분석 검토 결정이 올바르지 않음")
@@ -150,7 +152,7 @@ def _validated_review(review: Mapping[str, Any]) -> str:
     ).hexdigest()[:24]
     if review_id != expected_id:
         raise ProfileDocumentError("프로필 분석 검토 ID와 내용 지문이 일치하지 않음")
-    return review_id
+    return review_id, reviewed_at
 
 
 def build_profile_analysis_review(
@@ -248,7 +250,7 @@ def save_profile_analysis_review(
 ) -> Path:
     """Atomically save one immutable profile analysis review."""
 
-    review_id = _validated_review(review)
+    review_id, _ = _validated_review(review)
     target_directory = Path(directory)
     target_directory.mkdir(parents=True, exist_ok=True)
     target_path = target_directory / f"{review_id}.json"
@@ -278,3 +280,62 @@ def save_profile_analysis_review(
         if temporary_path is not None and temporary_path.exists():
             temporary_path.unlink()
     return target_path
+
+
+def load_profile_analysis_review(
+    review_id: str,
+    directory: str | Path,
+) -> dict[str, Any]:
+    """Load and verify one immutable private profile analysis review."""
+
+    normalized_id = _text(review_id, "review_id")
+    if _REVIEW_ID_PATTERN.fullmatch(normalized_id) is None:
+        raise ProfileDocumentError("프로필 분석 검토 ID가 올바르지 않음")
+    path = Path(directory) / f"{normalized_id}.json"
+    if path.is_symlink():
+        raise ProfileDocumentError("프로필 분석 검토 심볼릭 링크는 읽을 수 없음")
+    try:
+        review = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ProfileDocumentError(f"프로필 분석 검토 기록을 읽을 수 없음: {path}") from error
+    if not isinstance(review, dict):
+        raise ProfileDocumentError("프로필 분석 검토 최상위 JSON은 객체여야 함")
+    stored_id, _ = _validated_review(review)
+    if stored_id != normalized_id:
+        raise ProfileDocumentError("프로필 분석 검토 ID가 요청과 일치하지 않음")
+    return deepcopy(review)
+
+
+def select_latest_profile_analysis_reviews(
+    draft_id: str,
+    directory: str | Path,
+) -> dict[tuple[str, int], dict[str, Any]]:
+    """Return the newest verified decision for every item in one draft."""
+
+    normalized_draft_id = _text(draft_id, "draft_id")
+    if _DRAFT_ID_PATTERN.fullmatch(normalized_draft_id) is None:
+        raise ProfileDocumentError("프로필 분석 초안 ID가 올바르지 않음")
+    target_directory = Path(directory)
+    if not target_directory.exists():
+        return {}
+    if not target_directory.is_dir() or target_directory.is_symlink():
+        raise ProfileDocumentError("프로필 분석 검토 경로가 안전한 디렉터리가 아님")
+    paths = sorted(target_directory.glob("profile-analysis-review-*.json"))
+    if len(paths) > _MAX_STORED_REVIEW_FILES:
+        raise ProfileDocumentError("프로필 분석 검토 파일이 허용 개수를 초과함")
+
+    selected: dict[
+        tuple[str, int], tuple[datetime, str, dict[str, Any]]
+    ] = {}
+    for path in paths:
+        review = load_profile_analysis_review(path.stem, target_directory)
+        _, reviewed_at = _validated_review(review)
+        source = _mapping(review.get("source"), "source")
+        if source.get("draft_id") != normalized_draft_id:
+            continue
+        key = (str(source["item_type"]), int(source["item_position"]))
+        candidate = (reviewed_at, path.stem, review)
+        current = selected.get(key)
+        if current is None or candidate[:2] > current[:2]:
+            selected[key] = candidate
+    return {key: deepcopy(value[2]) for key, value in selected.items()}

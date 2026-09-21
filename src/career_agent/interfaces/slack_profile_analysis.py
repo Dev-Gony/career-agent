@@ -8,6 +8,7 @@ from career_agent.profile_input import (
     PROFILE_ANALYSIS_DRAFT_SCHEMA_VERSION,
     ProfileDocumentError,
     select_latest_profile_analysis_draft,
+    select_latest_profile_analysis_reviews,
     select_latest_profile_text_extraction,
     validate_profile_analysis_draft,
 )
@@ -38,6 +39,10 @@ NO_PROFILE_ANALYSIS_DRAFT_REPLY = (
 NO_PROFILE_ANALYSIS_ITEMS_REPLY = (
     "최신 프로필 분석 초안에 검토할 항목이 없습니다. "
     "개인 프로필과 검색 조건은 변경되지 않았습니다."
+)
+ALL_PROFILE_ANALYSIS_ITEMS_REVIEWED_REPLY = (
+    "최신 프로필 분석 초안의 모든 항목을 이미 검토했습니다. "
+    "아직 개인 프로필과 공고 검색 조건에는 자동 반영하지 않았습니다."
 )
 _REVIEW_ITEM_TYPES = (
     "career_evidence",
@@ -82,8 +87,12 @@ def _optional_line(
         lines.append(f"- {label}: {_safe_slack_text(value, field)}")
 
 
-def build_slack_profile_analysis_review_item(draft: Mapping[str, Any]) -> str:
-    """Render the first review item without exposing internal identifiers."""
+def build_slack_profile_analysis_review_item_result(
+    draft: Mapping[str, Any],
+    *,
+    reviewed_items: frozenset[tuple[str, int]] = frozenset(),
+) -> dict[str, Any]:
+    """Render the first pending review item and return its private target."""
 
     try:
         validated = validate_profile_analysis_draft(draft)
@@ -107,15 +116,25 @@ def build_slack_profile_analysis_review_item(draft: Mapping[str, Any]) -> str:
                 )
             )
     if not flattened:
-        return NO_PROFILE_ANALYSIS_ITEMS_REPLY
+        return {"public_message": NO_PROFILE_ANALYSIS_ITEMS_REPLY, "review_target": None}
 
-    item_type, item_position, item = flattened[0]
+    pending = [
+        entry for entry in flattened if (entry[0], entry[1]) not in reviewed_items
+    ]
+    if not pending:
+        return {
+            "public_message": ALL_PROFILE_ANALYSIS_ITEMS_REVIEWED_REPLY,
+            "review_target": None,
+        }
+
+    item_type, item_position, item = pending[0]
+    overall_position = flattened.index(pending[0]) + 1
     confidence = item.get("confidence")
     confidence_label = _CONFIDENCE_LABELS.get(confidence)
     if confidence_label is None:
         raise SlackEventError("프로필 분석 항목 신뢰도가 올바르지 않음")
     lines = [
-        f"프로필 분석 항목 1/{len(flattened)}",
+        f"프로필 분석 항목 {overall_position}/{len(flattened)}",
         "",
     ]
     if item_type == "career_evidence":
@@ -146,7 +165,21 @@ def build_slack_profile_analysis_review_item(draft: Mapping[str, Any]) -> str:
             "아직 개인 프로필과 공고 검색 조건에는 반영하지 않았습니다.",
         ]
     )
-    return "\n".join(lines)
+    return {
+        "public_message": "\n".join(lines),
+        "review_target": {
+            "draft_id": root["draft_id"],
+            "extraction_id": root["source_extraction_id"],
+            "item_type": item_type,
+            "item_position": item_position,
+        },
+    }
+
+
+def build_slack_profile_analysis_review_item(draft: Mapping[str, Any]) -> str:
+    """Render the first review item without exposing internal identifiers."""
+
+    return str(build_slack_profile_analysis_review_item_result(draft)["public_message"])
 
 
 def build_slack_profile_analysis_summary(draft: Mapping[str, Any]) -> str:
@@ -217,13 +250,30 @@ def build_latest_slack_profile_analysis_summary(
 def build_latest_slack_profile_analysis_review_item(
     extraction_directory: str,
     draft_directory: str,
+    review_directory: str | None = None,
 ) -> str:
     """Load the latest verified draft and render its first review item."""
+
+    return str(
+        build_latest_slack_profile_analysis_review_item_result(
+            extraction_directory,
+            draft_directory,
+            review_directory,
+        )["public_message"]
+    )
+
+
+def build_latest_slack_profile_analysis_review_item_result(
+    extraction_directory: str,
+    draft_directory: str,
+    review_directory: str | None = None,
+) -> dict[str, Any]:
+    """Load the latest draft and return its first pending item and target."""
 
     try:
         extraction = select_latest_profile_text_extraction(extraction_directory)
         if extraction is None:
-            return NO_PROFILE_EXTRACTION_REPLY
+            return {"public_message": NO_PROFILE_EXTRACTION_REPLY, "review_target": None}
         extraction_id = extraction["profile_extraction"]["extraction_id"]
         draft = select_latest_profile_analysis_draft(
             extraction_id,
@@ -232,5 +282,21 @@ def build_latest_slack_profile_analysis_review_item(
     except ProfileDocumentError as error:
         raise SlackEventError("저장된 프로필 분석 초안을 안전하게 확인할 수 없음") from error
     if draft is None:
-        return NO_PROFILE_ANALYSIS_DRAFT_REPLY
-    return build_slack_profile_analysis_review_item(draft)
+        return {"public_message": NO_PROFILE_ANALYSIS_DRAFT_REPLY, "review_target": None}
+    reviewed_items: frozenset[tuple[str, int]] = frozenset()
+    if review_directory is not None:
+        try:
+            draft_id = draft["profile_analysis_draft"]["draft_id"]
+            reviews = select_latest_profile_analysis_reviews(
+                draft_id,
+                review_directory,
+            )
+            reviewed_items = frozenset(reviews)
+        except ProfileDocumentError as error:
+            raise SlackEventError(
+                "저장된 프로필 분석 검토 기록을 안전하게 확인할 수 없음"
+            ) from error
+    return build_slack_profile_analysis_review_item_result(
+        draft,
+        reviewed_items=reviewed_items,
+    )

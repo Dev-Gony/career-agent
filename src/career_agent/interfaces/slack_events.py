@@ -24,6 +24,10 @@ PROFILE_DRAFT_COMMAND = "프로필 초안 보여줘"
 PROFILE_DRAFT_ACTION = "show_latest_profile_analysis_draft"
 PROFILE_REVIEW_COMMAND = "프로필 검토 시작"
 PROFILE_REVIEW_ACTION = "show_next_profile_analysis_review_item"
+PROFILE_REVIEW_APPROVE_COMMAND = "맞아"
+PROFILE_REVIEW_APPROVE_ACTION = "approve_active_profile_analysis_review_item"
+PROFILE_REVIEW_REJECT_COMMAND = "제외해줘"
+PROFILE_REVIEW_REJECT_ACTION = "reject_active_profile_analysis_review_item"
 
 _EVENT_ID_PATTERN = re.compile(r"^Ev[A-Za-z0-9]{6,62}$")
 _TEAM_ID_PATTERN = re.compile(r"^T[A-Za-z0-9]{6,31}$")
@@ -263,6 +267,12 @@ def build_slack_command_request(
         raise SlackEventError("Slack app_mention 이벤트만 처리할 수 있음")
     channel_id = _identifier(event.get("channel"), "event.channel", _CHANNEL_ID_PATTERN)
     event_ts = _identifier(event.get("event_ts"), "event.event_ts", _EVENT_TS_PATTERN)
+    raw_thread_ts = event.get("thread_ts")
+    thread_ts = (
+        _identifier(raw_thread_ts, "event.thread_ts", _EVENT_TS_PATTERN)
+        if raw_thread_ts is not None
+        else event_ts
+    )
 
     reason: str
     action: str | None
@@ -315,6 +325,22 @@ def build_slack_command_request(
                 reason = "supported_command"
                 action = PROFILE_REVIEW_ACTION
                 command_name = "start_profile_analysis_review"
+            elif command in {
+                PROFILE_REVIEW_APPROVE_COMMAND.casefold(),
+                PROFILE_REVIEW_REJECT_COMMAND.casefold(),
+            } and file_count == 0:
+                if raw_thread_ts is None:
+                    reason = "profile_review_thread_required"
+                    action = None
+                    command_name = None
+                elif command == PROFILE_REVIEW_APPROVE_COMMAND.casefold():
+                    reason = "supported_command"
+                    action = PROFILE_REVIEW_APPROVE_ACTION
+                    command_name = "approve_profile_analysis_review_item"
+                else:
+                    reason = "supported_command"
+                    action = PROFILE_REVIEW_REJECT_ACTION
+                    command_name = "reject_profile_analysis_review_item"
             elif command in {"", PROFILE_DOCUMENT_COMMAND.casefold()}:
                 action = None
                 command_name = "submit_profile_document"
@@ -358,6 +384,7 @@ def build_slack_command_request(
             "event_id": event_id,
             "event_time": event_time,
             "event_ts": event_ts,
+            "thread_ts": thread_ts,
             "team_id": team_id,
             "api_app_id": api_app_id,
             "user_id": user_id,
