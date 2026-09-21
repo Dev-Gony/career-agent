@@ -11,8 +11,9 @@
 - 입력: `PROFILE_EXTRACTION_SCHEMA` 0.1의 `needs_review` 후보
 - 출력 계약 버전: 0.1
 - 저장 위치: Git에서 제외된 `private-data/profile-analysis-drafts/`
-- 실제 외부 LLM 호출: 미구현
-- Slack 표시 및 승인: 미구현
+- 실제 외부 LLM 호출: OpenAI 어댑터와 공개 합성 입력 전용 Gemini 개발 경로 구현
+- Slack 표시: 최신 검증 초안의 항목 수 요약 구현
+- 항목 승인·거부: 비공개 불변 기록 구현, Slack 대화 연결 전
 
 현재 구현은 합성 공급자 응답으로 계약과 검증 경계만 확인한다. 실제 이력서 후보를 외부 API에 전송하지 않는다.
 
@@ -138,6 +139,34 @@
 
 `select_latest_profile_analysis_draft`는 같은 추출 ID에 연결된 검증된 초안만 모아 분석 시각과 초안 ID 순으로 최신 항목을 선택한다. 다른 문서에서 만든 초안은 분석 시각이 더 늦어도 선택하지 않는다. 초안 디렉터리가 아직 없거나 같은 추출 ID의 초안이 없으면 `None`을 반환한다.
 
+### 5.2 분석 항목 검토 기록
+
+검증된 초안의 각 배열 항목은 초안 ID, 항목 종류와 1부터 시작하는 순번으로 참조한다. 허용 항목 종류는 다음과 같다.
+
+- `career_evidence`
+- `achievement_evidence`
+- `technology_evidence`
+- `unknowns`
+
+사용자 결정은 `approve` 또는 `reject`다. 검토 기록은 분석 문장, 후보 문장과 후보 ID를 복제하지 않고 다음 참조만 저장한다.
+
+    {
+      "profile_analysis_review": {
+        "review_id": "profile-analysis-review-example",
+        "reviewed_at": "2026-09-21T12:00:00+00:00",
+        "decision": "approve",
+        "notes": null
+      },
+      "source": {
+        "draft_id": "profile-analysis-draft-example",
+        "extraction_id": "profile-text-extraction-example",
+        "item_type": "career_evidence",
+        "item_position": 1
+      }
+    }
+
+저장 전에 초안 전체 지문, 항목 존재 여부, 검토 ID 지문, 시간대와 비공개 메타데이터를 다시 검증한다. 결과는 `private-data/profile-analysis-reviews/`에 불변 파일로 저장하며 개인 프로필을 변경하지 않는다.
+
 ## 6. 다음 단계
 
 저장된 추출 결과와 로컬 합성 응답으로 전체 경계를 확인할 수 있다.
@@ -148,7 +177,6 @@
 
 다음 구현 순서는 다음과 같다.
 
-1. Slack에서 현재 추출 결과의 최신 초안 요약을 요청하는 명령을 추가한다.
-2. 합성 초안으로 명령 라우팅과 스레드 응답을 검증한다.
-3. 사용자 동의와 API Key가 준비된 뒤에만 OpenAI Responses API 구현을 추가한다.
-4. Slack에서 항목별 승인 또는 거부를 받는다.
+1. Slack에서 검토할 분석 항목 한 건의 내용을 안전하게 표시한다.
+2. 해당 항목의 승인 또는 거부 명령을 새 검토 기록에 연결한다.
+3. 최신 결정이 승인된 항목만 새 개인 프로필 갱신안으로 변환한다.

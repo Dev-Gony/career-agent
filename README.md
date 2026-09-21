@@ -69,6 +69,7 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
 - 새 분석, 기존 분석 재사용, 무후보와 실패 실행을 프로필·공고 본문 없이 별도 로컬 이력으로 저장하는 기능 구현
 - 사용자 문서 원본의 비공개 저장, Slack 저장 직후 후보 추출과 비확정 근거 신호 요약 구현
 - 프로필 후보별 승인·거부 불변 기록 구현
+- 프로필 분석 초안 항목별 승인·거부 불변 기록 구현
 - 후보별 최신 판단 중 승인된 항목만 기존 프로필과 분리된 갱신안으로 만드는 기능 구현
 - 승인된 기술 후보를 기존 기술 중복, 세부정보 필요와 기술명 분리 필요로 구분하는 비파괴 매핑 구현
 - 새 기술 후보의 숙련도와 사용 증거를 명시적 사용자 확인 기록으로 저장하는 기능 구현
@@ -420,6 +421,16 @@ Gemini 무료 API는 기능 개발 테스트에만 사용합니다. 실제 이�
       --confirm-public-synthetic-data
 
 기본 모델은 신규 사용자에게 제공되는 `gemini-3.5-flash-lite`, 추론 수준은 `low`, 응답 형식은 JSON Schema, 도구 사용은 없음으로 고정합니다. Gemini가 거부하는 일부 스키마 제약은 공급자 요청에서만 제거하고 더 엄격한 원문 근거·항목 수 검증은 로컬에서 다시 수행합니다. 결과는 일반 사용자 초안과 분리된 `private-data/gemini-development-drafts/`에 저장되고 개인 프로필은 변경하지 않습니다. Gemini 무료 등급에는 민감하거나 개인적인 자료를 전송하지 않습니다.
+
+검증된 프로필 분석 초안의 항목 한 건에 대한 사용자 결정을 별도 기록할 수 있습니다. 항목 순번은 1부터 시작하며 결정은 `approve` 또는 `reject`입니다.
+
+    python scripts/review_profile_analysis_item.py `
+      --draft-id profile-analysis-draft-실제ID `
+      --item-type career_evidence `
+      --item-position 1 `
+      --decision approve
+
+결과는 `private-data/profile-analysis-reviews/`에 저장됩니다. 분석 문장과 후보 원문을 검토 기록에 복제하지 않으며, 이 결정만으로 개인 프로필이나 검색 조건을 변경하지 않습니다. 현재 명령은 저장 계약 검증용이며 Slack에서 항목 내용을 먼저 확인하는 흐름은 다음 단계입니다.
 
 상세 분석된 공고에 사용자의 실제 판단을 별도 기록합니다. `fit`은 적합, `hold`는 보류, `not_fit`은 부적합입니다.
 

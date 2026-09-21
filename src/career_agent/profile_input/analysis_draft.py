@@ -772,6 +772,15 @@ def save_profile_analysis_draft(
     return target_path, True
 
 
+def validate_profile_analysis_draft(
+    draft: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Validate one stored-shape draft and return an isolated copy."""
+
+    _stored_draft(draft)
+    return deepcopy(dict(draft))
+
+
 def load_profile_analysis_draft(
     draft_id: str,
     directory: str | Path,
