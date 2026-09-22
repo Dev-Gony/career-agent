@@ -37,8 +37,11 @@ class JobSearchPlanGeneratorTest(unittest.TestCase):
         self.assertEqual("sample-user-001", plan["identity"]["profile_id"])
         self.assertEqual(
             ["AI Automation / Workflow Engineer", "AI Automation", "Workflow Engineer"],
-            plan["role_axes"][0]["discovery_terms"],
+            plan["role_axes"][0]["discovery_terms"][:3],
         )
+        self.assertIn("AI Agent", plan["role_axes"][0]["discovery_terms"])
+        self.assertIn("Automation Engineer", plan["role_axes"][0]["discovery_terms"])
+        self.assertIn("AI 자동화", plan["role_axes"][0]["discovery_terms"])
         signals = {item["signal"] for item in plan["capability_signals"]}
         self.assertIn("Python", signals)
         self.assertIn("REST API", signals)
@@ -94,6 +97,56 @@ class JobSearchPlanGeneratorTest(unittest.TestCase):
         self.assertEqual("sample-user-001", relevance["profile_id"])
         self.assertEqual("high", relevance["priority"])
         self.assertEqual(["role-ai-automation"], relevance["related_target_role_ids"])
+
+    def test_preserves_recall_for_current_ai_agent_discovery_titles(self) -> None:
+        plan = build_job_search_plan(_profile(), generated_at=GENERATED_AT)
+
+        current_opening = build_profile_relevance(
+            {
+                "title": "Software Engineer, AI Agent",
+                "location_text": "Seoul",
+                "employment_text": "full_time",
+            },
+            plan,
+        )
+        internship = build_profile_relevance(
+            {
+                "title": "AI Agent Engineer, Intern",
+                "location_text": "Seoul",
+                "employment_text": "internship",
+            },
+            plan,
+        )
+
+        self.assertEqual("high", current_opening["priority"])
+        self.assertIn(
+            "제목에 검색 확장어 'AI Agent'가 포함됨",
+            current_opening["positive_signals"],
+        )
+        self.assertEqual("medium", internship["priority"])
+        self.assertEqual("mismatch", internship["employment_assessment"])
+
+    def test_unknown_role_id_uses_only_confirmed_role_text(self) -> None:
+        profile = _profile()
+        profile["profile"]["target_roles"] = [
+            {
+                "target_role_id": "role-user-confirmed-custom",
+                "role": "Custom Platform / Integration Engineer",
+                "priority": 1,
+                "hypothesis": "사용자가 확인한 신규 탐색 직무",
+            }
+        ]
+
+        plan = build_job_search_plan(profile, generated_at=GENERATED_AT)
+
+        self.assertEqual(
+            [
+                "Custom Platform / Integration Engineer",
+                "Custom Platform",
+                "Integration Engineer",
+            ],
+            plan["job_search_plan"]["role_axes"][0]["discovery_terms"],
+        )
 
     def test_rejects_missing_roles_and_naive_datetime(self) -> None:
         profile = _profile()

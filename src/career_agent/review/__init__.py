@@ -16,6 +16,7 @@ from .queue import (
     GreenhouseReviewQueueError,
     build_greenhouse_review_queue,
     save_greenhouse_review_queue,
+    validate_greenhouse_review_queue_search_plan,
 )
 
 __all__ = [
@@ -30,4 +31,5 @@ __all__ = [
     "GreenhouseReviewQueueError",
     "build_greenhouse_review_queue",
     "save_greenhouse_review_queue",
+    "validate_greenhouse_review_queue_search_plan",
 ]

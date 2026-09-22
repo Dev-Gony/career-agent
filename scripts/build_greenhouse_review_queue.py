@@ -22,6 +22,7 @@ from career_agent.profile_input import (  # noqa: E402
 from career_agent.search_plan import (  # noqa: E402
     JobSearchPlanError,
     build_job_search_plan,
+    validate_job_search_plan_for_profile,
 )
 
 
@@ -123,6 +124,7 @@ def main() -> int:
             if args.search_plan is not None
             else build_job_search_plan(profile, generated_at=created_at)
         )
+        search_plan = validate_job_search_plan_for_profile(search_plan, profile)
         runs_with_paths = _load_runs(args.run_directory)
         reviews_with_paths = _load_optional_documents(args.review_directory)
         source_path, source_run = _latest_discovery_run(runs_with_paths)

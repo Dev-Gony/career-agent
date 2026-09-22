@@ -30,6 +30,7 @@ from career_agent.profile_input import (  # noqa: E402
 from career_agent.search_plan import (  # noqa: E402
     JobSearchPlanError,
     build_job_search_plan,
+    validate_job_search_plan_for_profile,
 )
 
 
@@ -153,6 +154,7 @@ def main() -> int:
             if args.search_plan is not None
             else build_job_search_plan(profile, generated_at=execution_time)
         )
+        search_plan = validate_job_search_plan_for_profile(search_plan, profile)
         boards = load_enabled_greenhouse_boards(_load_json(args.board_config))
         previous_runs, previous_paths = _load_previous_runs(args.run_directory)
         result = run_greenhouse_portfolio_agent(

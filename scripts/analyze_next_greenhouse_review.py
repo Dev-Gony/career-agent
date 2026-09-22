@@ -23,6 +23,7 @@ from career_agent.review import (  # noqa: E402
     save_greenhouse_review_analysis_run,
     save_greenhouse_review_queue,
     select_next_greenhouse_review_candidate,
+    validate_greenhouse_review_queue_search_plan,
 )
 from career_agent.workflows import (  # noqa: E402
     GreenhouseAnalysisError,
@@ -35,6 +36,7 @@ from career_agent.profile_input import (  # noqa: E402
 from career_agent.search_plan import (  # noqa: E402
     JobSearchPlanError,
     build_job_search_plan,
+    validate_job_search_plan_for_profile,
 )
 
 
@@ -150,7 +152,9 @@ def main() -> int:
             if args.search_plan is not None
             else build_job_search_plan(profile, generated_at=execution_time)
         )
+        search_plan = validate_job_search_plan_for_profile(search_plan, profile)
         queue_path, queue = _latest_queue(args.queue_directory)
+        validate_greenhouse_review_queue_search_plan(queue, search_plan)
         try:
             candidate = select_next_greenhouse_review_candidate(queue, profile)
         except NoGreenhouseReviewCandidateError:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -17,6 +18,9 @@ from career_agent.review import (  # noqa: E402
     GreenhouseReviewQueueError,
     build_greenhouse_review_queue,
     save_greenhouse_review_queue,
+)
+from career_agent.review.queue import (  # noqa: E402
+    validate_greenhouse_review_queue_search_plan,
 )
 from career_agent.workflows import (  # noqa: E402
     ANALYSIS_PIPELINE_VERSION,
@@ -86,6 +90,7 @@ class GreenhouseReviewQueueTest(unittest.TestCase):
         self.profile = {"profile": {"basic": {"profile_id": "sample"}}}
         self.search_plan = {
             "job_search_plan": {
+                "identity": {"plan_id": "search-plan-review-queue-test"},
                 "role_axes": [
                     {
                         "priority": 1,
@@ -161,6 +166,99 @@ class GreenhouseReviewQueueTest(unittest.TestCase):
         self.assertEqual("needs_analysis", queue["items"][1]["analysis_status"])
         self.assertEqual("not_reviewed", queue["items"][0]["human_review"]["status"])
         self.assertEqual(3, queue["summary"]["eligible_current_candidates"])
+
+    def test_records_and_validates_exact_search_plan_identity(self) -> None:
+        queue = build_greenhouse_review_queue(
+            self.discovery,
+            [],
+            self.profile,
+            self.search_plan,
+            created_at=datetime(2026, 9, 14, 12, tzinfo=timezone.utc),
+            source_run_filename="source.json",
+        )
+
+        self.assertEqual(
+            "search-plan-review-queue-test",
+            queue["review_queue"]["search_plan_id"],
+        )
+        self.assertEqual(
+            "greenhouse-review-queue-20260914T120000000000+0000",
+            queue["review_queue"]["queue_id"],
+        )
+        self.assertRegex(
+            queue["metadata"]["search_plan_content_sha256"],
+            r"^[0-9a-f]{64}$",
+        )
+        validate_greenhouse_review_queue_search_plan(queue, self.search_plan)
+        validate_greenhouse_review_queue_search_plan(
+            queue,
+            self.search_plan["job_search_plan"],
+        )
+
+    def test_rejects_queue_when_search_plan_content_changes_under_same_id(self) -> None:
+        queue = build_greenhouse_review_queue(
+            self.discovery,
+            [],
+            self.profile,
+            self.search_plan,
+            created_at=datetime(2026, 9, 14, 12, tzinfo=timezone.utc),
+            source_run_filename="source.json",
+        )
+        changed_plan = deepcopy(self.search_plan)
+        changed_plan["job_search_plan"]["role_axes"][0]["discovery_terms"].append(
+            "Workflow Automation"
+        )
+
+        with self.assertRaisesRegex(GreenhouseReviewQueueError, "검색 계획 내용"):
+            validate_greenhouse_review_queue_search_plan(queue, changed_plan)
+
+    def test_accepts_semantically_same_generated_plan_with_later_timestamp(self) -> None:
+        queue = build_greenhouse_review_queue(
+            self.discovery,
+            [],
+            self.profile,
+            self.search_plan,
+            created_at=datetime(2026, 9, 14, 12, tzinfo=timezone.utc),
+            source_run_filename="source.json",
+        )
+        regenerated_plan = deepcopy(self.search_plan)
+        regenerated_plan["job_search_plan"]["identity"]["generated_at"] = (
+            "2026-09-15T12:00:00+00:00"
+        )
+
+        validate_greenhouse_review_queue_search_plan(queue, regenerated_plan)
+
+    def test_rejects_queue_when_search_plan_id_changes(self) -> None:
+        queue = build_greenhouse_review_queue(
+            self.discovery,
+            [],
+            self.profile,
+            self.search_plan,
+            created_at=datetime(2026, 9, 14, 12, tzinfo=timezone.utc),
+            source_run_filename="source.json",
+        )
+        changed_plan = deepcopy(self.search_plan)
+        changed_plan["job_search_plan"]["identity"]["plan_id"] = (
+            "search-plan-review-queue-other"
+        )
+
+        with self.assertRaisesRegex(GreenhouseReviewQueueError, "검색 계획 ID"):
+            validate_greenhouse_review_queue_search_plan(queue, changed_plan)
+
+    def test_rejects_legacy_queue_without_search_plan_identity(self) -> None:
+        queue = build_greenhouse_review_queue(
+            self.discovery,
+            [],
+            self.profile,
+            self.search_plan,
+            created_at=datetime(2026, 9, 14, 12, tzinfo=timezone.utc),
+            source_run_filename="source.json",
+        )
+        del queue["review_queue"]["search_plan_id"]
+        del queue["metadata"]["search_plan_content_sha256"]
+
+        with self.assertRaisesRegex(GreenhouseReviewQueueError, "재사용할 수 없음"):
+            validate_greenhouse_review_queue_search_plan(queue, self.search_plan)
 
     def test_excludes_legacy_talent_pool_record_from_queue(self) -> None:
         talent_pool = _record(

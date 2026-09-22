@@ -3,6 +3,7 @@
     "identity": {
       "plan_id": "search-plan-sample-user-001-v1",
       "profile_id": "sample-user-001",
+      "profile_content_sha256": "931478a0604874fd54b89dd3f0407c27c04b50d659397f54976eb2d355dedb8a",
       "version": 1,
       "generated_at": "2026-09-13T10:00:00+09:00"
     },
@@ -292,11 +293,14 @@
     },
     "metadata": {
       "schema_version": "1.0",
+      "rules_version": "profile-evidence-v2",
       "generated_by": "profile_derived_rule",
       "requires_manual_keywords": false,
       "requires_manual_exclusions": false,
       "requires_remote_preference": false,
-      "is_example": true
+      "is_example": true,
+      "contains_personal_data": false,
+      "git_tracking_allowed": true
     }
   }
 }

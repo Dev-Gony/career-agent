@@ -38,10 +38,11 @@
     identity:
       plan_id: "search-plan-sample-user-001-v1"
       profile_id: "sample-user-001"
+      profile_content_sha256: "64자리 SHA-256"
       version: 1
       generated_at: "2026-09-13T10:00:00+09:00"
 
-같은 프로필에서 규칙이나 근거가 바뀌면 `version`을 올린다.
+자동 생성 계획의 `plan_id`는 전체 프로필 내용 지문과 생성 규칙 버전으로 정해진다. 명시적 계획도 `profile_id`와 `profile_content_sha256`가 실제로 선택한 프로필과 정확히 같아야 한다.
 
 ## 5. source_profile
 
@@ -97,7 +98,7 @@ ID를 가진 경력, 프로젝트와 기술은 `evidence_ids`로 참조한다. �
 
 `discovery_terms`는 공고를 넓게 찾기 위한 직무 및 문제 표현이다. `supporting_terms`는 같은 제목의 후보를 정렬할 때 사용하는 역량 표현이다.
 
-검색어는 사용자가 직접 관리하는 고정 목록이 아니다. 프로필의 목표 직무와 실제 공고 표현을 연결하기 위한 Agent 생성 결과이며 근거와 함께 검토할 수 있어야 한다.
+검색어는 사용자가 직접 관리하는 고정 목록이 아니다. 프로필의 목표 직무와 실제 공고 표현을 연결하기 위한 Agent 생성 결과이며 근거와 함께 검토할 수 있어야 한다. 현재 공개 예제에서 검토된 목표 직무 ID에는 통제된 직무 동의어를 결정론적으로 확장하고, 알 수 없는 새 직무 ID에는 프로필의 직무 원문과 슬래시 분리 원문만 사용한다. 직무 동의어는 검색 recall을 위한 표현이며 사용자의 보유 기술로 해석하지 않는다.
 
 ## 7. capability_signals
 
@@ -234,11 +235,14 @@ ID를 가진 경력, 프로젝트와 기술은 `evidence_ids`로 참조한다. �
 
     metadata:
       schema_version: "1.0"
+      rules_version: "profile-evidence-v2"
       generated_by: "profile_derived_rule"
       requires_manual_keywords: false
       requires_manual_exclusions: false
       requires_remote_preference: false
       is_example: true
+      contains_personal_data: false
+      git_tracking_allowed: true
 
 ## 14. 완료 기준
 
@@ -254,13 +258,15 @@ ID를 가진 경력, 프로젝트와 기술은 `evidence_ids`로 참조한다. �
 
 `career_agent.search_plan.build_job_search_plan`은 활성 프로필에서 다음 정보만 사용해 계획을 만든다.
 
-- 목표 직무의 원문과 슬래시로 구분된 원문 조각
+- 목표 직무의 원문, 슬래시로 구분된 원문 조각과 검토된 목표 직무 ID별 통제 동의어
 - 실제 사용 근거가 있고 수준이 `basic`, `project`, `work`인 기술
 - 프로필에 명시된 지역, 고용 형태와 업무 선호
 
 `exposure`와 `learning` 수준의 기술은 긍정 신호로 사용하지 않는다. 경력 연수와 재택 선호는 확정값이 없으면 `unknown_constraints`로 남긴다. 낮은 선호는 `rank_down_only`로 유지하고 강제 제외 조건으로 만들지 않는다. 계획 ID는 프로필 전체 내용 지문과 생성 규칙 버전으로 결정되며 개인 자료이므로 Git 추적을 허용하지 않는다.
 
-공고 발견, Greenhouse 검토 큐와 다음 공고 상세 분석 스크립트는 명시적 `--search-plan` 경로가 없을 때 선택된 활성 프로필에서 이 계획을 메모리에서 재생성한다. 명시적 경로는 개발 재현 시험용 우선 입력으로 유지한다.
+공고 발견, Greenhouse 검토 큐와 다음 공고 상세 분석 스크립트는 명시적 `--search-plan` 경로가 없을 때 선택된 활성 프로필에서 이 계획을 메모리에서 재생성한다. 명시적 경로는 개발 재현 시험용 우선 입력으로 유지하되 현재 스키마와 규칙 버전, 프로필 ID와 프로필 내용 지문이 모두 일치해야 한다.
+
+검토 큐에는 계획 ID와 생성 시각을 제외한 계획 내용의 SHA-256 지문을 함께 저장한다. 다음 상세 분석은 현재 재생성한 계획과 큐의 ID 및 내용 지문이 모두 같을 때만 진행한다. 생성 시각만 다른 동일 계획은 허용하지만 직무 표현, 선호나 규칙이 달라진 오래된 큐는 상세 공고 요청 전에 거부한다.
 
 ## 15. 우선순위 기대 사례
 

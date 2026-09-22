@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Iterable
 from datetime import datetime
+from hashlib import sha256
 import json
 import os
 from pathlib import Path
@@ -25,6 +26,7 @@ _ASSESSMENT_ORDER = {"match": 0, "unknown": 1, "mismatch": 2}
 _TOKEN_PATTERN = re.compile(r"[A-Za-z0-9]+|[가-힣]+")
 _TOKEN_STOPWORDS = {"and", "or", "the", "of"}
 _GENERIC_ROLE_TOKENS = frozenset({"engineer", "엔지니어"})
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 class GreenhouseReviewQueueError(ValueError):
@@ -119,8 +121,7 @@ def _explicit_mismatch_rank(record: Mapping[str, Any]) -> int:
 def _target_role_tokens(
     search_plan: Mapping[str, Any],
 ) -> tuple[dict[str, int], tuple[frozenset[str], ...], frozenset[str]]:
-    plan = search_plan.get("job_search_plan", search_plan)
-    plan = _mapping(plan, "job_search_plan")
+    plan = _search_plan_root(search_plan)
     role_axes = plan.get("role_axes")
     if not isinstance(role_axes, list) or not role_axes:
         raise GreenhouseReviewQueueError("job_search_plan.role_axes 배열이 필요함")
@@ -154,6 +155,69 @@ def _target_role_tokens(
         if axis_tokens:
             axis_token_groups.append(frozenset(axis_tokens))
     return weights, tuple(axis_token_groups), frozenset(singleton_tokens)
+
+
+def _search_plan_root(search_plan: Mapping[str, Any]) -> Mapping[str, Any]:
+    if not isinstance(search_plan, Mapping):
+        raise GreenhouseReviewQueueError("job_search_plan 객체가 필요함")
+    return _mapping(
+        search_plan.get("job_search_plan", search_plan),
+        "job_search_plan",
+    )
+
+
+def _search_plan_identity(search_plan: Mapping[str, Any]) -> tuple[str, str]:
+    plan = _search_plan_root(search_plan)
+    identity = _mapping(plan.get("identity"), "job_search_plan.identity")
+    plan_id = _text(identity.get("plan_id"), "job_search_plan.identity.plan_id")
+    semantic_plan = dict(plan)
+    semantic_identity = dict(identity)
+    semantic_identity.pop("generated_at", None)
+    semantic_plan["identity"] = semantic_identity
+    try:
+        canonical = json.dumps(
+            semantic_plan,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    except (TypeError, ValueError) as error:
+        raise GreenhouseReviewQueueError(
+            "job_search_plan을 안정적으로 직렬화할 수 없음"
+        ) from error
+    return plan_id, sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def validate_greenhouse_review_queue_search_plan(
+    queue: Mapping[str, Any],
+    current_search_plan: Mapping[str, Any],
+) -> None:
+    """Reject a queue that was not built from the current semantic search plan."""
+
+    root = _mapping(queue.get("review_queue"), "review_queue")
+    metadata = _mapping(queue.get("metadata"), "metadata")
+    if metadata.get("schema_version") != REVIEW_QUEUE_SCHEMA_VERSION:
+        raise GreenhouseReviewQueueError("현재 스키마 버전의 검토 큐가 아님")
+
+    recorded_plan_id = root.get("search_plan_id")
+    recorded_plan_hash = metadata.get("search_plan_content_sha256")
+    if not isinstance(recorded_plan_id, str) or not recorded_plan_id.strip():
+        raise GreenhouseReviewQueueError(
+            "검색 계획 식별 정보가 없는 검토 큐는 재사용할 수 없음"
+        )
+    if (
+        not isinstance(recorded_plan_hash, str)
+        or _SHA256_PATTERN.fullmatch(recorded_plan_hash) is None
+    ):
+        raise GreenhouseReviewQueueError(
+            "검색 계획 내용 지문이 없는 검토 큐는 재사용할 수 없음"
+        )
+
+    current_plan_id, current_plan_hash = _search_plan_identity(current_search_plan)
+    if recorded_plan_id.strip() != current_plan_id:
+        raise GreenhouseReviewQueueError("검토 큐의 검색 계획 ID가 현재 계획과 다름")
+    if recorded_plan_hash != current_plan_hash:
+        raise GreenhouseReviewQueueError("검토 큐의 검색 계획 내용이 현재 계획과 다름")
 
 
 def _broad_role_signals(
@@ -474,6 +538,7 @@ def build_greenhouse_review_queue(
         raise GreenhouseReviewQueueError("source_run_filename은 파일명이어야 함")
     _text(source_run_filename, "source_run_filename")
 
+    search_plan_id, search_plan_hash = _search_plan_identity(search_plan)
     token_weights, axis_token_groups, singleton_tokens = _target_role_tokens(
         search_plan
     )
@@ -524,6 +589,7 @@ def build_greenhouse_review_queue(
             "created_at": created_at.isoformat(timespec="microseconds"),
             "source_discovery_executed_at": discovery.get("executed_at"),
             "source_run_filename": source_run_filename,
+            "search_plan_id": search_plan_id,
             "limit": limit,
         },
         "summary": {
@@ -539,6 +605,7 @@ def build_greenhouse_review_queue(
             "matching_rules_version": MATCHING_RULES_VERSION,
             "analysis_pipeline_version": ANALYSIS_PIPELINE_VERSION,
             "profile_content_sha256": profile_hash,
+            "search_plan_content_sha256": search_plan_hash,
             "contains_profile_content": False,
             "contains_job_description_content": False,
         },

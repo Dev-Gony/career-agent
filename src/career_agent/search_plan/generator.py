@@ -9,11 +9,45 @@ from typing import Any, Mapping, Sequence
 
 
 JOB_SEARCH_PLAN_SCHEMA_VERSION = "1.0"
-JOB_SEARCH_PLAN_RULES_VERSION = "profile-evidence-v1"
+JOB_SEARCH_PLAN_RULES_VERSION = "profile-evidence-v2"
 
 _DEMONSTRATED_SKILL_LEVELS = frozenset({"basic", "project", "work"})
 _LOCATION_NORMALIZATION = {
     "수도권": ("서울", "경기", "인천"),
+}
+_ROLE_DISCOVERY_TERM_TAXONOMY = {
+    "role-ai-automation": (
+        "AI 자동화",
+        "업무 자동화",
+        "워크플로 자동화",
+        "Automation Engineer",
+        "AI Agent",
+    ),
+    "role-ai-solutions": (
+        "AI 솔루션",
+        "AI Solutions Engineer",
+        "Solutions Engineer",
+        "AI 엔지니어",
+        "LLM 응용",
+    ),
+    "role-enterprise-solution": (
+        "엔터프라이즈 솔루션",
+        "ITSM",
+        "솔루션 엔지니어",
+        "기술 컨설턴트",
+    ),
+    "role-cloud-finops": (
+        "FinOps",
+        "클라우드 자동화",
+        "클라우드 비용 최적화",
+        "Cloud Automation",
+    ),
+    "role-data-analytics-automation": (
+        "데이터 자동화",
+        "분석 자동화",
+        "Analytics Engineer",
+        "BI 자동화",
+    ),
 }
 
 
@@ -50,14 +84,18 @@ def _optional_text_list(value: Any, name: str) -> list[str]:
     return result
 
 
-def _role_terms(role: str) -> list[str]:
-    """Use only the confirmed role text and its verbatim slash-separated parts."""
+def _role_terms(target_role_id: str, role: str) -> list[str]:
+    """Expand one confirmed role with the reviewed discovery-term taxonomy."""
 
     terms = [role]
-    for part in role.split("/"):
-        normalized = part.strip()
-        if normalized and normalized not in terms:
-            terms.append(normalized)
+    candidates = (
+        *(part.strip() for part in role.split("/")),
+        *_ROLE_DISCOVERY_TERM_TAXONOMY.get(target_role_id, ()),
+    )
+    for candidate in candidates:
+        part = candidate.strip()
+        if part and part not in terms:
+            terms.append(part)
     return terms
 
 
@@ -152,7 +190,7 @@ def build_job_search_plan(
                 "target_role_id": target_role_id,
                 "priority": priority,
                 "canonical_role": role,
-                "discovery_terms": _role_terms(role),
+                "discovery_terms": _role_terms(target_role_id, role),
                 "supporting_terms": [skill["name"] for skill in demonstrated_skills],
                 "rationale": rationale,
             }
