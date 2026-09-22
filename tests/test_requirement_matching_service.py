@@ -11,6 +11,8 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
 from career_agent.matching import RequirementMatchError, match_job_requirements  # noqa: E402
+from career_agent.profile_input import build_draft_search_base_profile, build_provisional_search_profile
+from tests.test_provisional_search_profile import _draft, PROJECTED_AT
 
 
 class RequirementMatchingServiceTest(unittest.TestCase):
@@ -95,6 +97,54 @@ class RequirementMatchingServiceTest(unittest.TestCase):
         self.assertEqual("unknown", match["assessment"]["result"])
         self.assertEqual([], match["user_evidence"])
         self.assertEqual(4, result["summary"]["required"]["total"])
+
+    def _provisional_profile(self) -> dict:
+        draft = _draft()
+        return build_provisional_search_profile(
+            build_draft_search_base_profile(draft), draft, projected_at=PROJECTED_AT,
+        )["profile_document"]
+
+    def test_displays_sourced_resume_evidence_without_confirming_competence(self) -> None:
+        profile = self._provisional_profile()
+        original = deepcopy(profile)
+        result = match_job_requirements(profile, self.posting)
+        evidence = result["document_evidence"]
+
+        self.assertEqual("unconfirmed", evidence["status"])
+        self.assertEqual("QA Engineer", evidence["career_context"][0]["role_or_context"])
+        self.assertEqual(["candidate-001"], evidence["career_context"][0]["candidate_ids"])
+        self.assertEqual(["Python"], [item["name"] for item in evidence["requirement_links"]])
+        python = evidence["requirement_links"][0]
+        self.assertEqual("requirements", python["source_section"])
+        self.assertEqual(["candidate-003"], python["user_evidence"][0]["candidate_ids"])
+        self.assertEqual("unknown", result["required_matches"][0]["assessment"]["result"])
+        self.assertEqual([], result["confirmed_matches"])
+        self.assertEqual("HOLD", result["recommendation"])
+        self.assertEqual(original, profile)
+        self.assertTrue(result["metadata"]["contains_personal_data"])
+        self.assertTrue(result["metadata"]["contains_candidate_text"])
+        self.assertFalse(result["metadata"]["git_tracking_allowed"])
+        profile["metadata"]["data_type"] = "user_profile"
+        without_display = match_job_requirements(profile, self.posting)
+        self.assertEqual(result["confirmed_matches"], without_display["confirmed_matches"])
+        self.assertEqual(result["application_recommendation"], without_display["application_recommendation"])
+
+    def test_document_summary_requires_provisional_marker_and_source_lineage(self) -> None:
+        profile = self._provisional_profile()
+        profile["profile"]["skills"][0]["provenance"]["source_draft_id"] = "another-draft"
+        profile["profile"]["provisional_evidence"]["career_evidence"][0]["candidate_ids"] = []
+        result = match_job_requirements(profile, self.posting)
+        self.assertEqual([], result["document_evidence"]["requirement_links"])
+        self.assertEqual([], result["document_evidence"]["career_context"])
+        profile["metadata"]["data_type"] = "user_profile"
+        self.assertIsNone(match_job_requirements(profile, self.posting)["document_evidence"])
+        self.assertIsNone(match_job_requirements(self.profile, self.posting)["document_evidence"])
+
+    def test_unrelated_draft_skill_is_not_a_requirement_link(self) -> None:
+        profile = self._provisional_profile()
+        profile["profile"]["skills"][0]["name"] = "Unrelated technology"
+        result = match_job_requirements(profile, self.posting)
+        self.assertEqual([], result["document_evidence"]["requirement_links"])
 
     def test_rejects_duplicate_source_ids_across_sections(self) -> None:
         posting = deepcopy(self.posting)

@@ -133,6 +133,11 @@ def build_greenhouse_review_analysis_run(
         "metadata": {
             "analysis_id": analysis_id,
             "human_review_status": "not_reviewed",
+            **({
+                "contains_personal_data": True,
+                "contains_candidate_text": True,
+                "git_tracking_allowed": False,
+            } if match_result.get("document_evidence") is not None else {}),
         },
     }
 

@@ -6,6 +6,7 @@ from collections import Counter
 from typing import Any
 
 from .eligibility import EligibilityMatchError, assess_eligibility
+from .document_evidence import build_document_evidence
 from .experience import ExperienceMatchError, match_experience_requirements
 from .insights import MatchInsightsError, build_match_insights
 from .job_posting_information import (
@@ -19,7 +20,7 @@ from .responsibility import ResponsibilityMatchError, match_responsibilities
 from .technology import TechnologyMatchError, match_technology_requirements
 
 
-MATCHING_RULES_VERSION = "0.5"
+MATCHING_RULES_VERSION = "0.6"
 
 
 class RequirementMatchError(ValueError):
@@ -254,6 +255,10 @@ def match_job_requirements(
         preferred_matches,
         responsibility["responsibility_matches"],
     )
+    document_evidence = build_document_evidence(
+        profile_document,
+        [*required_matches, *responsibility["responsibility_matches"], *preferred_matches],
+    )
 
     return {
         "scope": "requirements_responsibilities_eligibility_and_recommendation",
@@ -274,6 +279,7 @@ def match_job_requirements(
         "responsibility_matches": responsibility["responsibility_matches"],
         "strengths": insights["strengths"],
         "confirmed_matches": confirmed_matches,
+        "document_evidence": document_evidence,
         "gaps": insights["gaps"],
         "unknowns": insights["unknowns"],
         "learning_recommendations": learning_recommendations,
@@ -284,6 +290,11 @@ def match_job_requirements(
             "recommendation_reason"
         ],
         "metadata": {
+            **({
+                "contains_personal_data": True,
+                "contains_candidate_text": True,
+                "git_tracking_allowed": False,
+            } if document_evidence is not None else {}),
             "matching_rules_version": MATCHING_RULES_VERSION,
             "analysis_mode": "mvp_rule_based",
             "incomplete_sections": [

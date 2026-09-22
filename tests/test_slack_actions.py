@@ -12,6 +12,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
 from career_agent.interfaces import SlackEventError, run_slack_career_action  # noqa: E402
+from career_agent.interfaces.slack_actions import _public_success_message
 
 
 def _success_output(path: Path) -> str:
@@ -122,6 +123,53 @@ def _save_analysis(directory: str, document: dict | None = None) -> Path:
 
 
 class SlackActionsTest(unittest.TestCase):
+    def test_displays_draft_context_and_skill_evidence_separately_from_confirmed_matches(self) -> None:
+        document = _analysis_document()
+        match = document["analysis"]["match_result"]
+        match["confirmed_matches"] = []
+        match["document_evidence"] = {
+            "status": "unconfirmed",
+            "career_context": [{
+                "role_or_context": "QA Engineer",
+                "period_expression": "2022년",
+                "detail": "API 테스트 자동화 <@U123> & 검증",
+            }],
+            "requirement_links": [{
+                "source_section": "requirements", "name": "Python",
+                "verification_status": "unconfirmed",
+                "user_evidence": [{"detail": "Python 테스트 데이터 도구 개발",
+                                   "evidence_level": "unconfirmed", "source_type": "skill"}],
+            }],
+        }
+        message = _public_success_message(_success_output(Path("ignored.json")), document)
+        self.assertIn("*확인된 일치*\n- 확인된 일치 항목이 없습니다.", message)
+        self.assertIn("이력서에 경험이 없다는 의미는 아닙니다", message)
+        self.assertIn("*이력서에서 읽은 경력 맥락 (AI 초안)*\n- QA Engineer", message)
+        self.assertIn("문서 기간 표현: 2022년", message)
+        self.assertIn("API 테스트 자동화 &lt;@U123&gt; &amp; 검증", message)
+        self.assertNotIn("<@U123>", message)
+        self.assertIn("이 공고의 직무·경력 연수 충족을 뜻하지 않습니다", message)
+        self.assertIn("*공고 기술과 연결되는 이력서 근거 (사용 수준 미확인)*", message)
+        self.assertIn("Python 테스트 데이터 도구 개발", message)
+        self.assertIn("최종 추천: HOLD", message)
+        match["document_evidence"]["requirement_links"][0]["user_evidence"][0]["evidence_level"] = "work"
+        with self.assertRaises(SlackEventError):
+            _public_success_message(_success_output(Path("ignored.json")), document)
+        match["document_evidence"]["requirement_links"][0]["verification_status"] = "confirmed"
+        with self.assertRaises(SlackEventError):
+            _public_success_message(_success_output(Path("ignored.json")), document)
+
+    def test_missing_or_empty_document_evidence_keeps_existing_summary(self) -> None:
+        document = _analysis_document()
+        output = _success_output(Path("ignored.json"))
+        before = _public_success_message(output, document)
+        document["analysis"]["match_result"]["document_evidence"] = None
+        self.assertEqual(before, _public_success_message(output, document))
+        document["analysis"]["match_result"]["document_evidence"] = {
+            "status": "unconfirmed", "career_context": [], "requirement_links": [],
+        }
+        self.assertEqual(before, _public_success_message(output, document))
+
     def test_runs_static_command_and_returns_escaped_public_summary(self) -> None:
         calls: list[tuple] = []
 

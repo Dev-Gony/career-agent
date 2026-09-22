@@ -85,6 +85,17 @@ class GreenhouseReviewAnalysisTest(unittest.TestCase):
         self.assertEqual("200", selected["external_job_id"])
         self.assertEqual(2, selected["position"])
 
+    def test_marks_document_derived_run_as_private(self) -> None:
+        self.analysis["match_result"]["document_evidence"] = {
+            "status": "unconfirmed", "career_context": [], "requirement_links": [],
+        }
+        run = build_greenhouse_review_analysis_run(
+            self.queue, self.candidate, self.analysis, queue_filename="queue.json",
+        )
+        self.assertTrue(run["metadata"]["contains_personal_data"])
+        self.assertTrue(run["metadata"]["contains_candidate_text"])
+        self.assertFalse(run["metadata"]["git_tracking_allowed"])
+
     def test_rejects_queue_built_from_changed_profile(self) -> None:
         changed_profile = {"profile": {"basic": {"profile_id": "changed"}}}
 

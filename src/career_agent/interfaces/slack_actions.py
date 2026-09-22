@@ -273,6 +273,46 @@ def _confirmed_match_lines(value: Any) -> list[str]:
     return lines
 
 
+def _document_evidence_lines(value: Any) -> list[str]:
+    if value is None:
+        return []
+    document = _mapping(value, "document_evidence")
+    if document.get("status") != "unconfirmed":
+        raise SlackEventError("문서 근거 상태가 올바르지 않음")
+    careers = document.get("career_context")
+    links = document.get("requirement_links")
+    if not isinstance(careers, list) or not isinstance(links, list):
+        raise SlackEventError("문서 경력과 연결 근거 배열이 필요함")
+    lines: list[str] = []
+    if careers:
+        lines.extend(["", "*이력서에서 읽은 경력 맥락 (AI 초안)*"])
+        for raw_item in careers[:2]:
+            item = _mapping(raw_item, "career_context")
+            role = _text(item.get("role_or_context"), "career_context.role", limit=100)
+            detail = _text(item.get("detail"), "career_context.detail", limit=220)
+            period = item.get("period_expression")
+            suffix = f" / 문서 기간 표현: {_text(period, 'period', limit=60)}" if period else ""
+            lines.append(f"- {role}{suffix}: {detail}")
+        lines.append("경력 맥락 요약이며, 이 공고의 직무·경력 연수 충족을 뜻하지 않습니다.")
+    if links:
+        for raw_link in links:
+            link = _mapping(raw_link, "requirement_links")
+            if link.get("verification_status") != "unconfirmed":
+                raise SlackEventError("문서 연결 근거는 미확인 상태여야 함")
+            evidence_items = link.get("user_evidence")
+            if not isinstance(evidence_items, list) or not evidence_items:
+                raise SlackEventError("문서 연결 근거가 필요함")
+            for raw_evidence in evidence_items:
+                evidence = _mapping(raw_evidence, "requirement_links.user_evidence")
+                if (evidence.get("source_type") != "skill"
+                        or evidence.get("evidence_level") != "unconfirmed"):
+                    raise SlackEventError("문서 기술 근거 상태가 올바르지 않음")
+        lines.extend(["", "*공고 기술과 연결되는 이력서 근거 (사용 수준 미확인)*"])
+        lines.extend(_confirmed_match_lines(links))
+        lines.append("문서에 사용 근거가 있습니다. 수행 범위와 숙련도는 아직 판단하지 않았습니다.")
+    return lines
+
+
 def _public_success_message(
     stdout: str,
     analysis_document: Mapping[str, Any],
@@ -306,6 +346,7 @@ def _public_success_message(
         "recommendation.next_steps",
     )
     confirmed_matches = _confirmed_match_lines(match_result.get("confirmed_matches"))
+    document_evidence = _document_evidence_lines(match_result.get("document_evidence"))
     gaps = _gap_lines(match_result.get("gaps"))
     unknowns = _unknown_lines(match_result.get("unknowns"))
 
@@ -325,6 +366,9 @@ def _public_success_message(
     )
     lines.extend(["", "*확인된 일치*"])
     lines.extend(confirmed_matches or ["- 확인된 일치 항목이 없습니다."])
+    if not confirmed_matches and document_evidence:
+        lines.append("확정 판정이 없다는 뜻이며, 이력서에 경험이 없다는 의미는 아닙니다.")
+    lines.extend(document_evidence)
     if gaps:
         lines.extend(["", "*확인된 부족 또는 불일치*"])
         lines.extend(gaps)
