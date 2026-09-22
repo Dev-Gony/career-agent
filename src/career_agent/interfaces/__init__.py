@@ -1,5 +1,26 @@
 """External chat interfaces for Career Agent."""
 
+from .slack_agent_plan import (
+    MAX_SLACK_AGENT_MESSAGE_CHARS,
+    SLACK_AGENT_CLARIFICATION_CODES,
+    SLACK_AGENT_PLAN_CONTRACT_VERSION,
+    SLACK_AGENT_TOOLS,
+    SLACK_AGENT_TOOL_REASON_CODES,
+    SlackAgentPlanError,
+    SlackAgentPlannerProvider,
+    build_slack_agent_planning_request,
+    plan_slack_agent_turn,
+    slack_agent_plan_json_schema,
+    validate_slack_agent_plan,
+    validate_slack_agent_planning_request,
+)
+from .gemini_slack_agent import (
+    DEFAULT_GEMINI_SLACK_AGENT_MODEL,
+    GEMINI_SLACK_AGENT_MODELS,
+    GeminiSlackAgentError,
+    GeminiSlackAgentPlanner,
+)
+
 from .slack_events import (
     PROFILE_EXTERNAL_ANALYSIS_APPROVE_ACTION,
     PROFILE_EXTERNAL_ANALYSIS_REJECT_ACTION,
@@ -84,6 +105,22 @@ from .slack_profile_analysis_consent_session import (
 )
 
 __all__ = [
+    "MAX_SLACK_AGENT_MESSAGE_CHARS",
+    "SLACK_AGENT_CLARIFICATION_CODES",
+    "SLACK_AGENT_PLAN_CONTRACT_VERSION",
+    "SLACK_AGENT_TOOLS",
+    "SLACK_AGENT_TOOL_REASON_CODES",
+    "SlackAgentPlanError",
+    "SlackAgentPlannerProvider",
+    "build_slack_agent_planning_request",
+    "plan_slack_agent_turn",
+    "slack_agent_plan_json_schema",
+    "validate_slack_agent_plan",
+    "validate_slack_agent_planning_request",
+    "DEFAULT_GEMINI_SLACK_AGENT_MODEL",
+    "GEMINI_SLACK_AGENT_MODELS",
+    "GeminiSlackAgentError",
+    "GeminiSlackAgentPlanner",
     "SLACK_COMMAND_REQUEST_SCHEMA_VERSION",
     "PROFILE_EXTERNAL_ANALYSIS_APPROVE_ACTION",
     "PROFILE_EXTERNAL_ANALYSIS_REJECT_ACTION",

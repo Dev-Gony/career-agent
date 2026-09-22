@@ -18,11 +18,18 @@ from scripts import run_slack_socket  # noqa: E402
 class SlackSocketMainTest(unittest.TestCase):
     def test_registers_enabled_gemini_consent_flow(self) -> None:
         register = Mock()
+        planner = object()
         with (
             patch.object(sys, "argv", ["run_slack_socket.py"]),
             patch.object(run_slack_socket, "load_slack_interface_config", return_value={}),
             patch.object(run_slack_socket, "load_slack_tokens", return_value=("app", "bot")),
             patch.object(run_slack_socket, "create_slack_bolt_app", return_value=object()),
+            patch.object(run_slack_socket, "load_gemini_api_key", return_value="key"),
+            patch.object(
+                run_slack_socket,
+                "GeminiSlackAgentPlanner",
+                return_value=planner,
+            ),
             patch.object(run_slack_socket, "register_slack_app_mention_listener", register),
             patch.object(run_slack_socket, "run_slack_socket_mode"),
             redirect_stdout(StringIO()),
@@ -38,6 +45,10 @@ class SlackSocketMainTest(unittest.TestCase):
         self.assertIs(
             run_slack_socket._create_profile_analysis_consent_session,
             register.call_args.kwargs["profile_analysis_consent_session_creator"],
+        )
+        self.assertIs(planner, register.call_args.kwargs["agent_planner"])
+        self.assertTrue(
+            register.call_args.kwargs["agent_external_transfer_approved"]
         )
 
 

@@ -6,7 +6,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
+from .slack_agent_plan import (
+    SlackAgentPlanError,
+    SlackAgentPlannerProvider,
+    build_slack_agent_planning_request,
+    plan_slack_agent_turn,
+)
 from .slack_events import (
+    NEXT_JOB_ACTION,
     PROFILE_EXTERNAL_ANALYSIS_APPROVE_ACTION,
     PROFILE_EXTERNAL_ANALYSIS_REJECT_ACTION,
     PROFILE_DRAFT_ACTION,
@@ -21,7 +28,9 @@ from .slack_events import (
     PROFILE_FINAL_REJECT_ACTION,
     SlackEventError,
     build_slack_command_request,
+    build_slack_profile_document_reference,
     save_slack_command_request,
+    validate_slack_interface_config,
 )
 
 
@@ -90,6 +99,22 @@ PROFILE_DOCUMENT_IMPORT_COMPLETED_REPLY = (
     "첨부파일을 비공개 문서 저장소에 저장했습니다. "
     "아직 개인 프로필에는 반영하지 않았습니다."
 )
+SLACK_AGENT_PLANNING_FAILED_REPLY = (
+    "요청의 의미를 안전하게 해석하지 못했습니다. 표현을 조금 바꿔 다시 말씀해주세요."
+)
+SLACK_AGENT_REQUEST_UNCLEAR_REPLY = (
+    "어떤 작업을 원하는지 한 가지만 더 구체적으로 알려주세요. "
+    "공고 찾기, 첨부 분석, 프로필 요약 또는 프로필 검토를 요청할 수 있습니다."
+)
+SLACK_AGENT_ATTACHMENT_REQUIRED_REPLY = (
+    "프로필 자료를 분석하려면 이력서, 포트폴리오 또는 경력기술서 파일 1개를 첨부해주세요."
+)
+
+_SLACK_AGENT_TOOL_ACTIONS = {
+    "find_next_job": NEXT_JOB_ACTION,
+    "show_profile_summary": PROFILE_DRAFT_ACTION,
+    "start_profile_review": PROFILE_REVIEW_ACTION,
+}
 PROFILE_DOCUMENT_EXTRACTION_EMPTY_REPLY = (
     "첨부파일 본문을 확인했지만 프로필 검토 후보를 찾지 못했습니다. "
     "개인 프로필은 변경하지 않았습니다."
@@ -242,6 +267,117 @@ def _profile_extraction_reply(result: Mapping[str, Any]) -> str:
     return "\n".join(reply_lines)
 
 
+def _run_profile_document_pipeline(
+    reference: Mapping[str, Any],
+    request: Mapping[str, Any],
+    received_at: datetime,
+    *,
+    profile_document_importer: Callable[
+        [Mapping[str, Any], datetime], Mapping[str, Any]
+    ],
+    profile_document_extractor: (
+        Callable[[Mapping[str, Any], datetime], Mapping[str, Any]] | None
+    ),
+    profile_analysis_consent_session_creator: (
+        Callable[[Mapping[str, Any], Mapping[str, Any], datetime], None] | None
+    ),
+    logger: Any,
+) -> str:
+    """Run the already validated attachment path for command or agent routing."""
+
+    document_stored = False
+    try:
+        import_result = profile_document_importer(reference, received_at)
+        if (
+            not isinstance(import_result, Mapping)
+            or import_result.get("status") not in {"stored", "reused"}
+        ):
+            raise SlackEventError("Slack 첨부파일 저장 결과가 올바르지 않음")
+        document_stored = True
+        if profile_document_extractor is None:
+            return PROFILE_DOCUMENT_IMPORT_COMPLETED_REPLY
+        extraction_result = profile_document_extractor(import_result, received_at)
+        if not isinstance(extraction_result, Mapping):
+            raise SlackEventError("프로필 문서 추출 결과가 올바르지 않음")
+        reply_text = _profile_extraction_reply(extraction_result)
+        summary = extraction_result.get("summary")
+        candidate_count = (
+            summary.get("candidate_count") if isinstance(summary, Mapping) else 0
+        )
+        if candidate_count and profile_analysis_consent_session_creator is not None:
+            try:
+                profile_analysis_consent_session_creator(
+                    request,
+                    extraction_result,
+                    received_at,
+                )
+            except SlackEventError as error:
+                logger.warning("Slack 외부 분석 동의 준비 실패: %s", error)
+                reply_text += (
+                    "\n\n" + PROFILE_EXTERNAL_ANALYSIS_CONSENT_PREPARATION_FAILED_REPLY
+                )
+            else:
+                reply_text += "\n\n" + PROFILE_EXTERNAL_ANALYSIS_CONSENT_PROMPT
+        return reply_text
+    except SlackEventError as error:
+        logger.warning("Slack 첨부파일 처리 실패: %s", error)
+        return (
+            PROFILE_DOCUMENT_EXTRACTION_FAILED_REPLY
+            if document_stored
+            else PROFILE_DOCUMENT_IMPORT_FAILED_REPLY
+        )
+
+
+def _transient_agent_message(
+    body: Mapping[str, Any],
+    config: Mapping[str, Any],
+) -> tuple[str, dict[str, Any] | None]:
+    """Return runtime-only message text and a validated attachment reference."""
+
+    event = body.get("event")
+    if not isinstance(event, Mapping):
+        raise SlackAgentPlanError("Slack Agent 이벤트 객체가 필요함")
+    raw_text = event.get("text")
+    bot_user_id = validate_slack_interface_config(config)["bot_user_id"]
+    if not isinstance(raw_text, str) or not isinstance(bot_user_id, str):
+        raise SlackAgentPlanError("Slack Agent 메시지 또는 봇 ID가 올바르지 않음")
+    mention = f"<@{bot_user_id}>"
+    if mention not in raw_text:
+        raise SlackAgentPlanError("Slack Agent 메시지에 봇 호출이 없음")
+    message_text = " ".join(raw_text.replace(mention, " ").split())
+    files = event.get("files")
+    if files is None:
+        return message_text, None
+    if not isinstance(files, list) or len(files) > 1:
+        raise SlackAgentPlanError("Slack Agent는 첨부파일 1개만 처리할 수 있음")
+    if not files:
+        return message_text, None
+    try:
+        reference = build_slack_profile_document_reference(files[0])
+    except SlackEventError as error:
+        raise SlackAgentPlanError("Slack Agent 첨부파일 메타데이터가 올바르지 않음") from error
+    return message_text, reference
+
+
+def _action_failure_reply(action: str) -> str:
+    if action in {
+        PROFILE_DRAFT_ACTION,
+        PROFILE_REVIEW_ACTION,
+        PROFILE_REVIEW_APPROVE_ACTION,
+        PROFILE_REVIEW_REJECT_ACTION,
+        PROFILE_UPDATE_MAPPING_ACTION,
+        PROFILE_UPDATE_CAREER_ACTION,
+        PROFILE_UPDATE_SKILL_LEVEL_ACTION,
+        PROFILE_FINAL_REVIEW_ACTION,
+        PROFILE_FINAL_APPROVE_ACTION,
+        PROFILE_FINAL_REJECT_ACTION,
+        PROFILE_EXTERNAL_ANALYSIS_APPROVE_ACTION,
+        PROFILE_EXTERNAL_ANALYSIS_REJECT_ACTION,
+    }:
+        return "프로필 분석 초안을 확인하지 못했습니다. 로컬 실행 이력을 확인해주세요."
+    return "공고 분석을 시작하지 못했습니다. 로컬 실행 이력을 확인해주세요."
+
+
 def _reply_text(request: Mapping[str, Any], *, created: bool) -> str | None:
     if not created:
         return None
@@ -336,6 +472,8 @@ def register_slack_app_mention_listener(
     profile_analysis_consent_session_creator: (
         Callable[[Mapping[str, Any], Mapping[str, Any], datetime], None] | None
     ) = None,
+    agent_planner: SlackAgentPlannerProvider | None = None,
+    agent_external_transfer_approved: bool = False,
 ) -> Callable[..., None]:
     """Register the single supported Bolt event listener and return it for tests."""
 
@@ -360,6 +498,103 @@ def register_slack_app_mention_listener(
         if reply_text is None:
             return
         if (
+            agent_planner is not None
+            and root.get("reason")
+            in {"unsupported_command", "unexpected_file_for_command"}
+        ):
+            try:
+                message_text, attachment_reference = _transient_agent_message(
+                    body,
+                    config,
+                )
+                planning_request = build_slack_agent_planning_request(
+                    message_text,
+                    has_validated_attachment=attachment_reference is not None,
+                )
+                plan = plan_slack_agent_turn(
+                    agent_planner,
+                    planning_request,
+                    explicit_external_transfer_approved=(
+                        agent_external_transfer_approved
+                    ),
+                )
+            except SlackAgentPlanError as error:
+                logger.warning("Slack Agent 계획 실패: %s", error)
+                say(
+                    text=SLACK_AGENT_PLANNING_FAILED_REPLY,
+                    thread_ts=request["source"]["thread_ts"],
+                )
+                return
+            if plan["intent"] == "clarify":
+                clarification_reply = (
+                    SLACK_AGENT_ATTACHMENT_REQUIRED_REPLY
+                    if plan["clarification_code"] == "attachment_required"
+                    else SLACK_AGENT_REQUEST_UNCLEAR_REPLY
+                )
+                say(
+                    text=clarification_reply,
+                    thread_ts=request["source"]["thread_ts"],
+                )
+                return
+            for step in plan["steps"]:
+                tool = step["tool"]
+                if tool == "analyze_profile_attachment":
+                    if (
+                        attachment_reference is None
+                        or profile_document_importer is None
+                    ):
+                        say(
+                            text=SLACK_AGENT_ATTACHMENT_REQUIRED_REPLY,
+                            thread_ts=request["source"]["thread_ts"],
+                        )
+                        return
+                    say(
+                        text=PROFILE_DOCUMENT_IMPORT_STARTED_REPLY,
+                        thread_ts=request["source"]["thread_ts"],
+                    )
+                    public_message = _run_profile_document_pipeline(
+                        attachment_reference,
+                        request,
+                        received_at,
+                        profile_document_importer=profile_document_importer,
+                        profile_document_extractor=profile_document_extractor,
+                        profile_analysis_consent_session_creator=(
+                            profile_analysis_consent_session_creator
+                        ),
+                        logger=logger,
+                    )
+                    say(
+                        text=public_message,
+                        thread_ts=request["source"]["thread_ts"],
+                    )
+                    continue
+                action = _SLACK_AGENT_TOOL_ACTIONS[tool]
+                say(
+                    text=_action_started_reply(action),
+                    thread_ts=request["source"]["thread_ts"],
+                )
+                if action_runner is None:
+                    public_message = _action_failure_reply(action)
+                else:
+                    try:
+                        action_result = action_runner(action, request)
+                        public_message = action_result.get("public_message")
+                        if (
+                            not isinstance(public_message, str)
+                            or not public_message.strip()
+                        ):
+                            raise SlackEventError(
+                                "Slack Agent 도구 결과의 공개 메시지가 없음"
+                            )
+                    except SlackEventError as error:
+                        logger.warning("Slack Agent 내부 도구 실패: %s", error)
+                        public_message = _action_failure_reply(action)
+                say(
+                    text=public_message,
+                    thread_ts=request["source"]["thread_ts"],
+                )
+            return
+        if (
             root.get("command_name") == "submit_profile_document"
             and root.get("routing_status") == "input_validated"
             and profile_document_importer is not None
@@ -368,59 +603,17 @@ def register_slack_app_mention_listener(
                 text=PROFILE_DOCUMENT_IMPORT_STARTED_REPLY,
                 thread_ts=request["source"]["thread_ts"],
             )
-            document_stored = False
-            try:
-                import_result = profile_document_importer(
-                    request["profile_document"],
-                    received_at,
-                )
-                if (
-                    not isinstance(import_result, Mapping)
-                    or import_result.get("status") not in {"stored", "reused"}
-                ):
-                    raise SlackEventError("Slack 첨부파일 저장 결과가 올바르지 않음")
-                document_stored = True
-                if profile_document_extractor is None:
-                    reply_text = PROFILE_DOCUMENT_IMPORT_COMPLETED_REPLY
-                else:
-                    extraction_result = profile_document_extractor(
-                        import_result,
-                        received_at,
-                    )
-                    if not isinstance(extraction_result, Mapping):
-                        raise SlackEventError("프로필 문서 추출 결과가 올바르지 않음")
-                    reply_text = _profile_extraction_reply(extraction_result)
-                    summary = extraction_result.get("summary")
-                    candidate_count = (
-                        summary.get("candidate_count")
-                        if isinstance(summary, Mapping)
-                        else 0
-                    )
-                    if (
-                        candidate_count
-                        and profile_analysis_consent_session_creator is not None
-                    ):
-                        try:
-                            profile_analysis_consent_session_creator(
-                                request,
-                                extraction_result,
-                                received_at,
-                            )
-                        except SlackEventError as error:
-                            logger.warning("Slack 외부 분석 동의 준비 실패: %s", error)
-                            reply_text += (
-                                "\n\n"
-                                + PROFILE_EXTERNAL_ANALYSIS_CONSENT_PREPARATION_FAILED_REPLY
-                            )
-                        else:
-                            reply_text += "\n\n" + PROFILE_EXTERNAL_ANALYSIS_CONSENT_PROMPT
-            except SlackEventError as error:
-                logger.warning("Slack 첨부파일 처리 실패: %s", error)
-                reply_text = (
-                    PROFILE_DOCUMENT_EXTRACTION_FAILED_REPLY
-                    if document_stored
-                    else PROFILE_DOCUMENT_IMPORT_FAILED_REPLY
-                )
+            reply_text = _run_profile_document_pipeline(
+                request["profile_document"],
+                request,
+                received_at,
+                profile_document_importer=profile_document_importer,
+                profile_document_extractor=profile_document_extractor,
+                profile_analysis_consent_session_creator=(
+                    profile_analysis_consent_session_creator
+                ),
+                logger=logger,
+            )
             say(
                 text=reply_text,
                 thread_ts=request["source"]["thread_ts"],
@@ -441,25 +634,7 @@ def register_slack_app_mention_listener(
                 raise SlackEventError("Slack 동작 결과의 공개 메시지가 없음")
         except SlackEventError as error:
             logger.warning("Slack 내부 동작 실패: %s", error)
-            public_message = (
-                "프로필 분석 초안을 확인하지 못했습니다. 로컬 실행 이력을 확인해주세요."
-                if root["action"]
-                in {
-                    PROFILE_DRAFT_ACTION,
-                    PROFILE_REVIEW_ACTION,
-                    PROFILE_REVIEW_APPROVE_ACTION,
-                    PROFILE_REVIEW_REJECT_ACTION,
-                    PROFILE_UPDATE_MAPPING_ACTION,
-                    PROFILE_UPDATE_CAREER_ACTION,
-                    PROFILE_UPDATE_SKILL_LEVEL_ACTION,
-                    PROFILE_FINAL_REVIEW_ACTION,
-                    PROFILE_FINAL_APPROVE_ACTION,
-                    PROFILE_FINAL_REJECT_ACTION,
-                    PROFILE_EXTERNAL_ANALYSIS_APPROVE_ACTION,
-                    PROFILE_EXTERNAL_ANALYSIS_REJECT_ACTION,
-                }
-                else "공고 분석을 시작하지 못했습니다. 로컬 실행 이력을 확인해주세요."
-            )
+            public_message = _action_failure_reply(root["action"])
         say(
             text=public_message,
             thread_ts=request["source"]["thread_ts"],

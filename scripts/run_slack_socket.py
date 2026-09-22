@@ -24,6 +24,7 @@ from career_agent.interfaces import (  # noqa: E402
     PROFILE_FINAL_REVIEW_ACTION,
     PROFILE_FINAL_APPROVE_ACTION,
     PROFILE_FINAL_REJECT_ACTION,
+    GeminiSlackAgentPlanner,
     SlackEventError,
     build_latest_slack_profile_analysis_review_item_result,
     build_latest_slack_profile_analysis_summary,
@@ -850,6 +851,9 @@ def main() -> int:
         config = load_slack_interface_config(args.config)
         app_token, bot_token = load_slack_tokens(args.env_file)
         app = create_slack_bolt_app(bot_token)
+        agent_planner = GeminiSlackAgentPlanner(
+            load_gemini_api_key(args.env_file),
+        )
         register_slack_app_mention_listener(
             app,
             config,
@@ -868,6 +872,8 @@ def main() -> int:
             profile_analysis_consent_session_creator=(
                 _create_profile_analysis_consent_session
             ),
+            agent_planner=agent_planner,
+            agent_external_transfer_approved=True,
         )
         print("Slack Socket Mode 수신기를 시작합니다.")
         print("- 지원 명령: @career_break 다음 공고 찾아줘")
@@ -880,6 +886,7 @@ def main() -> int:
         print("- 지원 명령: @career_break 프로필 최종 검토")
         print("- 최종 검토 스레드 답변: @career_break 최종 승인 또는 @career_break 최종 취소")
         print("- 지원 입력: @career_break 프로필 분석해줘 + 첨부파일 1개")
+        print("- 자연어 요청: Gemini가 허용된 내부 도구만 선택하며 메시지 원문은 저장하지 않음")
         print("- 현재 단계: 공고 1건 분석 또는 첨부파일 저장과 승인된 Gemini 초안 생성")
         print("- 종료: Ctrl+C")
         print("주의: 메시지 원문과 Token은 콘솔에 출력하지 않습니다.")
