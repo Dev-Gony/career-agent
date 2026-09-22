@@ -23,6 +23,10 @@ from career_agent.workflows import (  # noqa: E402
     GreenhouseAgentError,
     run_greenhouse_portfolio_agent,
 )
+from career_agent.profile_input import (  # noqa: E402
+    ProfileDocumentError,
+    resolve_active_profile_path,
+)
 
 
 DEFAULT_BOARD_CONFIG = REPOSITORY_ROOT / "data/greenhouse_boards.example.json"
@@ -31,6 +35,8 @@ DEFAULT_SEARCH_PLAN = REPOSITORY_ROOT / "data/job_search_plan.example.json"
 DEFAULT_STORE_PATH = REPOSITORY_ROOT / "private-data/discoveries.json"
 DEFAULT_RUN_DIRECTORY = REPOSITORY_ROOT / "private-data/agent-runs"
 DEFAULT_EXECUTION_DIRECTORY = REPOSITORY_ROOT / "private-data/execution-runs"
+DEFAULT_PROFILE_ACTIVATION_DIRECTORY = REPOSITORY_ROOT / "private-data/profile-activations"
+DEFAULT_PROFILE_APPLICATION_DIRECTORY = REPOSITORY_ROOT / "private-data/profile-analysis-applications"
 
 
 def _load_json(path: Path) -> dict:
@@ -48,7 +54,7 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Greenhouse 현재 공고를 발견하고 high 후보 1건만 상세 분석합니다."
     )
     parser.add_argument("--board-config", type=Path, default=DEFAULT_BOARD_CONFIG)
-    parser.add_argument("--profile", type=Path, default=DEFAULT_PROFILE)
+    parser.add_argument("--profile", type=Path)
     parser.add_argument("--search-plan", type=Path, default=DEFAULT_SEARCH_PLAN)
     parser.add_argument("--store", type=Path, default=DEFAULT_STORE_PATH)
     parser.add_argument("--run-directory", type=Path, default=DEFAULT_RUN_DIRECTORY)
@@ -131,10 +137,17 @@ def main() -> int:
     args = _build_parser().parse_args()
     execution_time = datetime.now().astimezone()
     try:
+        try:
+            profile_path = args.profile or resolve_active_profile_path(
+                DEFAULT_PROFILE_ACTIVATION_DIRECTORY,
+                DEFAULT_PROFILE_APPLICATION_DIRECTORY,
+            ) or DEFAULT_PROFILE
+        except ProfileDocumentError as error:
+            raise GreenhouseAgentError("활성 사용자 프로필을 확인할 수 없음") from error
         boards = load_enabled_greenhouse_boards(_load_json(args.board_config))
         previous_runs, previous_paths = _load_previous_runs(args.run_directory)
         result = run_greenhouse_portfolio_agent(
-            _load_json(args.profile),
+            _load_json(profile_path),
             _load_json(args.search_plan),
             args.store,
             boards=boards,

@@ -15,6 +15,10 @@ from career_agent.review import (  # noqa: E402
     build_greenhouse_review_queue,
     save_greenhouse_review_queue,
 )
+from career_agent.profile_input import (  # noqa: E402
+    ProfileDocumentError,
+    resolve_active_profile_path,
+)
 
 
 DEFAULT_PROFILE = REPOSITORY_ROOT / "data/user_profile.example.json"
@@ -22,6 +26,8 @@ DEFAULT_SEARCH_PLAN = REPOSITORY_ROOT / "data/job_search_plan.example.json"
 DEFAULT_RUN_DIRECTORY = REPOSITORY_ROOT / "private-data/agent-runs"
 DEFAULT_QUEUE_DIRECTORY = REPOSITORY_ROOT / "private-data/review-queues"
 DEFAULT_REVIEW_DIRECTORY = REPOSITORY_ROOT / "private-data/human-reviews"
+DEFAULT_PROFILE_ACTIVATION_DIRECTORY = REPOSITORY_ROOT / "private-data/profile-activations"
+DEFAULT_PROFILE_APPLICATION_DIRECTORY = REPOSITORY_ROOT / "private-data/profile-analysis-applications"
 
 
 def _load_json(path: Path) -> dict:
@@ -83,7 +89,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="최근 Greenhouse 목록에서 실제 공고 검토 후보를 자동 정렬합니다."
     )
-    parser.add_argument("--profile", type=Path, default=DEFAULT_PROFILE)
+    parser.add_argument("--profile", type=Path)
     parser.add_argument("--search-plan", type=Path, default=DEFAULT_SEARCH_PLAN)
     parser.add_argument("--run-directory", type=Path, default=DEFAULT_RUN_DIRECTORY)
     parser.add_argument("--queue-directory", type=Path, default=DEFAULT_QUEUE_DIRECTORY)
@@ -100,13 +106,20 @@ def main() -> int:
         sys.stderr.reconfigure(encoding="utf-8")
     args = _build_parser().parse_args()
     try:
+        try:
+            profile_path = args.profile or resolve_active_profile_path(
+                DEFAULT_PROFILE_ACTIVATION_DIRECTORY,
+                DEFAULT_PROFILE_APPLICATION_DIRECTORY,
+            ) or DEFAULT_PROFILE
+        except ProfileDocumentError as error:
+            raise GreenhouseReviewQueueError("활성 사용자 프로필을 확인할 수 없음") from error
         runs_with_paths = _load_runs(args.run_directory)
         reviews_with_paths = _load_optional_documents(args.review_directory)
         source_path, source_run = _latest_discovery_run(runs_with_paths)
         queue = build_greenhouse_review_queue(
             source_run["discovery"],
             [run for _, run in runs_with_paths],
-            _load_json(args.profile),
+            _load_json(profile_path),
             _load_json(args.search_plan),
             created_at=datetime.now().astimezone(),
             source_run_filename=source_path.name,

@@ -66,6 +66,7 @@ class SlackProfileMappingFlowTest(unittest.TestCase):
             session_directory = root_path / "sessions"
             review_directory = root_path / "reviews"
             application_directory = root_path / "applications"
+            activation_directory = root_path / "activations"
             save_profile_analysis_final_proposal(final, final_directory)
             save_slack_profile_final_session(
                 build_slack_profile_final_session(
@@ -84,16 +85,19 @@ class SlackProfileMappingFlowTest(unittest.TestCase):
                 patch.object(run_slack_socket, "DEFAULT_PROFILE_ANALYSIS_FINAL_REVIEW_DIRECTORY", review_directory),
                 patch.object(run_slack_socket, "DEFAULT_SLACK_PROFILE_FINAL_SESSION_DIRECTORY", session_directory),
                 patch.object(run_slack_socket, "DEFAULT_PROFILE_ANALYSIS_APPLICATION_DIRECTORY", application_directory),
+                patch.object(run_slack_socket, "DEFAULT_PROFILE_ACTIVATION_DIRECTORY", activation_directory),
             ):
                 result = run_slack_socket._run_profile_final_decision(
                     PROFILE_FINAL_APPROVE_ACTION,
                     _request(),
                 )
             saved_profiles = list(application_directory.glob("*/profile.json"))
+            activations = list(activation_directory.glob("profile-activation-*.json"))
             base_after = json.loads(profile_path.read_text(encoding="utf-8"))
 
         self.assertEqual("applied_to_new_version", result["status"])
         self.assertEqual(1, len(saved_profiles))
+        self.assertEqual(1, len(activations))
         self.assertEqual(profile, base_after)
 
     def test_final_review_requires_all_mappings_then_shows_summary(self) -> None:
@@ -152,6 +156,7 @@ class SlackProfileMappingFlowTest(unittest.TestCase):
             review_directory = root_path / "reviews"
             session_directory = root_path / "sessions"
             profile_path = root_path / "profile.json"
+            activation_directory = root_path / "activations"
             profile_path.write_text(
                 json.dumps(profile, ensure_ascii=False),
                 encoding="utf-8",
@@ -171,6 +176,7 @@ class SlackProfileMappingFlowTest(unittest.TestCase):
             save_slack_profile_mapping_session(session, session_directory)
             with (
                 patch.object(run_slack_socket, "DEFAULT_PROFILE", profile_path),
+                patch.object(run_slack_socket, "DEFAULT_PROFILE_ACTIVATION_DIRECTORY", activation_directory),
                 patch.object(
                     run_slack_socket,
                     "DEFAULT_PROFILE_ANALYSIS_UPDATE_PROPOSAL_DIRECTORY",

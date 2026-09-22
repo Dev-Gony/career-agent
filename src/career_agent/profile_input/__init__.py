@@ -134,6 +134,13 @@ from .analysis_application import (
     build_profile_analysis_application,
     save_profile_analysis_application,
 )
+from .active_profile import (
+    PROFILE_ACTIVATION_SCHEMA_VERSION,
+    build_profile_activation,
+    resolve_active_profile_path,
+    save_profile_activation,
+    validate_profile_activation,
+)
 from .openai_analysis import (
     DEFAULT_OPENAI_PROFILE_ANALYSIS_MODEL,
     OPENAI_PROFILE_ANALYSIS_MODELS,
@@ -249,6 +256,11 @@ __all__ = [
     "PROFILE_ANALYSIS_APPLICATION_SCHEMA_VERSION",
     "build_profile_analysis_application",
     "save_profile_analysis_application",
+    "PROFILE_ACTIVATION_SCHEMA_VERSION",
+    "build_profile_activation",
+    "resolve_active_profile_path",
+    "save_profile_activation",
+    "validate_profile_activation",
     "DEFAULT_OPENAI_PROFILE_ANALYSIS_MODEL",
     "OPENAI_PROFILE_ANALYSIS_MODELS",
     "OpenAIResponsesProfileAnalysisProvider",

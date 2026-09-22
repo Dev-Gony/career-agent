@@ -64,6 +64,9 @@ from career_agent.profile_input import (  # noqa: E402
     save_profile_analysis_final_proposal,
     save_profile_analysis_final_review,
     save_profile_analysis_application,
+    build_profile_activation,
+    resolve_active_profile_path,
+    save_profile_activation,
     save_profile_evidence_summary,
     save_profile_text_extraction,
     select_latest_profile_analysis_draft,
@@ -117,12 +120,23 @@ DEFAULT_SLACK_PROFILE_FINAL_SESSION_DIRECTORY = (
 DEFAULT_PROFILE_ANALYSIS_APPLICATION_DIRECTORY = (
     REPOSITORY_ROOT / "private-data/profile-analysis-applications"
 )
+DEFAULT_PROFILE_ACTIVATION_DIRECTORY = (
+    REPOSITORY_ROOT / "private-data/profile-activations"
+)
 DEFAULT_PROFILE = REPOSITORY_ROOT / "data/user_profile.example.json"
 
 
 def _load_profile() -> dict[str, Any]:
     try:
-        profile = json.loads(DEFAULT_PROFILE.read_text(encoding="utf-8"))
+        active_path = resolve_active_profile_path(
+            DEFAULT_PROFILE_ACTIVATION_DIRECTORY,
+            DEFAULT_PROFILE_ANALYSIS_APPLICATION_DIRECTORY,
+        )
+    except ProfileDocumentError as error:
+        raise SlackEventError("활성 사용자 프로필을 안전하게 확인할 수 없음") from error
+    profile_path = active_path or DEFAULT_PROFILE
+    try:
+        profile = json.loads(profile_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise SlackEventError("기준 사용자 프로필을 읽을 수 없음") from error
     if not isinstance(profile, dict):
@@ -511,6 +525,16 @@ def _run_profile_final_decision(
             updated_profile,
             DEFAULT_PROFILE_ANALYSIS_APPLICATION_DIRECTORY,
         )
+        if updated_profile is not None:
+            activation = build_profile_activation(
+                application,
+                updated_profile,
+                activated_at=reviewed_at,
+            )
+            save_profile_activation(
+                activation,
+                DEFAULT_PROFILE_ACTIVATION_DIRECTORY,
+            )
     except (KeyError, TypeError, ProfileDocumentError) as error:
         raise SlackEventError("Slack 최종 프로필 결정을 안전하게 처리할 수 없음") from error
     if decision == "reject":
@@ -525,7 +549,7 @@ def _run_profile_final_decision(
         "public_message": (
             "최종 변경안을 승인해 원본과 분리된 새 비공개 프로필 버전을 만들었습니다. "
             "기존 기준 프로필 파일은 덮어쓰지 않았습니다. "
-            "새 버전을 공고 검색 조건에 연결하는 작업은 아직 실행하지 않았습니다."
+            "이 버전을 다음 공고 검색에 사용할 활성 프로필로 설정했습니다."
         ),
     }
 
