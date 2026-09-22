@@ -58,6 +58,111 @@ def _provisional_skill_id(draft_id: str, name: str) -> str:
     return f"provisional-skill-{digest}"
 
 
+def _provisional_role_id(draft_id: str, role: str) -> str:
+    digest = sha256(
+        f"{draft_id}|{role.casefold().strip()}".encode("utf-8")
+    ).hexdigest()[:20]
+    return f"provisional-role-{digest}"
+
+
+def build_draft_search_base_profile(
+    draft: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Build a minimal private base using only unconfirmed draft role hypotheses."""
+
+    validated = validate_profile_analysis_draft(draft)
+    draft_root = _mapping(
+        validated.get("profile_analysis_draft"),
+        "profile_analysis_draft",
+    )
+    draft_id = _text(draft_root.get("draft_id"), "draft_id")
+    extraction_id = _text(
+        draft_root.get("source_extraction_id"),
+        "source_extraction_id",
+    )
+    analysis = _mapping(validated.get("analysis"), "analysis")
+    career_items = analysis.get("career_evidence")
+    if not isinstance(career_items, list):
+        raise ProfileDocumentError("analysis.career_evidence 배열이 필요함")
+
+    roles: list[str] = []
+    for position, raw_item in enumerate(career_items):
+        item = _mapping(raw_item, f"analysis.career_evidence[{position}]")
+        role = _text(
+            item.get("role_or_context"),
+            f"analysis.career_evidence[{position}].role_or_context",
+        )
+        if role not in roles:
+            roles.append(role)
+    if not roles:
+        raise ProfileDocumentError("임시 검색에 사용할 직무 맥락이 없음")
+
+    profile_id = "provisional-user-" + sha256(draft_id.encode("utf-8")).hexdigest()[:20]
+    return {
+        "profile": {
+            "basic": {
+                "profile_id": profile_id,
+                "locale": "ko-KR",
+                "career_status": "unknown",
+                "location_preference": [],
+                "employment_type_preference": [],
+            },
+            "career_goals": {
+                "primary_goal": "이력서 분석 초안 기반 직무 탐색",
+                "priorities": [],
+                "avoid_if_possible": [],
+            },
+            "career_history": [],
+            "education": {
+                "level": "unknown",
+                "field": None,
+                "status": "unknown",
+                "notes": "이력서 분석 초안에서 확정하지 않음",
+            },
+            "projects": [],
+            "skills": [],
+            "behavior_evidence": [],
+            "assessments": {},
+            "work_preferences": {"preferred": [], "less_preferred": []},
+            "learning_preferences": {
+                "approach": "unknown",
+                "preferred_flow": [],
+                "avoid": [],
+            },
+            "strengths": [],
+            "risks": [],
+            "target_roles": [
+                {
+                    "target_role_id": _provisional_role_id(draft_id, role),
+                    "role": role,
+                    "priority": index,
+                    "hypothesis": (
+                        "사용자 확인 전 이력서 AI 분석 초안에서 도출한 검색 가설"
+                    ),
+                }
+                for index, role in enumerate(roles, start=1)
+            ],
+            "evidence_sources": [
+                {
+                    "id": extraction_id,
+                    "type": "resume_analysis_draft",
+                    "title": "업로드 문서 AI 분석 초안",
+                    "storage": "private",
+                    "verification_status": "unconfirmed",
+                }
+            ],
+        },
+        "metadata": {
+            "schema_version": PROVISIONAL_SEARCH_PROFILE_SCHEMA_VERSION,
+            "data_type": "draft_search_base_profile",
+            "status": "provisional_search_only",
+            "evidence_status": "unconfirmed",
+            "contains_personal_data": True,
+            "git_tracking_allowed": False,
+        },
+    }
+
+
 def _base_profile(base_profile: Mapping[str, Any]) -> tuple[str, dict[str, Any]]:
     document = _mapping(base_profile, "base_profile")
     profile = _mapping(document.get("profile"), "base_profile.profile")

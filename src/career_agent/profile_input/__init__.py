@@ -164,6 +164,7 @@ from .active_profile import (
 from .provisional_search_profile import (
     PROVISIONAL_SEARCH_PROFILE_RULES_VERSION,
     PROVISIONAL_SEARCH_PROFILE_SCHEMA_VERSION,
+    build_draft_search_base_profile,
     build_provisional_search_profile,
     load_provisional_search_profile,
     save_provisional_search_profile,
@@ -304,6 +305,7 @@ __all__ = [
     "validate_profile_activation",
     "PROVISIONAL_SEARCH_PROFILE_RULES_VERSION",
     "PROVISIONAL_SEARCH_PROFILE_SCHEMA_VERSION",
+    "build_draft_search_base_profile",
     "build_provisional_search_profile",
     "load_provisional_search_profile",
     "save_provisional_search_profile",

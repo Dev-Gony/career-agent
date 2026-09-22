@@ -65,6 +65,8 @@ from career_agent.profile_input import (  # noqa: E402
     build_profile_analysis_final_proposal,
     build_profile_analysis_final_review,
     build_profile_analysis_application,
+    build_draft_search_base_profile,
+    build_provisional_search_profile,
     build_profile_evidence_summary,
     build_profile_text_extraction,
     load_profile_document_import,
@@ -82,6 +84,7 @@ from career_agent.profile_input import (  # noqa: E402
     save_profile_analysis_application,
     build_profile_analysis_external_consent,
     profile_analysis_request_sha256,
+    require_approved_profile_analysis_external_consent,
     save_profile_analysis_external_consent,
     build_profile_activation,
     resolve_active_profile_path,
@@ -285,6 +288,59 @@ def _request_context(request: Mapping[str, Any]) -> tuple[Mapping[str, Any], dat
     if received_at.tzinfo is None or received_at.utcoffset() is None:
         raise SlackEventError("Slack 동작 요청 시간에 시간대가 필요함")
     return source, received_at
+
+
+def _build_latest_provisional_search_profile(
+    request: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Build one search-only profile from the latest actor-approved external draft."""
+
+    source, projected_at = _request_context(request)
+    try:
+        extraction = select_latest_profile_text_extraction(
+            DEFAULT_PROFILE_EXTRACTION_DIRECTORY
+        )
+        if extraction is None:
+            raise ProfileDocumentError("사용할 프로필 문서 추출 결과가 없음")
+        extraction_id = extraction["profile_extraction"]["extraction_id"]
+        draft = select_latest_profile_analysis_draft(
+            extraction_id,
+            DEFAULT_PROFILE_ANALYSIS_DRAFT_DIRECTORY,
+        )
+        if draft is None:
+            raise ProfileDocumentError("사용할 외부 프로필 분석 초안이 없음")
+        analysis_source = draft.get("analysis_source")
+        if (
+            not isinstance(analysis_source, Mapping)
+            or analysis_source.get("data_boundary") != "external"
+        ):
+            raise ProfileDocumentError("외부 분석 경계의 초안만 임시 검색에 사용할 수 있음")
+        require_approved_profile_analysis_external_consent(
+            extraction,
+            provider_name=str(analysis_source.get("provider")),
+            model_name=str(analysis_source.get("model")),
+            session_directory=(
+                DEFAULT_SLACK_PROFILE_ANALYSIS_CONSENT_SESSION_DIRECTORY
+            ),
+            consent_directory=DEFAULT_PROFILE_ANALYSIS_EXTERNAL_CONSENT_DIRECTORY,
+            team_id=str(source["team_id"]),
+            channel_id=str(source["channel_id"]),
+            user_id=str(source["user_id"]),
+        )
+        base_profile = build_draft_search_base_profile(draft)
+        projection = build_provisional_search_profile(
+            base_profile,
+            draft,
+            projected_at=projected_at,
+        )
+        profile = projection.get("profile_document")
+        if not isinstance(profile, dict):
+            raise ProfileDocumentError("임시 검색 프로필 결과가 올바르지 않음")
+        return profile
+    except (KeyError, TypeError, ProfileDocumentError) as error:
+        raise SlackEventError(
+            "승인된 최신 이력서 분석 초안으로 임시 검색 프로필을 만들 수 없음"
+        ) from error
 
 
 def _run_profile_review_decision(
@@ -846,13 +902,22 @@ def _run_slack_action(
         except ProfileDocumentError as error:
             raise SlackEventError("활성 개인 프로필을 안전하게 확인할 수 없음") from error
         if active_profile_path is None:
-            return {
-                "status": "missing_personal_profile",
-                "public_message": (
-                    "공고 검색에 사용할 활성 개인 프로필이 없습니다. "
-                    "공개 예제 프로필로 대신 분석하지 않았습니다."
-                ),
-            }
+            try:
+                provisional_profile = _build_latest_provisional_search_profile(request)
+            except SlackEventError:
+                return {
+                    "status": "missing_personal_profile",
+                    "public_message": (
+                        "공고 검색에 사용할 활성 개인 프로필이나 승인된 최신 "
+                        "이력서 분석 초안이 없습니다. 공개 예제 프로필로 대신 "
+                        "분석하지 않았습니다."
+                    ),
+                }
+            return run_slack_career_action(
+                action,
+                repository_root=REPOSITORY_ROOT,
+                provisional_profile=provisional_profile,
+            )
     return run_slack_career_action(
         action,
         repository_root=REPOSITORY_ROOT,

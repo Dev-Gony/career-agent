@@ -66,6 +66,59 @@ def _consent(
 
 
 class ProfileAnalysisExternalAuthorizationTest(unittest.TestCase):
+    def test_selects_latest_approval_within_exact_slack_actor_scope(self) -> None:
+        extraction = _extraction()
+        own_session = _session(extraction, created_at=CREATED_AT)
+        own_consent = _consent(
+            extraction,
+            own_session,
+            decision="approve",
+            decided_at=CREATED_AT + timedelta(minutes=1),
+        )
+        other_source = {
+            **SOURCE,
+            "channel_id": "C99999999",
+            "user_id": "U99999999",
+        }
+        other_session = build_slack_profile_analysis_consent_session(
+            extraction,
+            provider_name=PROVIDER,
+            model_name=MODEL,
+            created_at=CREATED_AT + timedelta(minutes=2),
+            **other_source,
+        )
+        other_consent = build_profile_analysis_external_consent(
+            extraction,
+            provider_name=PROVIDER,
+            model_name=MODEL,
+            consent_session_id=other_session[
+                "slack_profile_analysis_consent_session"
+            ]["session_id"],
+            decision="approve",
+            decided_at=CREATED_AT + timedelta(minutes=3),
+            **other_source,
+        )
+        with tempfile.TemporaryDirectory() as root:
+            sessions = Path(root) / "sessions"
+            consents = Path(root) / "consents"
+            save_slack_profile_analysis_consent_session(own_session, sessions)
+            save_slack_profile_analysis_consent_session(other_session, sessions)
+            save_profile_analysis_external_consent(own_consent, consents)
+            save_profile_analysis_external_consent(other_consent, consents)
+
+            selected = require_approved_profile_analysis_external_consent(
+                extraction,
+                provider_name=PROVIDER,
+                model_name=MODEL,
+                session_directory=sessions,
+                consent_directory=consents,
+                team_id=SOURCE["team_id"],
+                channel_id=SOURCE["channel_id"],
+                user_id=SOURCE["user_id"],
+            )
+
+        self.assertEqual(own_consent, selected)
+
     def test_returns_exact_latest_session_approval_without_candidate_text(self) -> None:
         extraction = _extraction()
         session = _session(extraction, created_at=CREATED_AT)

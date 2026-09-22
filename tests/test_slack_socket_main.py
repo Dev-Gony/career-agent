@@ -24,6 +24,11 @@ class SlackSocketMainTest(unittest.TestCase):
                 return_value=None,
             ),
             patch.object(run_slack_socket, "run_slack_career_action") as run_action,
+            patch.object(
+                run_slack_socket,
+                "_build_latest_provisional_search_profile",
+                side_effect=run_slack_socket.SlackEventError("no draft"),
+            ),
         ):
             result = run_slack_socket._run_slack_action(
                 "analyze_next_greenhouse_review",
@@ -31,9 +36,36 @@ class SlackSocketMainTest(unittest.TestCase):
             )
 
         self.assertEqual("missing_personal_profile", result["status"])
-        self.assertIn("활성 개인 프로필이 없습니다", result["public_message"])
+        self.assertIn("활성 개인 프로필이나 승인된 최신", result["public_message"])
         self.assertIn("공개 예제 프로필로 대신 분석하지 않았습니다", result["public_message"])
         run_action.assert_not_called()
+
+    def test_next_job_uses_latest_approved_provisional_profile(self) -> None:
+        provisional = {"profile": {"basic": {"profile_id": "temporary"}}}
+        with (
+            patch.object(
+                run_slack_socket,
+                "resolve_active_profile_path",
+                return_value=None,
+            ),
+            patch.object(
+                run_slack_socket,
+                "_build_latest_provisional_search_profile",
+                return_value=provisional,
+            ),
+            patch.object(
+                run_slack_socket,
+                "run_slack_career_action",
+                return_value={"status": "no_candidate", "public_message": "none"},
+            ) as run_action,
+        ):
+            result = run_slack_socket._run_slack_action(
+                "analyze_next_greenhouse_review",
+                {},
+            )
+
+        self.assertEqual("no_candidate", result["status"])
+        self.assertEqual(provisional, run_action.call_args.kwargs["provisional_profile"])
 
     def test_registers_enabled_gemini_consent_flow(self) -> None:
         register = Mock()

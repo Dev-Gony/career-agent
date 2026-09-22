@@ -28,7 +28,7 @@ Personal AI career agent for job matching, skill gap analysis, and portfolio pla
 
 ## 현재 개발 단계
 
-현재는 실제 Slack 명령으로 다음 공고 1건 분석과 스레드 요약 응답을 검증했고, 실제 첨부 문서에서 외부 전송 없이 검토용 프로필 초안을 자동 생성해 기존 검토 흐름에 연결한 단계입니다.
+현재는 실제 Slack 명령으로 다음 공고 1건 분석과 스레드 요약 응답을 검증했고, 실제 첨부 문서의 승인된 Gemini 분석 초안을 영구 프로필과 분리된 임시 검색 프로필로 사용해 공식 공고를 찾는 단계까지 연결했습니다.
 
 완료:
 

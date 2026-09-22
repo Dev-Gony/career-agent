@@ -154,6 +154,9 @@ def require_approved_profile_analysis_external_consent(
     model_name: str,
     session_directory: str | Path,
     consent_directory: str | Path,
+    team_id: str | None = None,
+    channel_id: str | None = None,
+    user_id: str | None = None,
 ) -> dict[str, Any]:
     """Return the exact latest session approval or fail before any external call."""
 
@@ -170,6 +173,20 @@ def require_approved_profile_analysis_external_consent(
         "provider_name": provider_name,
         "model_name": model_name,
     }
+    actor_values = (team_id, channel_id, user_id)
+    if any(value is not None for value in actor_values) and not all(
+        value is not None for value in actor_values
+    ):
+        raise ProfileDocumentError(
+            "Slack 사용자 범위에는 team_id, channel_id, user_id가 모두 필요함"
+        )
+    expected_actor = None
+    if all(value is not None for value in actor_values):
+        expected_actor = {
+            "team_id": _identifier(team_id, "team_id", _TEAM_ID_PATTERN),
+            "channel_id": _identifier(channel_id, "channel_id", _CHANNEL_ID_PATTERN),
+            "user_id": _identifier(user_id, "user_id", _USER_ID_PATTERN),
+        }
 
     target_directory = Path(session_directory)
     if not target_directory.exists():
@@ -185,10 +202,15 @@ def require_approved_profile_analysis_external_consent(
     for path in paths:
         session = _load_session(path)
         session_id, created_at, source, target = _validated_session(session)
-        if dict(target) == expected_target:
+        actor_matches = expected_actor is None or all(
+            source.get(field) == value for field, value in expected_actor.items()
+        )
+        if dict(target) == expected_target and actor_matches:
             candidates.append((created_at, session_id, source, target))
     if not candidates:
-        raise ProfileDocumentError("현재 문서와 공급자에 맞는 외부 분석 동의 세션이 없음")
+        raise ProfileDocumentError(
+            "현재 사용자, 채널, 문서와 공급자에 맞는 외부 분석 동의 세션이 없음"
+        )
     created_at, session_id, session_source, session_target = max(
         candidates, key=lambda item: (item[0], item[1])
     )

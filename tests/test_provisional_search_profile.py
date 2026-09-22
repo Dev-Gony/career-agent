@@ -14,6 +14,7 @@ sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
 from career_agent.profile_input import (  # noqa: E402
     ProfileDocumentError,
+    build_draft_search_base_profile,
     build_provisional_search_profile,
     build_profile_analysis_draft,
     load_provisional_search_profile,
@@ -55,6 +56,22 @@ def _draft() -> dict:
 
 
 class ProvisionalSearchProfileTest(unittest.TestCase):
+    def test_builds_draft_only_base_without_public_example_facts(self) -> None:
+        draft = _draft()
+
+        base = build_draft_search_base_profile(draft)
+
+        self.assertEqual([], base["profile"]["career_history"])
+        self.assertEqual([], base["profile"]["projects"])
+        self.assertEqual([], base["profile"]["skills"])
+        self.assertEqual([], base["profile"]["basic"]["location_preference"])
+        self.assertEqual(
+            draft["analysis"]["career_evidence"][0]["role_or_context"],
+            base["profile"]["target_roles"][0]["role"],
+        )
+        self.assertEqual("unconfirmed", base["metadata"]["evidence_status"])
+        self.assertFalse(base["metadata"]["git_tracking_allowed"])
+
     def test_projects_unconfirmed_evidence_without_mutating_or_activating_profile(self) -> None:
         base = _base_profile()
         original = deepcopy(base)
