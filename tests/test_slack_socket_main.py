@@ -67,6 +67,38 @@ class SlackSocketMainTest(unittest.TestCase):
         self.assertEqual("no_candidate", result["status"])
         self.assertEqual(provisional, run_action.call_args.kwargs["provisional_profile"])
 
+    def test_agent_search_focus_reaches_provisional_profile_builder(self) -> None:
+        provisional = {"profile": {"basic": {"profile_id": "temporary"}}}
+        focus = ("QA Engineer", "Test Automation Engineer")
+        with (
+            patch.object(
+                run_slack_socket,
+                "resolve_active_profile_path",
+                return_value=None,
+            ),
+            patch.object(
+                run_slack_socket,
+                "_build_latest_provisional_search_profile",
+                return_value=provisional,
+            ) as build_provisional,
+            patch.object(
+                run_slack_socket,
+                "run_slack_career_action",
+                return_value={"status": "no_candidate", "public_message": "none"},
+            ),
+        ):
+            result = run_slack_socket._run_slack_agent_action(
+                "analyze_next_greenhouse_review",
+                {},
+                focus,
+            )
+
+        self.assertEqual("no_candidate", result["status"])
+        build_provisional.assert_called_once_with(
+            {},
+            search_focus_roles=focus,
+        )
+
     def test_registers_enabled_gemini_consent_flow(self) -> None:
         register = Mock()
         planner = object()
@@ -98,6 +130,10 @@ class SlackSocketMainTest(unittest.TestCase):
             register.call_args.kwargs["profile_analysis_consent_session_creator"],
         )
         self.assertIs(planner, register.call_args.kwargs["agent_planner"])
+        self.assertIs(
+            run_slack_socket._run_slack_agent_action,
+            register.call_args.kwargs["agent_action_runner"],
+        )
         self.assertTrue(
             register.call_args.kwargs["agent_external_transfer_approved"]
         )

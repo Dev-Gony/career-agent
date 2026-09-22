@@ -8,8 +8,15 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Protocol
 
+from career_agent.search_plan import (
+    JobSearchPlanError,
+    MAX_SEARCH_FOCUS_ROLES,
+    MAX_SEARCH_FOCUS_ROLE_CHARS,
+    validate_search_focus_roles,
+)
 
-SLACK_AGENT_PLAN_CONTRACT_VERSION = "slack-agent-plan-v1"
+
+SLACK_AGENT_PLAN_CONTRACT_VERSION = "slack-agent-plan-v2"
 MAX_SLACK_AGENT_MESSAGE_CHARS = 4_000
 
 SLACK_AGENT_TOOLS = frozenset(
@@ -63,6 +70,7 @@ def slack_agent_plan_json_schema() -> dict[str, Any]:
             "contract_version",
             "intent",
             "steps",
+            "search_focus_roles",
             "clarification_code",
         ],
         "properties": {
@@ -95,6 +103,17 @@ def slack_agent_plan_json_schema() -> dict[str, Any]:
                             ),
                         },
                     },
+                },
+            },
+            "search_focus_roles": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": MAX_SEARCH_FOCUS_ROLES,
+                "uniqueItems": True,
+                "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": MAX_SEARCH_FOCUS_ROLE_CHARS,
                 },
             },
             "clarification_code": {
@@ -162,6 +181,7 @@ def validate_slack_agent_plan(
         "contract_version",
         "intent",
         "steps",
+        "search_focus_roles",
         "clarification_code",
     }:
         raise SlackAgentPlanError("Slack Agent 계획 필드가 올바르지 않음")
@@ -175,6 +195,17 @@ def validate_slack_agent_plan(
     if not isinstance(raw_steps, list):
         raise SlackAgentPlanError("Slack Agent 계획 steps는 배열이어야 함")
     clarification_code = plan.get("clarification_code")
+    raw_focus_roles = plan.get("search_focus_roles")
+    if not isinstance(raw_focus_roles, list):
+        raise SlackAgentPlanError("search_focus_roles 배열이 필요함")
+    try:
+        focus_roles = (
+            validate_search_focus_roles(raw_focus_roles)
+            if raw_focus_roles
+            else []
+        )
+    except JobSearchPlanError as error:
+        raise SlackAgentPlanError("검색 초점 직무가 올바르지 않음") from error
 
     if intent == "clarify":
         if raw_steps:
@@ -183,10 +214,13 @@ def validate_slack_agent_plan(
             raise SlackAgentPlanError("clarify 계획의 clarification_code가 올바르지 않음")
         if clarification_code == "attachment_required" and has_validated_attachment:
             raise SlackAgentPlanError("검증된 첨부가 있어 attachment_required를 사용할 수 없음")
+        if focus_roles:
+            raise SlackAgentPlanError("clarify 계획은 검색 초점 직무를 포함할 수 없음")
         return {
             "contract_version": SLACK_AGENT_PLAN_CONTRACT_VERSION,
             "intent": "clarify",
             "steps": [],
+            "search_focus_roles": [],
             "clarification_code": clarification_code,
         }
 
@@ -224,11 +258,14 @@ def validate_slack_agent_plan(
                 raise SlackAgentPlanError("첨부 분석은 첫 번째 단계에서만 실행할 수 있음")
         seen_tools.add(tool)
         normalized_steps.append({"tool": tool, "reason_code": reason_code})
+    if focus_roles and "find_next_job" not in seen_tools:
+        raise SlackAgentPlanError("검색 초점 직무는 공고 찾기 도구와 함께 사용해야 함")
 
     return {
         "contract_version": SLACK_AGENT_PLAN_CONTRACT_VERSION,
         "intent": "execute",
         "steps": normalized_steps,
+        "search_focus_roles": focus_roles,
         "clarification_code": None,
     }
 

@@ -463,6 +463,12 @@ def register_slack_app_mention_listener(
     output_directory: str | Path,
     now: Callable[[], datetime] | None = None,
     action_runner: Callable[[str, Mapping[str, Any]], Mapping[str, Any]] | None = None,
+    agent_action_runner: (
+        Callable[
+            [str, Mapping[str, Any], tuple[str, ...]], Mapping[str, Any]
+        ]
+        | None
+    ) = None,
     profile_document_importer: (
         Callable[[Mapping[str, Any], datetime], Mapping[str, Any]] | None
     ) = None,
@@ -573,7 +579,25 @@ def register_slack_app_mention_listener(
                     text=_action_started_reply(action),
                     thread_ts=request["source"]["thread_ts"],
                 )
-                if action_runner is None:
+                if agent_action_runner is not None:
+                    try:
+                        action_result = agent_action_runner(
+                            action,
+                            request,
+                            tuple(plan["search_focus_roles"]),
+                        )
+                        public_message = action_result.get("public_message")
+                        if (
+                            not isinstance(public_message, str)
+                            or not public_message.strip()
+                        ):
+                            raise SlackEventError(
+                                "Slack Agent 도구 결과의 공개 메시지가 없음"
+                            )
+                    except SlackEventError as error:
+                        logger.warning("Slack Agent 내부 도구 실패: %s", error)
+                        public_message = _action_failure_reply(action)
+                elif action_runner is None:
                     public_message = _action_failure_reply(action)
                 else:
                     try:

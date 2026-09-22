@@ -20,7 +20,7 @@ from career_agent.interfaces.slack_agent_plan import (  # noqa: E402
 )
 
 
-def _execute_plan(*tools: str) -> dict:
+def _execute_plan(*tools: str, search_focus_roles: tuple[str, ...] = ()) -> dict:
     reasons = {
         "find_next_job": "job_search_requested",
         "analyze_profile_attachment": "profile_attachment_received",
@@ -34,6 +34,7 @@ def _execute_plan(*tools: str) -> dict:
             {"tool": tool, "reason_code": reasons[tool]}
             for tool in tools
         ],
+        "search_focus_roles": list(search_focus_roles),
         "clarification_code": None,
     }
 
@@ -170,6 +171,7 @@ class SlackAgentPlanTest(unittest.TestCase):
             "contract_version": SLACK_AGENT_PLAN_CONTRACT_VERSION,
             "intent": "clarify",
             "steps": [],
+            "search_focus_roles": [],
             "clarification_code": "request_unclear",
         }
         self.assertEqual(
@@ -212,6 +214,37 @@ class SlackAgentPlanTest(unittest.TestCase):
         )
         self.assertEqual("find_next_job", result["steps"][0]["tool"])
         self.assertEqual(1, len(provider.calls))
+
+    def test_validates_bounded_search_focus_only_for_job_search(self) -> None:
+        plan = validate_slack_agent_plan(
+            _execute_plan(
+                "find_next_job",
+                search_focus_roles=("QA Engineer", "Test Automation Engineer"),
+            ),
+            has_validated_attachment=False,
+        )
+        self.assertEqual(
+            ["QA Engineer", "Test Automation Engineer"],
+            plan["search_focus_roles"],
+        )
+        for roles in (
+            ("one", "two", "three", "four"),
+            ("https://example.invalid",),
+            ("QA", "qa"),
+        ):
+            with self.subTest(roles=roles), self.assertRaises(SlackAgentPlanError):
+                validate_slack_agent_plan(
+                    _execute_plan("find_next_job", search_focus_roles=roles),
+                    has_validated_attachment=False,
+                )
+        with self.assertRaises(SlackAgentPlanError):
+            validate_slack_agent_plan(
+                _execute_plan(
+                    "show_profile_summary",
+                    search_focus_roles=("QA Engineer",),
+                ),
+                has_validated_attachment=False,
+            )
 
     def test_local_provider_does_not_require_external_approval(self) -> None:
         provider = _Provider(_execute_plan("show_profile_summary"), external=False)

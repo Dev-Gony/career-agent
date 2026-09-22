@@ -26,7 +26,7 @@ from career_agent.interfaces.slack_agent_plan import (  # noqa: E402
 API_KEY = "AIza-synthetic-development-key-0123456789"
 
 
-def _execute_plan(*tools: str) -> dict:
+def _execute_plan(*tools: str, search_focus_roles: tuple[str, ...] = ()) -> dict:
     reason_codes = {
         "find_next_job": "job_search_requested",
         "analyze_profile_attachment": "profile_attachment_received",
@@ -40,6 +40,7 @@ def _execute_plan(*tools: str) -> dict:
             {"tool": tool, "reason_code": reason_codes[tool]}
             for tool in tools
         ],
+        "search_focus_roles": list(search_focus_roles),
         "clarification_code": None,
     }
 

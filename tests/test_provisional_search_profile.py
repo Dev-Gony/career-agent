@@ -72,6 +72,28 @@ class ProvisionalSearchProfileTest(unittest.TestCase):
         self.assertEqual("unconfirmed", base["metadata"]["evidence_status"])
         self.assertFalse(base["metadata"]["git_tracking_allowed"])
 
+    def test_explicit_search_focus_replaces_draft_roles_without_mutating_draft(self) -> None:
+        draft = _draft()
+        original = deepcopy(draft)
+
+        base = build_draft_search_base_profile(
+            draft,
+            search_focus_roles=("QA Engineer", "Test Automation Engineer"),
+        )
+
+        self.assertEqual(
+            ["QA Engineer", "Test Automation Engineer"],
+            [item["role"] for item in base["profile"]["target_roles"]],
+        )
+        self.assertEqual(original, draft)
+
+    def test_rejects_more_than_three_explicit_search_focus_roles(self) -> None:
+        with self.assertRaisesRegex(ProfileDocumentError, "3개 이하"):
+            build_draft_search_base_profile(
+                _draft(),
+                search_focus_roles=("A", "B", "C", "D"),
+            )
+
     def test_projects_unconfirmed_evidence_without_mutating_or_activating_profile(self) -> None:
         base = _base_profile()
         original = deepcopy(base)

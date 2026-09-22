@@ -67,6 +67,8 @@ def _provisional_role_id(draft_id: str, role: str) -> str:
 
 def build_draft_search_base_profile(
     draft: Mapping[str, Any],
+    *,
+    search_focus_roles: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """Build a minimal private base using only unconfirmed draft role hypotheses."""
 
@@ -85,8 +87,18 @@ def build_draft_search_base_profile(
     if not isinstance(career_items, list):
         raise ProfileDocumentError("analysis.career_evidence 배열이 필요함")
 
+    if not isinstance(search_focus_roles, tuple) or len(search_focus_roles) > 3:
+        raise ProfileDocumentError("검색 초점 직무는 3개 이하 tuple이어야 함")
     roles: list[str] = []
+    for position, raw_role in enumerate(search_focus_roles):
+        role = _text(raw_role, f"search_focus_roles[{position}]")
+        if len(role) > 100 or any(ord(character) < 32 or character in "<>" for character in role) or "://" in role:
+            raise ProfileDocumentError("검색 초점 직무 형식이 올바르지 않음")
+        if role.casefold() not in {item.casefold() for item in roles}:
+            roles.append(role)
     for position, raw_item in enumerate(career_items):
+        if search_focus_roles:
+            break
         item = _mapping(raw_item, f"analysis.career_evidence[{position}]")
         role = _text(
             item.get("role_or_context"),

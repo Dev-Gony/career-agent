@@ -292,6 +292,8 @@ def _request_context(request: Mapping[str, Any]) -> tuple[Mapping[str, Any], dat
 
 def _build_latest_provisional_search_profile(
     request: Mapping[str, Any],
+    *,
+    search_focus_roles: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """Build one search-only profile from the latest actor-approved external draft."""
 
@@ -327,7 +329,10 @@ def _build_latest_provisional_search_profile(
             channel_id=str(source["channel_id"]),
             user_id=str(source["user_id"]),
         )
-        base_profile = build_draft_search_base_profile(draft)
+        base_profile = build_draft_search_base_profile(
+            draft,
+            search_focus_roles=search_focus_roles,
+        )
         projection = build_provisional_search_profile(
             base_profile,
             draft,
@@ -786,6 +791,8 @@ def _run_profile_final_decision(
 def _run_slack_action(
     action: str,
     request: Mapping[str, Any],
+    *,
+    search_focus_roles: tuple[str, ...] = (),
 ) -> Mapping[str, Any]:
     if action in {
         PROFILE_EXTERNAL_ANALYSIS_APPROVE_ACTION,
@@ -903,7 +910,10 @@ def _run_slack_action(
             raise SlackEventError("활성 개인 프로필을 안전하게 확인할 수 없음") from error
         if active_profile_path is None:
             try:
-                provisional_profile = _build_latest_provisional_search_profile(request)
+                provisional_profile = _build_latest_provisional_search_profile(
+                    request,
+                    search_focus_roles=search_focus_roles,
+                )
             except SlackEventError:
                 return {
                     "status": "missing_personal_profile",
@@ -924,6 +934,20 @@ def _run_slack_action(
     )
 
 
+def _run_slack_agent_action(
+    action: str,
+    request: Mapping[str, Any],
+    search_focus_roles: tuple[str, ...],
+) -> Mapping[str, Any]:
+    """Pass only locally validated transient search focus to the action runner."""
+
+    return _run_slack_action(
+        action,
+        request,
+        search_focus_roles=search_focus_roles,
+    )
+
+
 def main() -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -941,6 +965,7 @@ def main() -> int:
             config,
             output_directory=args.output_directory,
             action_runner=_run_slack_action,
+            agent_action_runner=_run_slack_agent_action,
             profile_document_importer=lambda reference, imported_at: (
                 import_slack_profile_document(
                     reference,
