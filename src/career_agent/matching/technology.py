@@ -93,6 +93,12 @@ def _classify_skill(skill: dict[str, Any] | None) -> tuple[str, str, str]:
         )
 
     level = skill["level"]
+    if level == "unconfirmed" and skill["evidence"]:
+        return (
+            "unknown",
+            "exact",
+            "프로필 문서에 해당 기술의 사용 근거가 있으나 실제 사용 수준은 추가 확인이 필요합니다.",
+        )
     if level in _STRONG_LEVELS:
         return (
             "strong_match",
@@ -122,7 +128,9 @@ def _build_evidence(skill: dict[str, Any] | None) -> list[dict[str, str]]:
     if skill is None:
         return []
 
-    details = skill["evidence"] or [skill["notes"]]
+    details = skill["evidence"]
+    if not details and skill["level"] != "unconfirmed":
+        details = [skill["notes"]]
     return [
         {
             "source_type": "skill",
@@ -162,8 +170,14 @@ def _assess_items(
         unknowns = []
         next_action = None
         if result == "unknown":
-            unknowns.append(f"{name}의 실제 사용 경험")
-            next_action = f"프로필 자료에서 {name} 사용 경험을 추가 확인"
+            if skill is not None and directness == "exact" and skill["evidence"]:
+                unknowns.append(f"{name}의 실제 사용 수준")
+                next_action = (
+                    f"프로필 문서의 {name} 사용 근거를 바탕으로 실제 사용 수준을 추가 확인"
+                )
+            else:
+                unknowns.append(f"{name}의 실제 사용 경험")
+                next_action = f"프로필 자료에서 {name} 사용 경험을 추가 확인"
         elif result == "gap":
             next_action = f"기존 프로젝트에 {name} 적용 후 동작 증거 확보"
 

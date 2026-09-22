@@ -92,6 +92,108 @@ class TechnologyMatchingTest(unittest.TestCase):
             "partial", result["required_matches"][0]["assessment"]["result"]
         )
 
+    def test_unconfirmed_skill_with_own_evidence_stays_unknown_but_is_exact(self) -> None:
+        profile = deepcopy(self.profile)
+        profile["profile"]["skills"].append(
+            {
+                "skill_id": "skill-gemini-api-unconfirmed",
+                "name": "Gemini API",
+                "level": "unconfirmed",
+                "evidence": ["Gemini API를 사용해 문서 분석 흐름을 구현했습니다."],
+                "notes": "사용자 확인 전 AI 분석 초안",
+            }
+        )
+        posting = deepcopy(self.posting)
+        posting["job_posting"]["requirements"] = [
+            {
+                "requirement_id": "requirement-gemini-api",
+                "type": "skill",
+                "name": "Gemini API",
+                "level": "required",
+                "evidence_text": "Gemini API 사용 경험",
+            }
+        ]
+
+        result = match_technology_requirements(profile, posting)
+        match = result["required_matches"][0]
+
+        self.assertEqual("unknown", match["assessment"]["result"])
+        self.assertEqual("exact", match["assessment"]["directness"])
+        self.assertEqual("low", match["assessment"]["confidence"])
+        self.assertEqual(
+            "프로필 문서에 해당 기술의 사용 근거가 있으나 실제 사용 수준은 추가 확인이 필요합니다.",
+            match["assessment"]["reason"],
+        )
+        self.assertEqual(["Gemini API의 실제 사용 수준"], match["unknowns"])
+        self.assertEqual(
+            "프로필 문서의 Gemini API 사용 근거를 바탕으로 실제 사용 수준을 추가 확인",
+            match["next_action"],
+        )
+        self.assertEqual(
+            ["Gemini API를 사용해 문서 분석 흐름을 구현했습니다."],
+            [item["detail"] for item in match["user_evidence"]],
+        )
+        self.assertEqual(0, result["summary"]["required"]["strong_match"])
+        self.assertEqual(1, result["summary"]["required"]["unknown"])
+
+    def test_unconfirmed_skill_without_evidence_does_not_gain_notes_as_evidence(self) -> None:
+        profile = deepcopy(self.profile)
+        profile["profile"]["skills"].append(
+            {
+                "skill_id": "skill-vertex-ai-unconfirmed",
+                "name": "Vertex AI",
+                "level": "unconfirmed",
+                "evidence": [],
+                "notes": "사용자 확인 전 AI 분석 초안",
+            }
+        )
+        posting = deepcopy(self.posting)
+        posting["job_posting"]["requirements"] = [
+            {
+                "requirement_id": "requirement-vertex-ai",
+                "type": "skill",
+                "name": "Vertex AI",
+                "level": "required",
+                "evidence_text": "Vertex AI 사용 경험",
+            }
+        ]
+
+        result = match_technology_requirements(profile, posting)
+        match = result["required_matches"][0]
+
+        self.assertEqual("unknown", match["assessment"]["result"])
+        self.assertEqual("none", match["assessment"]["directness"])
+        self.assertEqual([], match["user_evidence"])
+        self.assertEqual(["Vertex AI의 실제 사용 경험"], match["unknowns"])
+
+    def test_unconfirmed_evidence_is_not_reused_for_another_technology(self) -> None:
+        profile = deepcopy(self.profile)
+        profile["profile"]["skills"].append(
+            {
+                "skill_id": "skill-gemini-api-unconfirmed",
+                "name": "Gemini API",
+                "level": "unconfirmed",
+                "evidence": ["Gemini API를 사용해 문서 분석 흐름을 구현했습니다."],
+            }
+        )
+        posting = deepcopy(self.posting)
+        posting["job_posting"]["requirements"] = [
+            {
+                "requirement_id": "requirement-vertex-ai",
+                "type": "skill",
+                "name": "Vertex AI",
+                "level": "required",
+                "evidence_text": "Vertex AI 사용 경험",
+            }
+        ]
+
+        result = match_technology_requirements(profile, posting)
+        match = result["required_matches"][0]
+
+        self.assertEqual("unknown", match["assessment"]["result"])
+        self.assertEqual("none", match["assessment"]["directness"])
+        self.assertEqual([], match["user_evidence"])
+
     def test_rejects_duplicate_canonical_skill_names(self) -> None:
         profile = deepcopy(self.profile)
         profile["profile"]["skills"].append(
