@@ -830,9 +830,6 @@ def main() -> int:
                 )
             ),
             profile_document_extractor=_extract_imported_profile_document,
-            profile_analysis_consent_session_creator=(
-                _create_profile_analysis_consent_session
-            ),
         )
         print("Slack Socket Mode 수신기를 시작합니다.")
         print("- 지원 명령: @career_break 다음 공고 찾아줘")
@@ -845,8 +842,7 @@ def main() -> int:
         print("- 지원 명령: @career_break 프로필 최종 검토")
         print("- 최종 검토 스레드 답변: @career_break 최종 승인 또는 @career_break 최종 취소")
         print("- 지원 입력: @career_break 프로필 분석해줘 + 첨부파일 1개")
-        print("- 문서 스레드 답변: @career_break 외부 AI 분석 동의 또는 외부 AI 분석 거부")
-        print("- 현재 단계: 공고 1건 분석 또는 첨부파일 저장과 검토 후보 추출")
+        print("- 현재 단계: 공고 1건 분석 또는 첨부파일 저장과 로컬 검토 초안 생성")
         print("- 종료: Ctrl+C")
         print("주의: 메시지 원문과 Token은 콘솔에 출력하지 않습니다.")
         run_slack_socket_mode(app, app_token)
