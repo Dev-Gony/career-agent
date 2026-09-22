@@ -313,7 +313,8 @@ class SlackSocketTest(unittest.TestCase):
             prepared[0][0]["source"]["thread_ts"],
         )
         self.assertEqual(RECEIVED_AT, prepared[0][2])
-        self.assertIn("무료 Gemini 개발 키", replies[1]["text"])
+        self.assertIn("무료 Gemini의 입력과 응답", replies[1]["text"])
+        self.assertIn("최소 후보 텍스트를 Gemini로 전송", replies[1]["text"])
         self.assertIn("외부 AI 분석 동의", replies[1]["text"])
         self.assertIn("동의 전에는 외부 전송이 없습니다", replies[1]["text"])
         self.assertEqual([], logger.messages)

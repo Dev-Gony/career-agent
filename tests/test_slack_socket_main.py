@@ -16,7 +16,7 @@ from scripts import run_slack_socket  # noqa: E402
 
 
 class SlackSocketMainTest(unittest.TestCase):
-    def test_does_not_offer_external_analysis_without_enabled_provider(self) -> None:
+    def test_registers_enabled_gemini_consent_flow(self) -> None:
         register = Mock()
         with (
             patch.object(sys, "argv", ["run_slack_socket.py"]),
@@ -31,9 +31,13 @@ class SlackSocketMainTest(unittest.TestCase):
             result = run_slack_socket.main()
 
         self.assertEqual(0, result)
-        self.assertNotIn(
+        self.assertIn(
             "profile_analysis_consent_session_creator",
             register.call_args.kwargs,
+        )
+        self.assertIs(
+            run_slack_socket._create_profile_analysis_consent_session,
+            register.call_args.kwargs["profile_analysis_consent_session_creator"],
         )
 
 

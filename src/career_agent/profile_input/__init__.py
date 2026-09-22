@@ -110,6 +110,12 @@ from .analysis_external_consent import (
     select_latest_profile_analysis_external_consent_for_session,
     validate_profile_analysis_external_consent,
 )
+from .analysis_external_authorization import (
+    require_approved_profile_analysis_external_consent,
+)
+from .analysis_external_service import (
+    analyze_profile_extraction_with_approved_external_consent,
+)
 from .analysis_update_proposal import (
     PROFILE_ANALYSIS_UPDATE_PROPOSAL_SCHEMA_VERSION,
     build_profile_analysis_update_proposal,
@@ -164,6 +170,7 @@ from .openai_analysis import (
 from .gemini_analysis import (
     DEFAULT_GEMINI_DEVELOPMENT_MODEL,
     GEMINI_DEVELOPMENT_MODELS,
+    GeminiConsentedProfileAnalysisProvider,
     GeminiDevelopmentProfileAnalysisProvider,
     load_gemini_api_key,
 )
@@ -252,6 +259,8 @@ __all__ = [
     "save_profile_analysis_external_consent",
     "select_latest_profile_analysis_external_consent_for_session",
     "validate_profile_analysis_external_consent",
+    "require_approved_profile_analysis_external_consent",
+    "analyze_profile_extraction_with_approved_external_consent",
     "PROFILE_ANALYSIS_UPDATE_PROPOSAL_SCHEMA_VERSION",
     "build_profile_analysis_update_proposal",
     "load_profile_analysis_update_proposal",
@@ -291,6 +300,7 @@ __all__ = [
     "load_openai_api_key",
     "DEFAULT_GEMINI_DEVELOPMENT_MODEL",
     "GEMINI_DEVELOPMENT_MODELS",
+    "GeminiConsentedProfileAnalysisProvider",
     "GeminiDevelopmentProfileAnalysisProvider",
     "load_gemini_api_key",
 ]

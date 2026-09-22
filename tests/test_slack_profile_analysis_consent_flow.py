@@ -87,6 +87,33 @@ class SlackProfileAnalysisConsentFlowTest(unittest.TestCase):
                     "DEFAULT_PROFILE_ANALYSIS_EXTERNAL_CONSENT_DIRECTORY",
                     consent_directory,
                 ),
+                patch.object(
+                    run_slack_socket,
+                    "DEFAULT_PROFILE_ANALYSIS_DRAFT_DIRECTORY",
+                    root_path / "drafts",
+                ),
+                patch.object(
+                    run_slack_socket,
+                    "load_gemini_api_key",
+                    return_value="AIza-synthetic-development-key-0123456789",
+                ),
+                patch.object(
+                    run_slack_socket,
+                    "analyze_profile_extraction_with_approved_external_consent",
+                    return_value={
+                        "summary": {
+                            "career_evidence_count": 2,
+                            "achievement_evidence_count": 3,
+                            "technology_evidence_count": 4,
+                            "unknown_count": 1,
+                        }
+                    },
+                ) as analyze,
+                patch.object(
+                    run_slack_socket,
+                    "save_profile_analysis_draft",
+                    return_value=(root_path / "draft.json", True),
+                ),
             ):
                 result = run_slack_socket._run_profile_external_analysis_decision(
                     PROFILE_EXTERNAL_ANALYSIS_APPROVE_ACTION,
@@ -97,10 +124,12 @@ class SlackProfileAnalysisConsentFlowTest(unittest.TestCase):
             )
             stored_text = consent_paths[0].read_text(encoding="utf-8")
 
-        self.assertEqual("approved", result["status"])
+        self.assertEqual("approved_and_analyzed", result["status"])
         self.assertEqual(1, len(consent_paths))
         self.assertNotIn(extraction["candidates"][0]["text"], stored_text)
-        self.assertIn("무료 Gemini에는 실제 문서를 보내지 않으며", result["public_message"])
+        self.assertIn("Gemini로 분석", result["public_message"])
+        self.assertIn("경력 근거: 2개", result["public_message"])
+        analyze.assert_called_once()
 
 
 if __name__ == "__main__":

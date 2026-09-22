@@ -25,6 +25,9 @@ from career_agent.profile_input import (  # noqa: E402
     load_gemini_api_key,
     profile_analysis_response_json_schema,
 )
+from career_agent.profile_input.gemini_analysis import (  # noqa: E402
+    GeminiConsentedProfileAnalysisProvider,
+)
 from scripts.build_gemini_synthetic_profile_analysis_draft import (  # noqa: E402
     PUBLIC_SYNTHETIC_DOCUMENT,
     _build_parser,
@@ -206,6 +209,80 @@ class GeminiProfileAnalysisTest(unittest.TestCase):
             provider.analyze(request, profile_analysis_response_json_schema())
 
         self.assertEqual([], calls)
+
+    def test_consented_provider_accepts_non_fixture_minimal_candidates(self) -> None:
+        calls = []
+
+        def open_url(request, *, timeout):
+            calls.append((request, timeout))
+            return _Response(_api_payload())
+
+        provider = GeminiConsentedProfileAnalysisProvider(
+            API_KEY,
+            open_url=open_url,
+        )
+        request = _request()
+        request["candidates"][0]["text"] = "실제 경력 후보 문장"
+
+        result = provider.analyze(
+            request,
+            profile_analysis_response_json_schema(),
+        )
+
+        self.assertEqual(_structured_output(), result)
+        self.assertTrue(provider.sends_data_externally)
+        self.assertEqual("google-gemini-development", provider.provider_name)
+        self.assertEqual("gemini-3.5-flash-lite", provider.model_name)
+        self.assertEqual(1, len(calls))
+        body = json.loads(calls[0][0].data.decode("utf-8"))
+        sent_request = json.loads(body["contents"][0]["parts"][0]["text"])
+        self.assertEqual(request, sent_request)
+        self.assertNotIn("document_id", json.dumps(body, ensure_ascii=False))
+        self.assertNotIn("extraction_id", json.dumps(body, ensure_ascii=False))
+        self.assertIn(
+            "외부 분석 전송을 승인한 경력 문서",
+            body["systemInstruction"]["parts"][0]["text"],
+        )
+        self.assertNotIn(
+            "공개 합성 경력 문서",
+            body["systemInstruction"]["parts"][0]["text"],
+        )
+
+    def test_consented_provider_keeps_minimal_request_boundary(self) -> None:
+        calls = []
+        provider = GeminiConsentedProfileAnalysisProvider(
+            API_KEY,
+            open_url=lambda *args, **kwargs: calls.append((args, kwargs)),
+        )
+        request = _request()
+        request["document_id"] = "private-document"
+
+        with self.assertRaisesRegex(ProfileDocumentError, "허용되지 않은 필드"):
+            provider.analyze(request, profile_analysis_response_json_schema())
+
+        self.assertEqual([], calls)
+
+    def test_consented_provider_sanitizes_network_failure(self) -> None:
+        candidate_text = "실제 경력 후보 비공개 문장"
+
+        def fail_request(*_args, **_kwargs):
+            raise URLError(f"{API_KEY} {candidate_text}")
+
+        provider = GeminiConsentedProfileAnalysisProvider(
+            API_KEY,
+            open_url=fail_request,
+            max_retries=0,
+        )
+        request = _request()
+        request["candidates"][0]["text"] = candidate_text
+
+        with self.assertRaises(ProfileDocumentError) as raised:
+            provider.analyze(request, profile_analysis_response_json_schema())
+
+        message = str(raised.exception)
+        self.assertIn("URLError", message)
+        self.assertNotIn(API_KEY, message)
+        self.assertNotIn(candidate_text, message)
 
     def test_sanitizes_network_failure_without_key_or_candidate_text(self) -> None:
         def fail_request(*_args, **_kwargs):

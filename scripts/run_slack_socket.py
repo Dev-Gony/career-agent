@@ -51,10 +51,12 @@ from career_agent.interfaces import (  # noqa: E402
 )
 from career_agent.profile_input import (  # noqa: E402
     DEFAULT_GEMINI_DEVELOPMENT_MODEL,
+    GeminiConsentedProfileAnalysisProvider,
     GeminiDevelopmentProfileAnalysisProvider,
     LocalEvidenceProfileAnalysisProvider,
     ProfileDocumentError,
     analyze_profile_extraction,
+    analyze_profile_extraction_with_approved_external_consent,
     build_profile_analysis_review,
     build_profile_analysis_mapping_review,
     build_profile_analysis_update_proposal,
@@ -68,6 +70,7 @@ from career_agent.profile_input import (  # noqa: E402
     load_profile_analysis_draft,
     load_profile_analysis_update_proposal,
     load_profile_analysis_final_proposal,
+    load_gemini_api_key,
     save_profile_analysis_update_proposal,
     save_profile_analysis_draft,
     save_profile_analysis_review,
@@ -399,12 +402,44 @@ def _run_profile_external_analysis_decision(
                 "개인 프로필도 변경하지 않았습니다."
             ),
         }
+    try:
+        provider = GeminiConsentedProfileAnalysisProvider(
+            load_gemini_api_key(DEFAULT_ENV_FILE),
+            model_name=str(target["model_name"]),
+        )
+        draft = analyze_profile_extraction_with_approved_external_consent(
+            extraction,
+            provider,
+            analyzed_at=decided_at,
+            session_directory=(
+                DEFAULT_SLACK_PROFILE_ANALYSIS_CONSENT_SESSION_DIRECTORY
+            ),
+            consent_directory=DEFAULT_PROFILE_ANALYSIS_EXTERNAL_CONSENT_DIRECTORY,
+        )
+        _, created = save_profile_analysis_draft(
+            draft,
+            DEFAULT_PROFILE_ANALYSIS_DRAFT_DIRECTORY,
+        )
+    except ProfileDocumentError:
+        return {
+            "status": "external_analysis_failed",
+            "public_message": (
+                "외부 AI 분석 동의는 저장했지만 Gemini 분석 결과를 안전한 초안으로 "
+                "만들지 못했습니다. 개인 프로필과 검색 조건은 변경하지 않았습니다."
+            ),
+        }
+    summary = draft["summary"]
+    creation_status = "새 초안을 만들었습니다" if created else "동일한 초안을 재사용했습니다"
     return {
-        "status": "approved",
+        "status": "approved_and_analyzed",
         "public_message": (
-            "이 문서의 최소 후보 텍스트를 허용된 외부 AI 공급자로 분석하는 데 동의한 "
-            "기록을 저장했습니다. 무료 Gemini에는 실제 문서를 보내지 않으며, 외부 전송과 "
-            "개인 프로필 변경은 실행하지 않았습니다."
+            "승인한 문서 후보를 Gemini로 분석해 비공개 검토 초안을 만들었습니다.\n\n"
+            f"- 경력 근거: {summary['career_evidence_count']}개\n"
+            f"- 성과 근거: {summary['achievement_evidence_count']}개\n"
+            f"- 기술 사용 근거: {summary['technology_evidence_count']}개\n"
+            f"- 추가 확인 질문: {summary['unknown_count']}개\n"
+            f"- 저장 결과: {creation_status}\n\n"
+            "개인 프로필과 공고 검색 조건은 아직 변경하지 않았습니다."
         ),
     }
 
@@ -830,6 +865,9 @@ def main() -> int:
                 )
             ),
             profile_document_extractor=_extract_imported_profile_document,
+            profile_analysis_consent_session_creator=(
+                _create_profile_analysis_consent_session
+            ),
         )
         print("Slack Socket Mode 수신기를 시작합니다.")
         print("- 지원 명령: @career_break 다음 공고 찾아줘")
@@ -842,7 +880,7 @@ def main() -> int:
         print("- 지원 명령: @career_break 프로필 최종 검토")
         print("- 최종 검토 스레드 답변: @career_break 최종 승인 또는 @career_break 최종 취소")
         print("- 지원 입력: @career_break 프로필 분석해줘 + 첨부파일 1개")
-        print("- 현재 단계: 공고 1건 분석 또는 첨부파일 저장과 로컬 검토 초안 생성")
+        print("- 현재 단계: 공고 1건 분석 또는 첨부파일 저장과 승인된 Gemini 초안 생성")
         print("- 종료: Ctrl+C")
         print("주의: 메시지 원문과 Token은 콘솔에 출력하지 않습니다.")
         run_slack_socket_mode(app, app_token)
