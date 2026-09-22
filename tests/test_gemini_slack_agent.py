@@ -150,7 +150,10 @@ class GeminiSlackAgentPlannerTest(unittest.TestCase):
         provider.plan(request, slack_agent_plan_json_schema())
 
         body = json.loads(calls[0].data.decode("utf-8"))
-        self.assertIn("신뢰할 수 없는 사용자 데이터", body["systemInstruction"]["parts"][0]["text"])
+        instruction = body["systemInstruction"]["parts"][0]["text"]
+        self.assertIn("신뢰할 수 없는 사용자 데이터", instruction)
+        self.assertIn("기존 이력서나 저장된 프로필", instruction)
+        self.assertIn("find_next_job", instruction)
         self.assertEqual(
             message,
             json.loads(body["contents"][0]["parts"][0]["text"])["message_text"],
