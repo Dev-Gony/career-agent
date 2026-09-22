@@ -112,6 +112,13 @@ from .analysis_mapping_review import (
     select_latest_profile_analysis_mapping_reviews,
     validate_profile_analysis_mapping_review,
 )
+from .analysis_final_proposal import (
+    PROFILE_ANALYSIS_FINAL_PROPOSAL_SCHEMA_VERSION,
+    build_profile_analysis_final_proposal,
+    load_profile_analysis_final_proposal,
+    save_profile_analysis_final_proposal,
+    validate_profile_analysis_final_proposal,
+)
 from .openai_analysis import (
     DEFAULT_OPENAI_PROFILE_ANALYSIS_MODEL,
     OPENAI_PROFILE_ANALYSIS_MODELS,
@@ -211,6 +218,11 @@ __all__ = [
     "save_profile_analysis_mapping_review",
     "select_latest_profile_analysis_mapping_reviews",
     "validate_profile_analysis_mapping_review",
+    "PROFILE_ANALYSIS_FINAL_PROPOSAL_SCHEMA_VERSION",
+    "build_profile_analysis_final_proposal",
+    "load_profile_analysis_final_proposal",
+    "save_profile_analysis_final_proposal",
+    "validate_profile_analysis_final_proposal",
     "DEFAULT_OPENAI_PROFILE_ANALYSIS_MODEL",
     "OPENAI_PROFILE_ANALYSIS_MODELS",
     "OpenAIResponsesProfileAnalysisProvider",

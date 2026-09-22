@@ -24,6 +24,7 @@ from career_agent.profile_input import (  # noqa: E402
 )
 from scripts import run_slack_socket  # noqa: E402
 from tests.test_profile_analysis_mapping_review import _proposal  # noqa: E402
+from tests.test_profile_analysis_final_proposal import _mapping_reviews  # noqa: E402
 from tests.test_profile_analysis_update_proposal import CREATED_AT  # noqa: E402
 
 
@@ -43,6 +44,53 @@ def _request(thread_ts: str = "1789372700.000900") -> dict:
 
 
 class SlackProfileMappingFlowTest(unittest.TestCase):
+    def test_final_review_requires_all_mappings_then_shows_summary(self) -> None:
+        profile, proposal = _proposal()
+        reviews = _mapping_reviews(profile, proposal)
+        incomplete = dict(reviews)
+        incomplete.pop("analysis-change-002")
+        with tempfile.TemporaryDirectory() as root:
+            final_directory = Path(root) / "final"
+            with (
+                patch.object(
+                    run_slack_socket,
+                    "_build_latest_profile_update_context",
+                    return_value={
+                        "profile": profile,
+                        "proposal": proposal,
+                        "mapping_reviews": incomplete,
+                    },
+                ),
+                patch.object(
+                    run_slack_socket,
+                    "DEFAULT_PROFILE_ANALYSIS_FINAL_PROPOSAL_DIRECTORY",
+                    final_directory,
+                ),
+            ):
+                waiting = run_slack_socket._build_latest_profile_final_result(CREATED_AT)
+            with (
+                patch.object(
+                    run_slack_socket,
+                    "_build_latest_profile_update_context",
+                    return_value={
+                        "profile": profile,
+                        "proposal": proposal,
+                        "mapping_reviews": reviews,
+                    },
+                ),
+                patch.object(
+                    run_slack_socket,
+                    "DEFAULT_PROFILE_ANALYSIS_FINAL_PROPOSAL_DIRECTORY",
+                    final_directory,
+                ),
+            ):
+                completed = run_slack_socket._build_latest_profile_final_result(CREATED_AT)
+
+        self.assertIn("아직 선택하지 않은", waiting["public_message"])
+        self.assertIsNone(waiting["final_target"])
+        self.assertIn("프로필 최종 변경안", completed["public_message"])
+        self.assertIsNotNone(completed["final_target"])
+
     def test_same_thread_selection_is_saved_without_updating_profile(self) -> None:
         profile, proposal = _proposal()
         proposal_id = proposal["profile_analysis_update_proposal"]["proposal_id"]

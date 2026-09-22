@@ -19,12 +19,14 @@ from career_agent.interfaces import (  # noqa: E402
     PROFILE_UPDATE_MAPPING_ACTION,
     PROFILE_UPDATE_CAREER_ACTION,
     PROFILE_UPDATE_SKILL_LEVEL_ACTION,
+    PROFILE_FINAL_REVIEW_ACTION,
     SlackEventError,
     build_latest_slack_profile_analysis_review_item_result,
     build_latest_slack_profile_analysis_summary,
     build_slack_profile_review_session,
     build_slack_profile_mapping_session,
     build_slack_profile_update_mapping_item_result,
+    build_slack_profile_final_proposal_result,
     create_slack_bolt_app,
     import_slack_profile_document,
     load_slack_interface_config,
@@ -42,6 +44,7 @@ from career_agent.profile_input import (  # noqa: E402
     build_profile_analysis_review,
     build_profile_analysis_mapping_review,
     build_profile_analysis_update_proposal,
+    build_profile_analysis_final_proposal,
     build_profile_evidence_summary,
     build_profile_text_extraction,
     load_profile_document_import,
@@ -50,6 +53,7 @@ from career_agent.profile_input import (  # noqa: E402
     save_profile_analysis_update_proposal,
     save_profile_analysis_review,
     save_profile_analysis_mapping_review,
+    save_profile_analysis_final_proposal,
     save_profile_evidence_summary,
     save_profile_text_extraction,
     select_latest_profile_analysis_draft,
@@ -90,6 +94,9 @@ DEFAULT_PROFILE_ANALYSIS_MAPPING_REVIEW_DIRECTORY = (
 )
 DEFAULT_SLACK_PROFILE_MAPPING_SESSION_DIRECTORY = (
     REPOSITORY_ROOT / "private-data/slack-profile-mapping-sessions"
+)
+DEFAULT_PROFILE_ANALYSIS_FINAL_PROPOSAL_DIRECTORY = (
+    REPOSITORY_ROOT / "private-data/profile-analysis-final-proposals"
 )
 DEFAULT_PROFILE = REPOSITORY_ROOT / "data/user_profile.example.json"
 
@@ -233,7 +240,7 @@ def _run_profile_review_decision(
     }
 
 
-def _build_latest_profile_update_mapping_result(
+def _build_latest_profile_update_context(
     created_at: datetime,
 ) -> Mapping[str, Any]:
     profile = _load_profile()
@@ -243,11 +250,10 @@ def _build_latest_profile_update_mapping_result(
         )
         if extraction is None:
             return {
-                "public_message": (
+                "unavailable_message": (
                     "아직 확인할 프로필 문서 추출 결과가 없습니다. "
                     "먼저 `프로필 분석해줘`와 함께 파일 1개를 첨부해주세요."
-                ),
-                "mapping_target": None,
+                )
             }
         extraction_id = extraction["profile_extraction"]["extraction_id"]
         draft = select_latest_profile_analysis_draft(
@@ -256,11 +262,10 @@ def _build_latest_profile_update_mapping_result(
         )
         if draft is None:
             return {
-                "public_message": (
+                "unavailable_message": (
                     "가장 최근 프로필 문서의 검증된 분석 초안이 아직 없습니다. "
                     "개인 프로필은 변경되지 않았습니다."
-                ),
-                "mapping_target": None,
+                )
             }
         draft_id = draft["profile_analysis_draft"]["draft_id"]
         reviews = select_latest_profile_analysis_reviews(
@@ -284,10 +289,81 @@ def _build_latest_profile_update_mapping_result(
         )
     except (KeyError, TypeError, ProfileDocumentError) as error:
         raise SlackEventError("프로필 변경 제안을 안전하게 만들 수 없음") from error
+    return {
+        "profile": profile,
+        "proposal": proposal,
+        "mapping_reviews": mapping_reviews,
+    }
+
+
+def _build_latest_profile_update_mapping_result(
+    created_at: datetime,
+) -> Mapping[str, Any]:
+    context = _build_latest_profile_update_context(created_at)
+    unavailable_message = context.get("unavailable_message")
+    if unavailable_message is not None:
+        return {"public_message": unavailable_message, "mapping_target": None}
     return build_slack_profile_update_mapping_item_result(
-        profile,
-        proposal,
-        mapping_reviews,
+        context["profile"],
+        context["proposal"],
+        context["mapping_reviews"],
+    )
+
+
+def _build_latest_profile_final_result(created_at: datetime) -> Mapping[str, Any]:
+    context = _build_latest_profile_update_context(created_at)
+    unavailable_message = context.get("unavailable_message")
+    if unavailable_message is not None:
+        return {"public_message": unavailable_message, "final_target": None}
+    changes = context["proposal"].get("proposed_changes")
+    if not isinstance(changes, list):
+        raise SlackEventError("프로필 변경 제안 항목 배열이 없음")
+    proposal_summary = context["proposal"].get("summary")
+    if (
+        not isinstance(proposal_summary, Mapping)
+        or proposal_summary.get("unreviewed_count") != 0
+        or not changes
+    ):
+        mapping_result = build_slack_profile_update_mapping_item_result(
+            context["profile"],
+            context["proposal"],
+            context["mapping_reviews"],
+        )
+        return {
+            "public_message": mapping_result["public_message"],
+            "final_target": None,
+        }
+    required_mapping_ids = {
+        str(change["change_id"])
+        for change in changes
+        if isinstance(change, Mapping)
+        and isinstance(change.get("target"), Mapping)
+        and str(change["target"].get("mapping_status")).startswith("needs_")
+    }
+    if required_mapping_ids - set(context["mapping_reviews"]):
+        return {
+            "public_message": (
+                "아직 선택하지 않은 프로필 변경 항목이 있습니다. "
+                "먼저 `프로필 변경 검토 시작`으로 모든 항목을 확인해주세요."
+            ),
+            "final_target": None,
+        }
+    try:
+        final_proposal = build_profile_analysis_final_proposal(
+            context["profile"],
+            context["proposal"],
+            context["mapping_reviews"],
+            created_at=created_at,
+        )
+        save_profile_analysis_final_proposal(
+            final_proposal,
+            DEFAULT_PROFILE_ANALYSIS_FINAL_PROPOSAL_DIRECTORY,
+        )
+    except ProfileDocumentError as error:
+        raise SlackEventError("최종 프로필 변경안을 안전하게 만들 수 없음") from error
+    return build_slack_profile_final_proposal_result(
+        context["profile"],
+        final_proposal,
     )
 
 
@@ -447,6 +523,10 @@ def _run_slack_action(
         }
     if action in {PROFILE_UPDATE_CAREER_ACTION, PROFILE_UPDATE_SKILL_LEVEL_ACTION}:
         return _run_profile_mapping_decision(action, request)
+    if action == PROFILE_FINAL_REVIEW_ACTION:
+        _, created_at = _request_context(request)
+        result = _build_latest_profile_final_result(created_at)
+        return {"status": "completed", "public_message": result["public_message"]}
     return run_slack_career_action(
         action,
         repository_root=REPOSITORY_ROOT,
@@ -486,6 +566,7 @@ def main() -> int:
         print("- 검토 스레드 답변: @career_break 맞아 또는 @career_break 제외해줘")
         print("- 변경 스레드 답변: @career_break 경력 <경력ID>")
         print("- 변경 스레드 답변: @career_break 기술수준 <숙련도>")
+        print("- 지원 명령: @career_break 프로필 최종 검토")
         print("- 지원 입력: @career_break 프로필 분석해줘 + 첨부파일 1개")
         print("- 현재 단계: 공고 1건 분석 또는 첨부파일 저장과 검토 후보 추출")
         print("- 종료: Ctrl+C")

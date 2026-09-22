@@ -14,6 +14,7 @@ from .slack_events import (
     PROFILE_UPDATE_MAPPING_ACTION,
     PROFILE_UPDATE_CAREER_ACTION,
     PROFILE_UPDATE_SKILL_LEVEL_ACTION,
+    PROFILE_FINAL_REVIEW_ACTION,
     SlackEventError,
     build_slack_command_request,
     save_slack_command_request,
@@ -37,6 +38,9 @@ PROFILE_UPDATE_MAPPING_STARTED_REPLY = (
 )
 PROFILE_UPDATE_SELECTION_STARTED_REPLY = (
     "요청을 확인했습니다. 표시된 프로필 변경 항목의 선택을 기록합니다."
+)
+PROFILE_FINAL_REVIEW_STARTED_REPLY = (
+    "요청을 확인했습니다. 적용 전 최종 프로필 변경안을 확인합니다."
 )
 PROFILE_MAPPING_THREAD_REQUIRED_REPLY = (
     "경력 또는 기술수준 답변은 `프로필 변경 검토 시작`으로 생성된 "
@@ -221,6 +225,8 @@ def _action_started_reply(action: str) -> str:
         return PROFILE_UPDATE_MAPPING_STARTED_REPLY
     if action in {PROFILE_UPDATE_CAREER_ACTION, PROFILE_UPDATE_SKILL_LEVEL_ACTION}:
         return PROFILE_UPDATE_SELECTION_STARTED_REPLY
+    if action == PROFILE_FINAL_REVIEW_ACTION:
+        return PROFILE_FINAL_REVIEW_STARTED_REPLY
     return ACTION_STARTED_REPLY
 
 
@@ -353,6 +359,7 @@ def register_slack_app_mention_listener(
                     PROFILE_UPDATE_MAPPING_ACTION,
                     PROFILE_UPDATE_CAREER_ACTION,
                     PROFILE_UPDATE_SKILL_LEVEL_ACTION,
+                    PROFILE_FINAL_REVIEW_ACTION,
                 }
                 else "공고 분석을 시작하지 못했습니다. 로컬 실행 이력을 확인해주세요."
             )
