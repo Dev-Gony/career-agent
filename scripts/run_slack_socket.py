@@ -50,6 +50,7 @@ from career_agent.interfaces import (  # noqa: E402
     select_active_slack_profile_mapping_session,
     select_active_slack_profile_final_session,
 )
+from career_agent.interfaces.slack_events import NEXT_JOB_ACTION  # noqa: E402
 from career_agent.profile_input import (  # noqa: E402
     DEFAULT_GEMINI_DEVELOPMENT_MODEL,
     GeminiConsentedProfileAnalysisProvider,
@@ -836,6 +837,22 @@ def _run_slack_action(
         return {"status": "completed", "public_message": result["public_message"]}
     if action in {PROFILE_FINAL_APPROVE_ACTION, PROFILE_FINAL_REJECT_ACTION}:
         return _run_profile_final_decision(action, request)
+    if action == NEXT_JOB_ACTION:
+        try:
+            active_profile_path = resolve_active_profile_path(
+                DEFAULT_PROFILE_ACTIVATION_DIRECTORY,
+                DEFAULT_PROFILE_ANALYSIS_APPLICATION_DIRECTORY,
+            )
+        except ProfileDocumentError as error:
+            raise SlackEventError("활성 개인 프로필을 안전하게 확인할 수 없음") from error
+        if active_profile_path is None:
+            return {
+                "status": "missing_personal_profile",
+                "public_message": (
+                    "공고 검색에 사용할 활성 개인 프로필이 없습니다. "
+                    "공개 예제 프로필로 대신 분석하지 않았습니다."
+                ),
+            }
     return run_slack_career_action(
         action,
         repository_root=REPOSITORY_ROOT,

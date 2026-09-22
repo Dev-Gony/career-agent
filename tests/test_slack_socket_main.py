@@ -16,6 +16,25 @@ from scripts import run_slack_socket  # noqa: E402
 
 
 class SlackSocketMainTest(unittest.TestCase):
+    def test_next_job_does_not_fall_back_to_public_example_profile(self) -> None:
+        with (
+            patch.object(
+                run_slack_socket,
+                "resolve_active_profile_path",
+                return_value=None,
+            ),
+            patch.object(run_slack_socket, "run_slack_career_action") as run_action,
+        ):
+            result = run_slack_socket._run_slack_action(
+                "analyze_next_greenhouse_review",
+                {},
+            )
+
+        self.assertEqual("missing_personal_profile", result["status"])
+        self.assertIn("활성 개인 프로필이 없습니다", result["public_message"])
+        self.assertIn("공개 예제 프로필로 대신 분석하지 않았습니다", result["public_message"])
+        run_action.assert_not_called()
+
     def test_registers_enabled_gemini_consent_flow(self) -> None:
         register = Mock()
         planner = object()

@@ -179,6 +179,42 @@ class SlackActionsTest(unittest.TestCase):
         self.assertEqual("failed", result["status"])
         self.assertNotIn(secret_error, result["public_message"])
 
+    def test_uses_and_deletes_process_scoped_profile(self) -> None:
+        observed_profile: dict = {}
+        observed_path: Path | None = None
+        provisional = {"profile": {"basic": {"profile_id": "temporary"}}}
+
+        with _repository() as directory:
+            analysis_path = _save_analysis(directory)
+
+            def run_process(command, **_options):
+                nonlocal observed_path
+                profile_index = command.index("--profile") + 1
+                observed_path = Path(command[profile_index])
+                observed_profile.update(
+                    json.loads(observed_path.read_text(encoding="utf-8"))
+                )
+                return subprocess.CompletedProcess(
+                    command,
+                    0,
+                    _success_output(analysis_path),
+                    "",
+                )
+
+            result = run_slack_career_action(
+                "analyze_next_greenhouse_review",
+                repository_root=directory,
+                run_process=run_process,
+                provisional_profile=provisional,
+            )
+
+        self.assertEqual("completed", result["status"])
+        self.assertEqual(provisional, observed_profile)
+        self.assertIsNotNone(observed_path)
+        self.assertFalse(observed_path.exists())
+        self.assertIn("사용자 확인 전 이력서 AI 분석 초안", result["public_message"])
+        self.assertIn("영구 개인 프로필에는 반영하지 않았습니다", result["public_message"])
+
     def test_rebuilds_stale_queue_once_and_retries_analysis(self) -> None:
         calls: list[str] = []
 

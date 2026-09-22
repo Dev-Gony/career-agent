@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 from typing import Any, Callable, Mapping
 from urllib.parse import urlsplit
 
@@ -355,12 +356,13 @@ def _public_success_message(
     return "\n".join(lines)
 
 
-def run_slack_career_action(
+def _run_slack_career_action(
     action: str,
     *,
     repository_root: str | Path,
     timeout_seconds: float = 180.0,
     run_process: Callable[..., Any] = subprocess.run,
+    profile_path: Path | None = None,
 ) -> dict[str, str]:
     """Run one static allowlisted script and return only a safe Slack summary."""
 
@@ -374,8 +376,11 @@ def run_slack_career_action(
         raise SlackEventError("다음 공고 분석 실행 파일을 찾을 수 없음")
 
     def run_script(path: Path, *arguments: str) -> Any:
+        profile_arguments = (
+            ("--profile", str(profile_path)) if profile_path is not None else ()
+        )
         return run_process(
-            [sys.executable, str(path), *arguments],
+            [sys.executable, str(path), *arguments, *profile_arguments],
             cwd=root,
             capture_output=True,
             text=True,
@@ -488,3 +493,52 @@ def run_slack_career_action(
             "public_message": "공고 분석은 끝났지만 결과 요약을 만들지 못했습니다. 로컬 실행 이력을 확인해주세요.",
         }
     return {"status": "completed", "public_message": message}
+
+
+def run_slack_career_action(
+    action: str,
+    *,
+    repository_root: str | Path,
+    timeout_seconds: float = 180.0,
+    run_process: Callable[..., Any] = subprocess.run,
+    provisional_profile: Mapping[str, Any] | None = None,
+) -> dict[str, str]:
+    """Run one allowlisted action with an optional process-scoped profile."""
+
+    if provisional_profile is None:
+        return _run_slack_career_action(
+            action,
+            repository_root=repository_root,
+            timeout_seconds=timeout_seconds,
+            run_process=run_process,
+        )
+    if not isinstance(provisional_profile, Mapping):
+        raise SlackEventError("임시 검색 프로필 형식이 올바르지 않음")
+    try:
+        serialized = json.dumps(
+            provisional_profile,
+            ensure_ascii=False,
+            indent=2,
+        ) + "\n"
+    except (TypeError, ValueError) as error:
+        raise SlackEventError("임시 검색 프로필을 직렬화할 수 없음") from error
+    with tempfile.TemporaryDirectory(prefix="career-agent-search-profile-") as directory:
+        profile_path = Path(directory) / "profile.json"
+        try:
+            profile_path.write_text(serialized, encoding="utf-8", newline="\n")
+        except OSError as error:
+            raise SlackEventError("임시 검색 프로필을 준비할 수 없음") from error
+        result = _run_slack_career_action(
+            action,
+            repository_root=repository_root,
+            timeout_seconds=timeout_seconds,
+            run_process=run_process,
+            profile_path=profile_path,
+        )
+    if result["status"] in {"completed", "no_candidate"}:
+        result["public_message"] = (
+            "이 결과는 사용자 확인 전 이력서 AI 분석 초안을 검색 보조 근거로 "
+            "사용했습니다. 영구 개인 프로필에는 반영하지 않았습니다.\n\n"
+            + result["public_message"]
+        )
+    return result
