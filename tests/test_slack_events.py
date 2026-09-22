@@ -158,6 +158,29 @@ class SlackEventsTest(unittest.TestCase):
         self.assertEqual("show_profile_final_update_proposal", root["command_name"])
         self.assertNotIn("프로필 최종 검토", json.dumps(request, ensure_ascii=False))
 
+    def test_maps_final_decision_only_inside_final_review_thread(self) -> None:
+        for command, expected_action in (
+            ("최종 승인", "approve_profile_final_update_proposal"),
+            ("최종 취소", "reject_profile_final_update_proposal"),
+        ):
+            event = _event(f"<@U01234567> {command}")
+            event["event"]["thread_ts"] = "1789372700.000900"
+            request = build_slack_command_request(
+                event,
+                _config(),
+                received_at=RECEIVED_AT,
+            )
+            self.assertEqual(expected_action, request["slack_command_request"]["action"])
+            self.assertNotIn(command, json.dumps(request, ensure_ascii=False))
+
+        outside = build_slack_command_request(
+            _event("<@U01234567> 최종 승인"),
+            _config(),
+            received_at=RECEIVED_AT,
+        )
+        self.assertEqual("profile_final_thread_required", outside["slack_command_request"]["reason"])
+        self.assertIsNone(outside["slack_command_request"]["action"])
+
     def test_maps_profile_review_answers_only_inside_a_thread(self) -> None:
         for command, expected_action in (
             ("맞아", "approve_active_profile_analysis_review_item"),

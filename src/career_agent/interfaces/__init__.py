@@ -9,6 +9,8 @@ from .slack_events import (
     PROFILE_UPDATE_CAREER_ACTION,
     PROFILE_UPDATE_SKILL_LEVEL_ACTION,
     PROFILE_FINAL_REVIEW_ACTION,
+    PROFILE_FINAL_APPROVE_ACTION,
+    PROFILE_FINAL_REJECT_ACTION,
     SLACK_COMMAND_REQUEST_SCHEMA_VERSION,
     SlackEventError,
     build_slack_profile_document_reference,
@@ -64,6 +66,13 @@ from .slack_profile_mapping_session import (
     select_active_slack_profile_mapping_session,
 )
 from .slack_profile_final import build_slack_profile_final_proposal_result
+from .slack_profile_final_session import (
+    SLACK_PROFILE_FINAL_SESSION_SCHEMA_VERSION,
+    build_slack_profile_final_session,
+    load_slack_profile_final_session,
+    save_slack_profile_final_session,
+    select_active_slack_profile_final_session,
+)
 
 __all__ = [
     "SLACK_COMMAND_REQUEST_SCHEMA_VERSION",
@@ -75,6 +84,8 @@ __all__ = [
     "PROFILE_UPDATE_CAREER_ACTION",
     "PROFILE_UPDATE_SKILL_LEVEL_ACTION",
     "PROFILE_FINAL_REVIEW_ACTION",
+    "PROFILE_FINAL_APPROVE_ACTION",
+    "PROFILE_FINAL_REJECT_ACTION",
     "SlackEventError",
     "build_slack_profile_document_reference",
     "build_slack_command_request",
@@ -114,4 +125,9 @@ __all__ = [
     "save_slack_profile_mapping_session",
     "select_active_slack_profile_mapping_session",
     "build_slack_profile_final_proposal_result",
+    "SLACK_PROFILE_FINAL_SESSION_SCHEMA_VERSION",
+    "build_slack_profile_final_session",
+    "load_slack_profile_final_session",
+    "save_slack_profile_final_session",
+    "select_active_slack_profile_final_session",
 ]

@@ -34,6 +34,10 @@ PROFILE_UPDATE_CAREER_ACTION = "record_profile_update_career_selection"
 PROFILE_UPDATE_SKILL_LEVEL_ACTION = "record_profile_update_skill_level"
 PROFILE_FINAL_REVIEW_COMMAND = "프로필 최종 검토"
 PROFILE_FINAL_REVIEW_ACTION = "show_profile_final_update_proposal"
+PROFILE_FINAL_APPROVE_COMMAND = "최종 승인"
+PROFILE_FINAL_APPROVE_ACTION = "approve_profile_final_update_proposal"
+PROFILE_FINAL_REJECT_COMMAND = "최종 취소"
+PROFILE_FINAL_REJECT_ACTION = "reject_profile_final_update_proposal"
 
 _EVENT_ID_PATTERN = re.compile(r"^Ev[A-Za-z0-9]{6,62}$")
 _TEAM_ID_PATTERN = re.compile(r"^T[A-Za-z0-9]{6,31}$")
@@ -387,6 +391,22 @@ def build_slack_command_request(
                     action = PROFILE_UPDATE_SKILL_LEVEL_ACTION
                     command_name = "confirm_profile_update_skill_level"
                     command_arguments = {"selected_value": skill_level_match.group(1)}
+            elif command in {
+                PROFILE_FINAL_APPROVE_COMMAND.casefold(),
+                PROFILE_FINAL_REJECT_COMMAND.casefold(),
+            } and file_count == 0:
+                if raw_thread_ts is None:
+                    reason = "profile_final_thread_required"
+                    action = None
+                    command_name = None
+                elif command == PROFILE_FINAL_APPROVE_COMMAND.casefold():
+                    reason = "supported_command"
+                    action = PROFILE_FINAL_APPROVE_ACTION
+                    command_name = "approve_profile_final_update_proposal"
+                else:
+                    reason = "supported_command"
+                    action = PROFILE_FINAL_REJECT_ACTION
+                    command_name = "reject_profile_final_update_proposal"
             elif command in {"", PROFILE_DOCUMENT_COMMAND.casefold()}:
                 action = None
                 command_name = "submit_profile_document"

@@ -20,6 +20,8 @@ from career_agent.interfaces import (  # noqa: E402
     PROFILE_UPDATE_CAREER_ACTION,
     PROFILE_UPDATE_SKILL_LEVEL_ACTION,
     PROFILE_FINAL_REVIEW_ACTION,
+    PROFILE_FINAL_APPROVE_ACTION,
+    PROFILE_FINAL_REJECT_ACTION,
     SlackEventError,
     build_latest_slack_profile_analysis_review_item_result,
     build_latest_slack_profile_analysis_summary,
@@ -27,6 +29,7 @@ from career_agent.interfaces import (  # noqa: E402
     build_slack_profile_mapping_session,
     build_slack_profile_update_mapping_item_result,
     build_slack_profile_final_proposal_result,
+    build_slack_profile_final_session,
     create_slack_bolt_app,
     import_slack_profile_document,
     load_slack_interface_config,
@@ -36,8 +39,10 @@ from career_agent.interfaces import (  # noqa: E402
     run_slack_socket_mode,
     save_slack_profile_review_session,
     save_slack_profile_mapping_session,
+    save_slack_profile_final_session,
     select_active_slack_profile_review_session,
     select_active_slack_profile_mapping_session,
+    select_active_slack_profile_final_session,
 )
 from career_agent.profile_input import (  # noqa: E402
     ProfileDocumentError,
@@ -45,15 +50,20 @@ from career_agent.profile_input import (  # noqa: E402
     build_profile_analysis_mapping_review,
     build_profile_analysis_update_proposal,
     build_profile_analysis_final_proposal,
+    build_profile_analysis_final_review,
+    build_profile_analysis_application,
     build_profile_evidence_summary,
     build_profile_text_extraction,
     load_profile_document_import,
     load_profile_analysis_draft,
     load_profile_analysis_update_proposal,
+    load_profile_analysis_final_proposal,
     save_profile_analysis_update_proposal,
     save_profile_analysis_review,
     save_profile_analysis_mapping_review,
     save_profile_analysis_final_proposal,
+    save_profile_analysis_final_review,
+    save_profile_analysis_application,
     save_profile_evidence_summary,
     save_profile_text_extraction,
     select_latest_profile_analysis_draft,
@@ -97,6 +107,15 @@ DEFAULT_SLACK_PROFILE_MAPPING_SESSION_DIRECTORY = (
 )
 DEFAULT_PROFILE_ANALYSIS_FINAL_PROPOSAL_DIRECTORY = (
     REPOSITORY_ROOT / "private-data/profile-analysis-final-proposals"
+)
+DEFAULT_PROFILE_ANALYSIS_FINAL_REVIEW_DIRECTORY = (
+    REPOSITORY_ROOT / "private-data/profile-analysis-final-reviews"
+)
+DEFAULT_SLACK_PROFILE_FINAL_SESSION_DIRECTORY = (
+    REPOSITORY_ROOT / "private-data/slack-profile-final-sessions"
+)
+DEFAULT_PROFILE_ANALYSIS_APPLICATION_DIRECTORY = (
+    REPOSITORY_ROOT / "private-data/profile-analysis-applications"
 )
 DEFAULT_PROFILE = REPOSITORY_ROOT / "data/user_profile.example.json"
 
@@ -445,6 +464,72 @@ def _run_profile_mapping_decision(
     }
 
 
+def _run_profile_final_decision(
+    action: str,
+    request: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    source, reviewed_at = _request_context(request)
+    try:
+        session = select_active_slack_profile_final_session(
+            team_id=str(source["team_id"]),
+            channel_id=str(source["channel_id"]),
+            user_id=str(source["user_id"]),
+            thread_ts=str(source["thread_ts"]),
+            session_directory=DEFAULT_SLACK_PROFILE_FINAL_SESSION_DIRECTORY,
+            review_directory=DEFAULT_PROFILE_ANALYSIS_FINAL_REVIEW_DIRECTORY,
+        )
+        if session is None:
+            return {
+                "status": "no_active_final_session",
+                "public_message": (
+                    "이 스레드에 결정할 최종 변경안이 없습니다. "
+                    "새 메시지에서 `프로필 최종 검토`를 호출해주세요."
+                ),
+            }
+        final_proposal = load_profile_analysis_final_proposal(
+            session["target"]["final_proposal_id"],
+            DEFAULT_PROFILE_ANALYSIS_FINAL_PROPOSAL_DIRECTORY,
+        )
+        decision = "approve" if action == PROFILE_FINAL_APPROVE_ACTION else "reject"
+        review = build_profile_analysis_final_review(
+            final_proposal,
+            decision=decision,
+            reviewed_at=reviewed_at,
+        )
+        save_profile_analysis_final_review(
+            review,
+            DEFAULT_PROFILE_ANALYSIS_FINAL_REVIEW_DIRECTORY,
+        )
+        application, updated_profile = build_profile_analysis_application(
+            _load_profile(),
+            final_proposal,
+            review,
+            applied_at=reviewed_at,
+        )
+        save_profile_analysis_application(
+            application,
+            updated_profile,
+            DEFAULT_PROFILE_ANALYSIS_APPLICATION_DIRECTORY,
+        )
+    except (KeyError, TypeError, ProfileDocumentError) as error:
+        raise SlackEventError("Slack 최종 프로필 결정을 안전하게 처리할 수 없음") from error
+    if decision == "reject":
+        return {
+            "status": "rejected",
+            "public_message": (
+                "최종 변경안을 취소로 기록했습니다. 개인 프로필은 변경하지 않았습니다."
+            ),
+        }
+    return {
+        "status": "applied_to_new_version",
+        "public_message": (
+            "최종 변경안을 승인해 원본과 분리된 새 비공개 프로필 버전을 만들었습니다. "
+            "기존 기준 프로필 파일은 덮어쓰지 않았습니다. "
+            "새 버전을 공고 검색 조건에 연결하는 작업은 아직 실행하지 않았습니다."
+        ),
+    }
+
+
 def _run_slack_action(
     action: str,
     request: Mapping[str, Any],
@@ -524,9 +609,32 @@ def _run_slack_action(
     if action in {PROFILE_UPDATE_CAREER_ACTION, PROFILE_UPDATE_SKILL_LEVEL_ACTION}:
         return _run_profile_mapping_decision(action, request)
     if action == PROFILE_FINAL_REVIEW_ACTION:
-        _, created_at = _request_context(request)
+        source, created_at = _request_context(request)
         result = _build_latest_profile_final_result(created_at)
+        target = result.get("final_target")
+        if target is not None:
+            try:
+                session = build_slack_profile_final_session(
+                    team_id=str(source["team_id"]),
+                    channel_id=str(source["channel_id"]),
+                    user_id=str(source["user_id"]),
+                    thread_ts=str(source["thread_ts"]),
+                    final_proposal_id=target["final_proposal_id"],
+                    created_at=created_at,
+                )
+                save_slack_profile_final_session(
+                    session,
+                    DEFAULT_SLACK_PROFILE_FINAL_SESSION_DIRECTORY,
+                )
+            except (KeyError, TypeError) as error:
+                raise SlackEventError("Slack 최종 프로필 검토 세션을 만들 수 없음") from error
+            result["public_message"] += (
+                "\n\n전체 변경을 적용하려면 이 스레드에서 `@career_break 최종 승인`, "
+                "적용하지 않으려면 `@career_break 최종 취소`라고 답해주세요."
+            )
         return {"status": "completed", "public_message": result["public_message"]}
+    if action in {PROFILE_FINAL_APPROVE_ACTION, PROFILE_FINAL_REJECT_ACTION}:
+        return _run_profile_final_decision(action, request)
     return run_slack_career_action(
         action,
         repository_root=REPOSITORY_ROOT,
@@ -567,6 +675,7 @@ def main() -> int:
         print("- 변경 스레드 답변: @career_break 경력 <경력ID>")
         print("- 변경 스레드 답변: @career_break 기술수준 <숙련도>")
         print("- 지원 명령: @career_break 프로필 최종 검토")
+        print("- 최종 검토 스레드 답변: @career_break 최종 승인 또는 @career_break 최종 취소")
         print("- 지원 입력: @career_break 프로필 분석해줘 + 첨부파일 1개")
         print("- 현재 단계: 공고 1건 분석 또는 첨부파일 저장과 검토 후보 추출")
         print("- 종료: Ctrl+C")

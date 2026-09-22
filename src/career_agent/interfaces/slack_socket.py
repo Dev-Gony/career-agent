@@ -15,6 +15,8 @@ from .slack_events import (
     PROFILE_UPDATE_CAREER_ACTION,
     PROFILE_UPDATE_SKILL_LEVEL_ACTION,
     PROFILE_FINAL_REVIEW_ACTION,
+    PROFILE_FINAL_APPROVE_ACTION,
+    PROFILE_FINAL_REJECT_ACTION,
     SlackEventError,
     build_slack_command_request,
     save_slack_command_request,
@@ -41,6 +43,12 @@ PROFILE_UPDATE_SELECTION_STARTED_REPLY = (
 )
 PROFILE_FINAL_REVIEW_STARTED_REPLY = (
     "요청을 확인했습니다. 적용 전 최종 프로필 변경안을 확인합니다."
+)
+PROFILE_FINAL_DECISION_STARTED_REPLY = (
+    "요청을 확인했습니다. 최종 변경안에 대한 명시적 결정을 기록합니다."
+)
+PROFILE_FINAL_THREAD_REQUIRED_REPLY = (
+    "최종 승인 또는 취소는 `프로필 최종 검토`로 생성된 스레드 안에서 보내주세요."
 )
 PROFILE_MAPPING_THREAD_REQUIRED_REPLY = (
     "경력 또는 기술수준 답변은 `프로필 변경 검토 시작`으로 생성된 "
@@ -209,6 +217,8 @@ def _reply_text(request: Mapping[str, Any], *, created: bool) -> str | None:
         return PROFILE_REVIEW_THREAD_REQUIRED_REPLY
     if root.get("reason") == "profile_mapping_thread_required":
         return PROFILE_MAPPING_THREAD_REQUIRED_REPLY
+    if root.get("reason") == "profile_final_thread_required":
+        return PROFILE_FINAL_THREAD_REQUIRED_REPLY
     return None
 
 
@@ -227,6 +237,8 @@ def _action_started_reply(action: str) -> str:
         return PROFILE_UPDATE_SELECTION_STARTED_REPLY
     if action == PROFILE_FINAL_REVIEW_ACTION:
         return PROFILE_FINAL_REVIEW_STARTED_REPLY
+    if action in {PROFILE_FINAL_APPROVE_ACTION, PROFILE_FINAL_REJECT_ACTION}:
+        return PROFILE_FINAL_DECISION_STARTED_REPLY
     return ACTION_STARTED_REPLY
 
 
@@ -360,6 +372,8 @@ def register_slack_app_mention_listener(
                     PROFILE_UPDATE_CAREER_ACTION,
                     PROFILE_UPDATE_SKILL_LEVEL_ACTION,
                     PROFILE_FINAL_REVIEW_ACTION,
+                    PROFILE_FINAL_APPROVE_ACTION,
+                    PROFILE_FINAL_REJECT_ACTION,
                 }
                 else "공고 분석을 시작하지 못했습니다. 로컬 실행 이력을 확인해주세요."
             )

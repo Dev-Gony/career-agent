@@ -14,11 +14,16 @@ sys.path.insert(0, str(REPOSITORY_ROOT))
 sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
 from career_agent.interfaces import (  # noqa: E402
+    PROFILE_FINAL_APPROVE_ACTION,
     PROFILE_UPDATE_CAREER_ACTION,
+    build_slack_profile_final_session,
     build_slack_profile_mapping_session,
+    save_slack_profile_final_session,
     save_slack_profile_mapping_session,
 )
 from career_agent.profile_input import (  # noqa: E402
+    build_profile_analysis_final_proposal,
+    save_profile_analysis_final_proposal,
     save_profile_analysis_update_proposal,
     select_latest_profile_analysis_mapping_reviews,
 )
@@ -44,6 +49,53 @@ def _request(thread_ts: str = "1789372700.000900") -> dict:
 
 
 class SlackProfileMappingFlowTest(unittest.TestCase):
+    def test_final_approval_creates_new_private_profile_version(self) -> None:
+        profile, proposal = _proposal()
+        final = build_profile_analysis_final_proposal(
+            profile,
+            proposal,
+            _mapping_reviews(profile, proposal),
+            created_at=CREATED_AT,
+        )
+        final_id = final["profile_analysis_final_proposal"]["final_proposal_id"]
+        with tempfile.TemporaryDirectory() as root:
+            root_path = Path(root)
+            profile_path = root_path / "profile.json"
+            profile_path.write_text(json.dumps(profile, ensure_ascii=False), encoding="utf-8")
+            final_directory = root_path / "final"
+            session_directory = root_path / "sessions"
+            review_directory = root_path / "reviews"
+            application_directory = root_path / "applications"
+            save_profile_analysis_final_proposal(final, final_directory)
+            save_slack_profile_final_session(
+                build_slack_profile_final_session(
+                    team_id="T01234567",
+                    channel_id="C01234567",
+                    user_id="U76543210",
+                    thread_ts="1789372700.000900",
+                    final_proposal_id=final_id,
+                    created_at=CREATED_AT,
+                ),
+                session_directory,
+            )
+            with (
+                patch.object(run_slack_socket, "DEFAULT_PROFILE", profile_path),
+                patch.object(run_slack_socket, "DEFAULT_PROFILE_ANALYSIS_FINAL_PROPOSAL_DIRECTORY", final_directory),
+                patch.object(run_slack_socket, "DEFAULT_PROFILE_ANALYSIS_FINAL_REVIEW_DIRECTORY", review_directory),
+                patch.object(run_slack_socket, "DEFAULT_SLACK_PROFILE_FINAL_SESSION_DIRECTORY", session_directory),
+                patch.object(run_slack_socket, "DEFAULT_PROFILE_ANALYSIS_APPLICATION_DIRECTORY", application_directory),
+            ):
+                result = run_slack_socket._run_profile_final_decision(
+                    PROFILE_FINAL_APPROVE_ACTION,
+                    _request(),
+                )
+            saved_profiles = list(application_directory.glob("*/profile.json"))
+            base_after = json.loads(profile_path.read_text(encoding="utf-8"))
+
+        self.assertEqual("applied_to_new_version", result["status"])
+        self.assertEqual(1, len(saved_profiles))
+        self.assertEqual(profile, base_after)
+
     def test_final_review_requires_all_mappings_then_shows_summary(self) -> None:
         profile, proposal = _proposal()
         reviews = _mapping_reviews(profile, proposal)
