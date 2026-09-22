@@ -407,6 +407,16 @@ Token을 입력한 뒤 실제 인증과 Socket Mode 사용 가능 여부만 확�
 
     python scripts/run_slack_socket.py
 
+Windows에서 터미널 세션과 분리해 실행하려면 다음 명령을 사용합니다.
+
+    powershell -NoProfile -File scripts/start_slack_background.ps1
+
+실행 상태 확인:
+
+    powershell -NoProfile -File scripts/start_slack_background.ps1 -Status
+
+같은 컴퓨터에 Python Slack 수신기가 있으면 추가 실행하지 않습니다. 표준 출력과 오류 로그는 날짜별로 `private-data/slack-runtime/`에 저장합니다. `process_running`과 `Bolt app is running!`은 각각 프로세스 실행과 연결 시작 확인이며, 실제 메시지 응답 성공을 의미하지 않습니다. 실제 수신·응답은 Slack 요청과 `private-data/slack-command-requests/` 기록으로 따로 확인합니다. 이 방식은 재부팅·절전·프로세스 장애 후 자동 복구되는 상시 서비스가 아닙니다.
+
 실행 중 지정 채널에서 `@career_break 다음 공고 찾아줘`를 보내면 허용된 사용자와 채널의 이벤트만 저장하고, 분석 시작을 먼저 알린 뒤 검토 큐의 다음 공고 1건을 분석합니다. 큐가 비면 Greenhouse 공식 보드 목록을 한 번 갱신하고 새 큐에서 다시 검사합니다. 이 목록 갱신은 상세 공고를 분석하지 않습니다. 성공 시 회사·공고명과 원문 링크, 공고 정보 충분도, `RECOMMEND`·`HOLD`·`NOT_RECOMMEND` 추천 상태와 근거를 원래 메시지 스레드에 요약합니다. 확인된 일치, 확인된 부족 또는 불일치, 공고에서 확인할 수 없는 정보와 비교를 위해 추가 확인할 정보를 구분합니다. 조건에 맞는 새 공고가 없으면 실패가 아닌 정상 빈 결과를 전달하며 분석 완료, 조건 불일치와 현재 분석 가능 개수를 구분합니다. 같은 `event_id` 재전송에는 분석과 답변을 중복 실행하지 않습니다. 종료는 `Ctrl+C`입니다.
 
 정확한 기존 명령이 아니어도 `내 경력에 맞는 새 공고 하나 찾아줘`, `AI Agent Engineer와 QA 자동화 공고를 찾아줘`, `지금 프로필 분석 결과를 요약해줘`처럼 자연어로 요청할 수 있습니다. 지원되지 않은 자연어만 Gemini planner가 일시적으로 해석하며 메시지 원문은 로컬 요청 파일과 로그에 저장하지 않습니다. 모델은 공고 찾기, 검증된 첨부 분석, 프로필 요약, 프로필 검토 시작 중 1~3개만 선택할 수 있습니다. 공고 요청에 사용자가 명시한 직무는 최대 3개의 일회성 검색 초점으로만 전달되며, URL·경로·Slack ID·Token·명령 구문과 프롬프트 주입 문구는 로컬에서 거부합니다. 승인·거부와 최종 프로필 반영은 모델이 선택할 수 없습니다. 모델의 계획은 로컬 strict validator를 통과한 뒤 기존 내부 기능으로 실행되며 Slack 답변도 모델 자유문이 아니라 기존 검증 포맷터가 만듭니다. 동일 `event_id` 재전송은 planner와 도구를 다시 실행하지 않습니다.
