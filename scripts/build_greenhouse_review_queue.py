@@ -19,10 +19,13 @@ from career_agent.profile_input import (  # noqa: E402
     ProfileDocumentError,
     resolve_active_profile_path,
 )
+from career_agent.search_plan import (  # noqa: E402
+    JobSearchPlanError,
+    build_job_search_plan,
+)
 
 
 DEFAULT_PROFILE = REPOSITORY_ROOT / "data/user_profile.example.json"
-DEFAULT_SEARCH_PLAN = REPOSITORY_ROOT / "data/job_search_plan.example.json"
 DEFAULT_RUN_DIRECTORY = REPOSITORY_ROOT / "private-data/agent-runs"
 DEFAULT_QUEUE_DIRECTORY = REPOSITORY_ROOT / "private-data/review-queues"
 DEFAULT_REVIEW_DIRECTORY = REPOSITORY_ROOT / "private-data/human-reviews"
@@ -90,7 +93,7 @@ def _build_parser() -> argparse.ArgumentParser:
         description="최근 Greenhouse 목록에서 실제 공고 검토 후보를 자동 정렬합니다."
     )
     parser.add_argument("--profile", type=Path)
-    parser.add_argument("--search-plan", type=Path, default=DEFAULT_SEARCH_PLAN)
+    parser.add_argument("--search-plan", type=Path)
     parser.add_argument("--run-directory", type=Path, default=DEFAULT_RUN_DIRECTORY)
     parser.add_argument("--queue-directory", type=Path, default=DEFAULT_QUEUE_DIRECTORY)
     parser.add_argument(
@@ -105,6 +108,7 @@ def main() -> int:
         sys.stdout.reconfigure(encoding="utf-8")
         sys.stderr.reconfigure(encoding="utf-8")
     args = _build_parser().parse_args()
+    created_at = datetime.now().astimezone()
     try:
         try:
             profile_path = args.profile or resolve_active_profile_path(
@@ -113,21 +117,27 @@ def main() -> int:
             ) or DEFAULT_PROFILE
         except ProfileDocumentError as error:
             raise GreenhouseReviewQueueError("활성 사용자 프로필을 확인할 수 없음") from error
+        profile = _load_json(profile_path)
+        search_plan = (
+            _load_json(args.search_plan)
+            if args.search_plan is not None
+            else build_job_search_plan(profile, generated_at=created_at)
+        )
         runs_with_paths = _load_runs(args.run_directory)
         reviews_with_paths = _load_optional_documents(args.review_directory)
         source_path, source_run = _latest_discovery_run(runs_with_paths)
         queue = build_greenhouse_review_queue(
             source_run["discovery"],
             [run for _, run in runs_with_paths],
-            _load_json(profile_path),
-            _load_json(args.search_plan),
-            created_at=datetime.now().astimezone(),
+            profile,
+            search_plan,
+            created_at=created_at,
             source_run_filename=source_path.name,
             limit=args.limit,
             human_reviews=[review for _, review in reviews_with_paths],
         )
         output_path = save_greenhouse_review_queue(queue, args.queue_directory)
-    except GreenhouseReviewQueueError as error:
+    except (GreenhouseReviewQueueError, JobSearchPlanError) as error:
         print(f"Greenhouse 검토 큐 생성 실패: {error}", file=sys.stderr)
         return 1
 

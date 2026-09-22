@@ -32,10 +32,13 @@ from career_agent.profile_input import (  # noqa: E402
     ProfileDocumentError,
     resolve_active_profile_path,
 )
+from career_agent.search_plan import (  # noqa: E402
+    JobSearchPlanError,
+    build_job_search_plan,
+)
 
 
 DEFAULT_PROFILE = REPOSITORY_ROOT / "data/user_profile.example.json"
-DEFAULT_SEARCH_PLAN = REPOSITORY_ROOT / "data/job_search_plan.example.json"
 DEFAULT_RUN_DIRECTORY = REPOSITORY_ROOT / "private-data/agent-runs"
 DEFAULT_QUEUE_DIRECTORY = REPOSITORY_ROOT / "private-data/review-queues"
 DEFAULT_EXECUTION_DIRECTORY = REPOSITORY_ROOT / "private-data/execution-runs"
@@ -112,7 +115,7 @@ def _build_parser() -> argparse.ArgumentParser:
         description="검토 큐의 첫 미분석 Greenhouse 공고 1건만 상세 분석합니다."
     )
     parser.add_argument("--profile", type=Path)
-    parser.add_argument("--search-plan", type=Path, default=DEFAULT_SEARCH_PLAN)
+    parser.add_argument("--search-plan", type=Path)
     parser.add_argument("--run-directory", type=Path, default=DEFAULT_RUN_DIRECTORY)
     parser.add_argument("--queue-directory", type=Path, default=DEFAULT_QUEUE_DIRECTORY)
     parser.add_argument(
@@ -142,7 +145,11 @@ def main() -> int:
         except ProfileDocumentError as error:
             raise GreenhouseReviewQueueError("활성 사용자 프로필을 확인할 수 없음") from error
         profile = _load_json(profile_path)
-        search_plan = _load_json(args.search_plan)
+        search_plan = (
+            _load_json(args.search_plan)
+            if args.search_plan is not None
+            else build_job_search_plan(profile, generated_at=execution_time)
+        )
         queue_path, queue = _latest_queue(args.queue_directory)
         try:
             candidate = select_next_greenhouse_review_candidate(queue, profile)
@@ -220,6 +227,7 @@ def main() -> int:
         ExecutionLogError,
         GreenhouseAnalysisError,
         GreenhouseReviewQueueError,
+        JobSearchPlanError,
         KeyError,
         OSError,
         TypeError,
