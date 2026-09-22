@@ -30,6 +30,8 @@ PROFILE_REVIEW_REJECT_COMMAND = "제외해줘"
 PROFILE_REVIEW_REJECT_ACTION = "reject_active_profile_analysis_review_item"
 PROFILE_UPDATE_MAPPING_COMMAND = "프로필 변경 검토 시작"
 PROFILE_UPDATE_MAPPING_ACTION = "show_next_profile_update_mapping_item"
+PROFILE_UPDATE_CAREER_ACTION = "record_profile_update_career_selection"
+PROFILE_UPDATE_SKILL_LEVEL_ACTION = "record_profile_update_skill_level"
 
 _EVENT_ID_PATTERN = re.compile(r"^Ev[A-Za-z0-9]{6,62}$")
 _TEAM_ID_PATTERN = re.compile(r"^T[A-Za-z0-9]{6,31}$")
@@ -39,6 +41,12 @@ _CHANNEL_ID_PATTERN = re.compile(r"^[CGD][A-Za-z0-9]{6,31}$")
 _EVENT_TS_PATTERN = re.compile(r"^[0-9]{1,20}(?:\.[0-9]{1,20})?$")
 _REQUEST_ID_PATTERN = re.compile(r"^slack-command-request-[0-9a-f]{24}$")
 _FILE_ID_PATTERN = re.compile(r"^F[A-Za-z0-9]{6,31}$")
+_CAREER_SELECTION_COMMAND_PATTERN = re.compile(
+    r"^경력 ([a-z0-9][a-z0-9._-]{0,99})$"
+)
+_SKILL_LEVEL_COMMAND_PATTERN = re.compile(
+    r"^기술수준 (none|exposure|learning|basic|project|work)$"
+)
 _PROFILE_DOCUMENT_MIME_TYPES = {
     ".docx": frozenset(
         {
@@ -281,6 +289,7 @@ def build_slack_command_request(
     command_name: str | None
     user_id: str | None
     profile_document: dict[str, Any] | None = None
+    command_arguments: dict[str, str] | None = None
     if event.get("bot_id") is not None or event.get("bot_profile") is not None:
         reason = "bot_event"
         action = None
@@ -311,6 +320,8 @@ def build_slack_command_request(
                     f"event.text는 {MAX_SLACK_MESSAGE_CHARS}자 이하여야 함"
                 )
             command = _normalized_command(raw_text, settings["bot_user_id"])
+            career_match = _CAREER_SELECTION_COMMAND_PATTERN.fullmatch(command)
+            skill_level_match = _SKILL_LEVEL_COMMAND_PATTERN.fullmatch(command)
             files = event.get("files")
             if files is not None and not isinstance(files, list):
                 raise SlackEventError("event.files는 배열이어야 함")
@@ -350,6 +361,26 @@ def build_slack_command_request(
                     reason = "supported_command"
                     action = PROFILE_REVIEW_REJECT_ACTION
                     command_name = "reject_profile_analysis_review_item"
+            elif career_match is not None and file_count == 0:
+                if raw_thread_ts is None:
+                    reason = "profile_mapping_thread_required"
+                    action = None
+                    command_name = None
+                else:
+                    reason = "supported_command"
+                    action = PROFILE_UPDATE_CAREER_ACTION
+                    command_name = "select_profile_update_career"
+                    command_arguments = {"selected_value": career_match.group(1)}
+            elif skill_level_match is not None and file_count == 0:
+                if raw_thread_ts is None:
+                    reason = "profile_mapping_thread_required"
+                    action = None
+                    command_name = None
+                else:
+                    reason = "supported_command"
+                    action = PROFILE_UPDATE_SKILL_LEVEL_ACTION
+                    command_name = "confirm_profile_update_skill_level"
+                    command_arguments = {"selected_value": skill_level_match.group(1)}
             elif command in {"", PROFILE_DOCUMENT_COMMAND.casefold()}:
                 action = None
                 command_name = "submit_profile_document"
@@ -402,6 +433,11 @@ def build_slack_command_request(
         **(
             {"profile_document": profile_document}
             if profile_document is not None
+            else {}
+        ),
+        **(
+            {"command_arguments": command_arguments}
+            if command_arguments is not None
             else {}
         ),
         "metadata": {
@@ -459,6 +495,32 @@ def save_slack_command_request(
     }:
         raise SlackEventError("Slack 요청 라우팅 상태가 올바르지 않음")
     profile_document = request.get("profile_document")
+    command_arguments = request.get("command_arguments")
+    if command_arguments is not None:
+        arguments = _mapping(command_arguments, "command_arguments")
+        if set(arguments) != {"selected_value"}:
+            raise SlackEventError("Slack 명령 인자 구성이 올바르지 않음")
+        selected_value = _text(arguments.get("selected_value"), "selected_value")
+        action = root.get("action")
+        if action == PROFILE_UPDATE_CAREER_ACTION:
+            if _CAREER_SELECTION_COMMAND_PATTERN.fullmatch(
+                f"경력 {selected_value}"
+            ) is None:
+                raise SlackEventError("Slack 경력 선택 인자가 올바르지 않음")
+        elif action == PROFILE_UPDATE_SKILL_LEVEL_ACTION:
+            if _SKILL_LEVEL_COMMAND_PATTERN.fullmatch(
+                f"기술수준 {selected_value}"
+            ) is None:
+                raise SlackEventError("Slack 기술 숙련도 인자가 올바르지 않음")
+        else:
+            raise SlackEventError("Slack 명령 인자와 실행 동작이 일치하지 않음")
+        if root.get("routing_status") != "action_identified":
+            raise SlackEventError("Slack 명령 인자와 라우팅 상태가 일치하지 않음")
+    elif root.get("action") in {
+        PROFILE_UPDATE_CAREER_ACTION,
+        PROFILE_UPDATE_SKILL_LEVEL_ACTION,
+    }:
+        raise SlackEventError("Slack 프로필 변경 선택 인자가 없음")
     if profile_document is not None:
         validate_slack_profile_document_reference(profile_document)
         if root.get("routing_status") != "input_validated":

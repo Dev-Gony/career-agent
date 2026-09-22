@@ -6,6 +6,8 @@ from .slack_events import (
     PROFILE_REVIEW_ACTION,
     PROFILE_REVIEW_REJECT_ACTION,
     PROFILE_UPDATE_MAPPING_ACTION,
+    PROFILE_UPDATE_CAREER_ACTION,
+    PROFILE_UPDATE_SKILL_LEVEL_ACTION,
     SLACK_COMMAND_REQUEST_SCHEMA_VERSION,
     SlackEventError,
     build_slack_profile_document_reference,
@@ -53,6 +55,13 @@ from .slack_profile_review_session import (
     select_active_slack_profile_review_session,
 )
 from .slack_profile_update import build_slack_profile_update_mapping_item_result
+from .slack_profile_mapping_session import (
+    SLACK_PROFILE_MAPPING_SESSION_SCHEMA_VERSION,
+    build_slack_profile_mapping_session,
+    load_slack_profile_mapping_session,
+    save_slack_profile_mapping_session,
+    select_active_slack_profile_mapping_session,
+)
 
 __all__ = [
     "SLACK_COMMAND_REQUEST_SCHEMA_VERSION",
@@ -61,6 +70,8 @@ __all__ = [
     "PROFILE_REVIEW_ACTION",
     "PROFILE_REVIEW_REJECT_ACTION",
     "PROFILE_UPDATE_MAPPING_ACTION",
+    "PROFILE_UPDATE_CAREER_ACTION",
+    "PROFILE_UPDATE_SKILL_LEVEL_ACTION",
     "SlackEventError",
     "build_slack_profile_document_reference",
     "build_slack_command_request",
@@ -94,4 +105,9 @@ __all__ = [
     "save_slack_profile_review_session",
     "select_active_slack_profile_review_session",
     "build_slack_profile_update_mapping_item_result",
+    "SLACK_PROFILE_MAPPING_SESSION_SCHEMA_VERSION",
+    "build_slack_profile_mapping_session",
+    "load_slack_profile_mapping_session",
+    "save_slack_profile_mapping_session",
+    "select_active_slack_profile_mapping_session",
 ]

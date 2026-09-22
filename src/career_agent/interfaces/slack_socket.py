@@ -12,6 +12,8 @@ from .slack_events import (
     PROFILE_REVIEW_ACTION,
     PROFILE_REVIEW_REJECT_ACTION,
     PROFILE_UPDATE_MAPPING_ACTION,
+    PROFILE_UPDATE_CAREER_ACTION,
+    PROFILE_UPDATE_SKILL_LEVEL_ACTION,
     SlackEventError,
     build_slack_command_request,
     save_slack_command_request,
@@ -32,6 +34,13 @@ PROFILE_REVIEW_THREAD_REQUIRED_REPLY = (
 )
 PROFILE_UPDATE_MAPPING_STARTED_REPLY = (
     "요청을 확인했습니다. 프로필 변경 제안의 매핑 항목을 확인합니다."
+)
+PROFILE_UPDATE_SELECTION_STARTED_REPLY = (
+    "요청을 확인했습니다. 표시된 프로필 변경 항목의 선택을 기록합니다."
+)
+PROFILE_MAPPING_THREAD_REQUIRED_REPLY = (
+    "경력 또는 기술수준 답변은 `프로필 변경 검토 시작`으로 생성된 "
+    "스레드 안에서 보내주세요."
 )
 UNSUPPORTED_COMMAND_REPLY = (
     "현재 지원하는 명령은 `다음 공고 찾아줘`, `프로필 초안 보여줘`, "
@@ -194,6 +203,8 @@ def _reply_text(request: Mapping[str, Any], *, created: bool) -> str | None:
         return UNSUPPORTED_COMMAND_REPLY
     if root.get("reason") == "profile_review_thread_required":
         return PROFILE_REVIEW_THREAD_REQUIRED_REPLY
+    if root.get("reason") == "profile_mapping_thread_required":
+        return PROFILE_MAPPING_THREAD_REQUIRED_REPLY
     return None
 
 
@@ -208,6 +219,8 @@ def _action_started_reply(action: str) -> str:
         return PROFILE_REVIEW_REJECT_STARTED_REPLY
     if action == PROFILE_UPDATE_MAPPING_ACTION:
         return PROFILE_UPDATE_MAPPING_STARTED_REPLY
+    if action in {PROFILE_UPDATE_CAREER_ACTION, PROFILE_UPDATE_SKILL_LEVEL_ACTION}:
+        return PROFILE_UPDATE_SELECTION_STARTED_REPLY
     return ACTION_STARTED_REPLY
 
 
@@ -338,6 +351,8 @@ def register_slack_app_mention_listener(
                     PROFILE_REVIEW_APPROVE_ACTION,
                     PROFILE_REVIEW_REJECT_ACTION,
                     PROFILE_UPDATE_MAPPING_ACTION,
+                    PROFILE_UPDATE_CAREER_ACTION,
+                    PROFILE_UPDATE_SKILL_LEVEL_ACTION,
                 }
                 else "공고 분석을 시작하지 못했습니다. 로컬 실행 이력을 확인해주세요."
             )

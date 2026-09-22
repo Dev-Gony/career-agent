@@ -17,10 +17,13 @@ from career_agent.interfaces import (  # noqa: E402
     PROFILE_REVIEW_ACTION,
     PROFILE_REVIEW_REJECT_ACTION,
     PROFILE_UPDATE_MAPPING_ACTION,
+    PROFILE_UPDATE_CAREER_ACTION,
+    PROFILE_UPDATE_SKILL_LEVEL_ACTION,
     SlackEventError,
     build_latest_slack_profile_analysis_review_item_result,
     build_latest_slack_profile_analysis_summary,
     build_slack_profile_review_session,
+    build_slack_profile_mapping_session,
     build_slack_profile_update_mapping_item_result,
     create_slack_bolt_app,
     import_slack_profile_document,
@@ -30,22 +33,28 @@ from career_agent.interfaces import (  # noqa: E402
     run_slack_career_action,
     run_slack_socket_mode,
     save_slack_profile_review_session,
+    save_slack_profile_mapping_session,
     select_active_slack_profile_review_session,
+    select_active_slack_profile_mapping_session,
 )
 from career_agent.profile_input import (  # noqa: E402
     ProfileDocumentError,
     build_profile_analysis_review,
+    build_profile_analysis_mapping_review,
     build_profile_analysis_update_proposal,
     build_profile_evidence_summary,
     build_profile_text_extraction,
     load_profile_document_import,
     load_profile_analysis_draft,
+    load_profile_analysis_update_proposal,
     save_profile_analysis_update_proposal,
     save_profile_analysis_review,
+    save_profile_analysis_mapping_review,
     save_profile_evidence_summary,
     save_profile_text_extraction,
     select_latest_profile_analysis_draft,
     select_latest_profile_analysis_reviews,
+    select_latest_profile_analysis_mapping_reviews,
     select_latest_profile_text_extraction,
 )
 
@@ -75,6 +84,12 @@ DEFAULT_SLACK_PROFILE_REVIEW_SESSION_DIRECTORY = (
 )
 DEFAULT_PROFILE_ANALYSIS_UPDATE_PROPOSAL_DIRECTORY = (
     REPOSITORY_ROOT / "private-data/profile-analysis-update-proposals"
+)
+DEFAULT_PROFILE_ANALYSIS_MAPPING_REVIEW_DIRECTORY = (
+    REPOSITORY_ROOT / "private-data/profile-analysis-mapping-reviews"
+)
+DEFAULT_SLACK_PROFILE_MAPPING_SESSION_DIRECTORY = (
+    REPOSITORY_ROOT / "private-data/slack-profile-mapping-sessions"
 )
 DEFAULT_PROFILE = REPOSITORY_ROOT / "data/user_profile.example.json"
 
@@ -262,9 +277,96 @@ def _build_latest_profile_update_mapping_result(
             proposal,
             DEFAULT_PROFILE_ANALYSIS_UPDATE_PROPOSAL_DIRECTORY,
         )
+        proposal_id = proposal["profile_analysis_update_proposal"]["proposal_id"]
+        mapping_reviews = select_latest_profile_analysis_mapping_reviews(
+            proposal_id,
+            DEFAULT_PROFILE_ANALYSIS_MAPPING_REVIEW_DIRECTORY,
+        )
     except (KeyError, TypeError, ProfileDocumentError) as error:
         raise SlackEventError("프로필 변경 제안을 안전하게 만들 수 없음") from error
-    return build_slack_profile_update_mapping_item_result(profile, proposal)
+    return build_slack_profile_update_mapping_item_result(
+        profile,
+        proposal,
+        mapping_reviews,
+    )
+
+
+def _run_profile_mapping_decision(
+    action: str,
+    request: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    source, reviewed_at = _request_context(request)
+    arguments = request.get("command_arguments")
+    if not isinstance(arguments, Mapping):
+        raise SlackEventError("Slack 프로필 변경 선택 인자가 없음")
+    selected_value = arguments.get("selected_value")
+    if not isinstance(selected_value, str):
+        raise SlackEventError("Slack 프로필 변경 선택값이 올바르지 않음")
+    try:
+        session = select_active_slack_profile_mapping_session(
+            team_id=str(source["team_id"]),
+            channel_id=str(source["channel_id"]),
+            user_id=str(source["user_id"]),
+            thread_ts=str(source["thread_ts"]),
+            session_directory=DEFAULT_SLACK_PROFILE_MAPPING_SESSION_DIRECTORY,
+            review_directory=DEFAULT_PROFILE_ANALYSIS_MAPPING_REVIEW_DIRECTORY,
+        )
+        if session is None:
+            return {
+                "status": "no_active_mapping_session",
+                "public_message": (
+                    "이 스레드에 선택할 프로필 변경 항목이 없습니다. "
+                    "새 메시지에서 `프로필 변경 검토 시작`을 호출해주세요."
+                ),
+            }
+        target = session["target"]
+        expected_action = (
+            PROFILE_UPDATE_CAREER_ACTION
+            if target["mapping_status"] == "needs_career_selection"
+            else PROFILE_UPDATE_SKILL_LEVEL_ACTION
+        )
+        if action != expected_action:
+            return {
+                "status": "selection_type_mismatch",
+                "public_message": (
+                    "표시된 항목에 맞는 답변 형식이 아닙니다. "
+                    "스레드에 안내된 `경력 <경력ID>` 또는 `기술수준 <숙련도>` 형식을 확인해주세요."
+                ),
+            }
+        if selected_value not in target["allowed_values"]:
+            allowed = ", ".join(f"`{value}`" for value in target["allowed_values"])
+            return {
+                "status": "selection_not_allowed",
+                "public_message": f"허용된 값 중 하나를 선택해주세요: {allowed}",
+            }
+        proposal = load_profile_analysis_update_proposal(
+            target["proposal_id"],
+            DEFAULT_PROFILE_ANALYSIS_UPDATE_PROPOSAL_DIRECTORY,
+        )
+        review = build_profile_analysis_mapping_review(
+            _load_profile(),
+            proposal,
+            change_id=target["change_id"],
+            selected_value=selected_value,
+            reviewed_at=reviewed_at,
+        )
+        save_profile_analysis_mapping_review(
+            review,
+            DEFAULT_PROFILE_ANALYSIS_MAPPING_REVIEW_DIRECTORY,
+        )
+    except (KeyError, TypeError, ProfileDocumentError) as error:
+        raise SlackEventError("Slack 프로필 변경 선택을 안전하게 저장할 수 없음") from error
+    selection_label = (
+        "경력 연결" if action == PROFILE_UPDATE_CAREER_ACTION else "기술 숙련도"
+    )
+    return {
+        "status": "completed",
+        "public_message": (
+            f"{selection_label} 선택을 기록했습니다. "
+            "아직 개인 프로필에는 적용하지 않았습니다. "
+            "다음 항목은 새 메시지에서 `프로필 변경 검토 시작`을 호출해 확인할 수 있습니다."
+        ),
+    }
 
 
 def _run_slack_action(
@@ -317,12 +419,34 @@ def _run_slack_action(
     if action in {PROFILE_REVIEW_APPROVE_ACTION, PROFILE_REVIEW_REJECT_ACTION}:
         return _run_profile_review_decision(action, request)
     if action == PROFILE_UPDATE_MAPPING_ACTION:
-        _, created_at = _request_context(request)
+        source, created_at = _request_context(request)
         result = _build_latest_profile_update_mapping_result(created_at)
+        target = result.get("mapping_target")
+        if target is not None:
+            try:
+                session = build_slack_profile_mapping_session(
+                    team_id=str(source["team_id"]),
+                    channel_id=str(source["channel_id"]),
+                    user_id=str(source["user_id"]),
+                    thread_ts=str(source["thread_ts"]),
+                    proposal_id=target["proposal_id"],
+                    change_id=target["change_id"],
+                    mapping_status=target["mapping_status"],
+                    allowed_values=target["allowed_values"],
+                    created_at=created_at,
+                )
+                save_slack_profile_mapping_session(
+                    session,
+                    DEFAULT_SLACK_PROFILE_MAPPING_SESSION_DIRECTORY,
+                )
+            except (KeyError, TypeError) as error:
+                raise SlackEventError("Slack 프로필 변경 매핑 세션을 만들 수 없음") from error
         return {
             "status": "completed",
             "public_message": result["public_message"],
         }
+    if action in {PROFILE_UPDATE_CAREER_ACTION, PROFILE_UPDATE_SKILL_LEVEL_ACTION}:
+        return _run_profile_mapping_decision(action, request)
     return run_slack_career_action(
         action,
         repository_root=REPOSITORY_ROOT,
@@ -360,6 +484,8 @@ def main() -> int:
         print("- 지원 명령: @career_break 프로필 검토 시작")
         print("- 지원 명령: @career_break 프로필 변경 검토 시작")
         print("- 검토 스레드 답변: @career_break 맞아 또는 @career_break 제외해줘")
+        print("- 변경 스레드 답변: @career_break 경력 <경력ID>")
+        print("- 변경 스레드 답변: @career_break 기술수준 <숙련도>")
         print("- 지원 입력: @career_break 프로필 분석해줘 + 첨부파일 1개")
         print("- 현재 단계: 공고 1건 분석 또는 첨부파일 저장과 검토 후보 추출")
         print("- 종료: Ctrl+C")

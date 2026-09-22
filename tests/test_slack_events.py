@@ -181,6 +181,55 @@ class SlackEventsTest(unittest.TestCase):
         )
         self.assertIsNone(outside_thread["slack_command_request"]["action"])
 
+    def test_maps_profile_update_choices_only_inside_a_thread(self) -> None:
+        for command, expected_action, expected_value in (
+            ("경력 career-001", "record_profile_update_career_selection", "career-001"),
+            ("기술수준 project", "record_profile_update_skill_level", "project"),
+        ):
+            with self.subTest(command=command):
+                event = _event(f"<@U01234567> {command}")
+                event["event"]["thread_ts"] = "1789372700.000900"
+                request = build_slack_command_request(
+                    event,
+                    _config(),
+                    received_at=RECEIVED_AT,
+                )
+
+                self.assertEqual(
+                    expected_action,
+                    request["slack_command_request"]["action"],
+                )
+                self.assertEqual(
+                    {"selected_value": expected_value},
+                    request["command_arguments"],
+                )
+                self.assertNotIn(command, json.dumps(request, ensure_ascii=False))
+
+        outside_thread = build_slack_command_request(
+            _event("<@U01234567> 기술수준 project"),
+            _config(),
+            received_at=RECEIVED_AT,
+        )
+        self.assertEqual(
+            "profile_mapping_thread_required",
+            outside_thread["slack_command_request"]["reason"],
+        )
+        self.assertNotIn("command_arguments", outside_thread)
+
+    def test_rejects_tampered_profile_update_choice_when_saving(self) -> None:
+        event = _event("<@U01234567> 경력 career-001")
+        event["event"]["thread_ts"] = "1789372700.000900"
+        request = build_slack_command_request(
+            event,
+            _config(),
+            received_at=RECEIVED_AT,
+        )
+        request["command_arguments"]["selected_value"] = "../../outside"
+
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(SlackEventError, "경력 선택 인자"):
+                save_slack_command_request(request, directory)
+
     def test_validates_one_profile_document_without_content_or_download_url(self) -> None:
         event = _event("<@U01234567> 프로필 분석해줘")
         event["event"]["files"] = [_profile_file()]

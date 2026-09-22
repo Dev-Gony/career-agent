@@ -7,6 +7,7 @@ from typing import Any, Mapping
 from career_agent.profile_input import (
     ProfileDocumentError,
     profile_content_sha256,
+    validate_profile_analysis_mapping_review,
     validate_profile_analysis_update_proposal,
 )
 
@@ -66,6 +67,7 @@ def _optional_line(
 def build_slack_profile_update_mapping_item_result(
     profile_document: Mapping[str, Any],
     proposal: Mapping[str, Any],
+    mapping_reviews: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Return a safe message and private target for the first pending mapping."""
 
@@ -102,11 +104,33 @@ def build_slack_profile_update_mapping_item_result(
     changes = validated.get("proposed_changes")
     if not isinstance(changes, list):
         raise SlackEventError("프로필 변경 제안 항목 배열이 없음")
+    proposal_id = str(root["proposal_id"])
+    change_ids = {
+        str(_mapping(change, "proposed_changes item").get("change_id"))
+        for change in changes
+    }
+    completed_change_ids: set[str] = set()
+    for change_id, raw_review in (mapping_reviews or {}).items():
+        try:
+            review = validate_profile_analysis_mapping_review(raw_review)
+        except ProfileDocumentError as error:
+            raise SlackEventError("프로필 변경 매핑 기록을 안전하게 표시할 수 없음") from error
+        source = _mapping(review.get("source"), "mapping_review.source")
+        if (
+            change_id not in change_ids
+            or source.get("change_id") != change_id
+            or source.get("proposal_id") != proposal_id
+        ):
+            raise SlackEventError("프로필 변경 매핑 기록의 대상이 제안과 일치하지 않음")
+        completed_change_ids.add(change_id)
     pending: list[tuple[int, Mapping[str, Any]]] = []
     for position, raw_change in enumerate(changes, start=1):
         change = _mapping(raw_change, f"proposed_changes[{position - 1}]")
         target = _mapping(change.get("target"), "change.target")
-        if str(target.get("mapping_status")).startswith("needs_"):
+        if (
+            str(target.get("mapping_status")).startswith("needs_")
+            and change.get("change_id") not in completed_change_ids
+        ):
             pending.append((position, change))
     if not pending:
         return {

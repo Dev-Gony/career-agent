@@ -13,6 +13,7 @@ from career_agent.interfaces import (  # noqa: E402
     build_slack_profile_update_mapping_item_result,
 )
 from career_agent.profile_input import (  # noqa: E402
+    build_profile_analysis_mapping_review,
     build_profile_analysis_update_proposal,
 )
 from tests.test_profile_analysis_update_proposal import (  # noqa: E402
@@ -96,6 +97,40 @@ class SlackProfileUpdateTest(unittest.TestCase):
 
         self.assertIn("모든 프로필 변경 항목의 매핑", result["public_message"])
         self.assertIsNone(result["mapping_target"])
+
+    def test_skips_saved_mapping_choice_and_shows_next_item(self) -> None:
+        profile = _profile()
+        draft = _draft()
+        reviews = [
+            _review(draft, "career_evidence", 1, "approve", 1),
+            _review(draft, "achievement_evidence", 1, "approve", 2),
+            _review(draft, "technology_evidence", 1, "reject", 3),
+            _review(draft, "technology_evidence", 2, "reject", 4),
+            _review(draft, "unknowns", 1, "reject", 5),
+        ]
+        proposal = build_profile_analysis_update_proposal(
+            profile,
+            draft,
+            reviews,
+            created_at=CREATED_AT,
+        )
+        decision = build_profile_analysis_mapping_review(
+            profile,
+            proposal,
+            change_id="analysis-change-001",
+            selected_value="career-001",
+            reviewed_at=CREATED_AT + timedelta(minutes=10),
+        )
+
+        result = build_slack_profile_update_mapping_item_result(
+            profile,
+            proposal,
+            {"analysis-change-001": decision},
+        )
+
+        self.assertIn("프로필 변경 매핑 2/2", result["public_message"])
+        self.assertIn("유형: 성과 근거", result["public_message"])
+        self.assertEqual("analysis-change-002", result["mapping_target"]["change_id"])
 
 
 if __name__ == "__main__":
