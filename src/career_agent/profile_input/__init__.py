@@ -161,6 +161,14 @@ from .active_profile import (
     save_profile_activation,
     validate_profile_activation,
 )
+from .provisional_search_profile import (
+    PROVISIONAL_SEARCH_PROFILE_RULES_VERSION,
+    PROVISIONAL_SEARCH_PROFILE_SCHEMA_VERSION,
+    build_provisional_search_profile,
+    load_provisional_search_profile,
+    save_provisional_search_profile,
+    validate_provisional_search_profile,
+)
 from .openai_analysis import (
     DEFAULT_OPENAI_PROFILE_ANALYSIS_MODEL,
     OPENAI_PROFILE_ANALYSIS_MODELS,
@@ -294,6 +302,12 @@ __all__ = [
     "resolve_active_profile_path",
     "save_profile_activation",
     "validate_profile_activation",
+    "PROVISIONAL_SEARCH_PROFILE_RULES_VERSION",
+    "PROVISIONAL_SEARCH_PROFILE_SCHEMA_VERSION",
+    "build_provisional_search_profile",
+    "load_provisional_search_profile",
+    "save_provisional_search_profile",
+    "validate_provisional_search_profile",
     "DEFAULT_OPENAI_PROFILE_ANALYSIS_MODEL",
     "OPENAI_PROFILE_ANALYSIS_MODELS",
     "OpenAIResponsesProfileAnalysisProvider",

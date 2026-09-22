@@ -134,25 +134,34 @@ def build_job_search_plan(
     profile_id = _text(basic.get("profile_id"), "profile.basic.profile_id")
 
     demonstrated_skills: list[dict[str, Any]] = []
+    provisional_skills: list[dict[str, Any]] = []
+    profile_metadata = _mapping(document.get("metadata", {}), "profile_document.metadata")
+    is_provisional_profile = (
+        profile_metadata.get("data_type") == "provisional_search_profile"
+        and profile_metadata.get("status") == "provisional_search_only"
+        and profile_metadata.get("evidence_status") == "unconfirmed"
+    )
     for index, item in enumerate(_sequence(profile.get("skills", []), "profile.skills")):
         skill = _mapping(item, f"profile.skills[{index}]")
         level = _text(skill.get("level"), f"profile.skills[{index}].level")
-        if level not in _DEMONSTRATED_SKILL_LEVELS:
-            continue
         evidence = _optional_text_list(
             skill.get("evidence"), f"profile.skills[{index}].evidence"
         )
         if not evidence:
             continue
-        demonstrated_skills.append(
-            {
-                "skill_id": _text(
-                    skill.get("skill_id"), f"profile.skills[{index}].skill_id"
-                ),
-                "name": _text(skill.get("name"), f"profile.skills[{index}].name"),
-                "level": level,
-            }
-        )
+        normalized = {
+            "skill_id": _text(
+                skill.get("skill_id"), f"profile.skills[{index}].skill_id"
+            ),
+            "name": _text(skill.get("name"), f"profile.skills[{index}].name"),
+            "level": level,
+        }
+        if level in _DEMONSTRATED_SKILL_LEVELS:
+            demonstrated_skills.append(normalized)
+        elif is_provisional_profile and level == "unconfirmed":
+            if skill.get("verification_status") != "unconfirmed":
+                raise JobSearchPlanError("임시 기술 근거의 확인 상태가 올바르지 않음")
+            provisional_skills.append(normalized)
 
     target_roles = _sequence(profile.get("target_roles"), "profile.target_roles")
     if not target_roles:
@@ -191,7 +200,10 @@ def build_job_search_plan(
                 "priority": priority,
                 "canonical_role": role,
                 "discovery_terms": _role_terms(target_role_id, role),
-                "supporting_terms": [skill["name"] for skill in demonstrated_skills],
+                "supporting_terms": [
+                    skill["name"]
+                    for skill in (*demonstrated_skills, *provisional_skills)
+                ],
                 "rationale": rationale,
             }
         )
@@ -260,7 +272,10 @@ def build_job_search_plan(
             },
             "source_profile": {
                 "target_role_ids": target_role_ids,
-                "evidence_ids": [skill["skill_id"] for skill in demonstrated_skills],
+                "evidence_ids": [
+                    skill["skill_id"]
+                    for skill in (*demonstrated_skills, *provisional_skills)
+                ],
                 "preference_fields": preference_fields,
             },
             "role_axes": role_axes,
@@ -273,6 +288,14 @@ def build_job_search_plan(
                     "evidence_ids": [skill["skill_id"]],
                 }
                 for skill in demonstrated_skills
+            ]
+            + [
+                {
+                    "signal": skill["name"],
+                    "importance": "supporting",
+                    "evidence_ids": [skill["skill_id"]],
+                }
+                for skill in provisional_skills
             ],
             "preference_signals": {
                 "positive": [
@@ -308,7 +331,18 @@ def build_job_search_plan(
                     "reason": "프로필에 확정된 재택 선호가 없음",
                     "action": "ignore_for_discovery",
                 },
-            ],
+            ]
+            + (
+                [
+                    {
+                        "field": "provisional_profile_evidence",
+                        "reason": "이력서 분석 초안이 사용자 확인 전 상태임",
+                        "action": "supporting_only_do_not_treat_as_confirmed",
+                    }
+                ]
+                if is_provisional_profile
+                else []
+            ),
             "discovery_sources": [
                 {
                     "provider": "incruit",
@@ -342,7 +376,11 @@ def build_job_search_plan(
             "metadata": {
                 "schema_version": JOB_SEARCH_PLAN_SCHEMA_VERSION,
                 "rules_version": JOB_SEARCH_PLAN_RULES_VERSION,
-                "generated_by": "profile_derived_rule",
+                "generated_by": (
+                    "provisional_profile_derived_rule"
+                    if is_provisional_profile
+                    else "profile_derived_rule"
+                ),
                 "requires_manual_keywords": False,
                 "requires_manual_exclusions": False,
                 "requires_remote_preference": False,
