@@ -101,6 +101,8 @@ from .analysis_update_proposal import (
     build_profile_analysis_update_proposal,
     load_profile_analysis_update_proposal,
     save_profile_analysis_update_proposal,
+    select_latest_profile_analysis_update_proposal,
+    validate_profile_analysis_update_proposal,
 )
 from .openai_analysis import (
     DEFAULT_OPENAI_PROFILE_ANALYSIS_MODEL,
@@ -193,6 +195,8 @@ __all__ = [
     "build_profile_analysis_update_proposal",
     "load_profile_analysis_update_proposal",
     "save_profile_analysis_update_proposal",
+    "select_latest_profile_analysis_update_proposal",
+    "validate_profile_analysis_update_proposal",
     "DEFAULT_OPENAI_PROFILE_ANALYSIS_MODEL",
     "OPENAI_PROFILE_ANALYSIS_MODELS",
     "OpenAIResponsesProfileAnalysisProvider",

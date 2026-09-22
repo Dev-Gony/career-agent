@@ -16,10 +16,12 @@ from career_agent.interfaces import (  # noqa: E402
     PROFILE_REVIEW_APPROVE_ACTION,
     PROFILE_REVIEW_ACTION,
     PROFILE_REVIEW_REJECT_ACTION,
+    PROFILE_UPDATE_MAPPING_ACTION,
     SlackEventError,
     build_latest_slack_profile_analysis_review_item_result,
     build_latest_slack_profile_analysis_summary,
     build_slack_profile_review_session,
+    build_slack_profile_update_mapping_item_result,
     create_slack_bolt_app,
     import_slack_profile_document,
     load_slack_interface_config,
@@ -33,13 +35,18 @@ from career_agent.interfaces import (  # noqa: E402
 from career_agent.profile_input import (  # noqa: E402
     ProfileDocumentError,
     build_profile_analysis_review,
+    build_profile_analysis_update_proposal,
     build_profile_evidence_summary,
     build_profile_text_extraction,
     load_profile_document_import,
     load_profile_analysis_draft,
+    save_profile_analysis_update_proposal,
     save_profile_analysis_review,
     save_profile_evidence_summary,
     save_profile_text_extraction,
+    select_latest_profile_analysis_draft,
+    select_latest_profile_analysis_reviews,
+    select_latest_profile_text_extraction,
 )
 
 
@@ -65,6 +72,9 @@ DEFAULT_PROFILE_ANALYSIS_REVIEW_DIRECTORY = (
 )
 DEFAULT_SLACK_PROFILE_REVIEW_SESSION_DIRECTORY = (
     REPOSITORY_ROOT / "private-data/slack-profile-review-sessions"
+)
+DEFAULT_PROFILE_ANALYSIS_UPDATE_PROPOSAL_DIRECTORY = (
+    REPOSITORY_ROOT / "private-data/profile-analysis-update-proposals"
 )
 DEFAULT_PROFILE = REPOSITORY_ROOT / "data/user_profile.example.json"
 
@@ -208,6 +218,55 @@ def _run_profile_review_decision(
     }
 
 
+def _build_latest_profile_update_mapping_result(
+    created_at: datetime,
+) -> Mapping[str, Any]:
+    profile = _load_profile()
+    try:
+        extraction = select_latest_profile_text_extraction(
+            DEFAULT_PROFILE_EXTRACTION_DIRECTORY
+        )
+        if extraction is None:
+            return {
+                "public_message": (
+                    "아직 확인할 프로필 문서 추출 결과가 없습니다. "
+                    "먼저 `프로필 분석해줘`와 함께 파일 1개를 첨부해주세요."
+                ),
+                "mapping_target": None,
+            }
+        extraction_id = extraction["profile_extraction"]["extraction_id"]
+        draft = select_latest_profile_analysis_draft(
+            extraction_id,
+            DEFAULT_PROFILE_ANALYSIS_DRAFT_DIRECTORY,
+        )
+        if draft is None:
+            return {
+                "public_message": (
+                    "가장 최근 프로필 문서의 검증된 분석 초안이 아직 없습니다. "
+                    "개인 프로필은 변경되지 않았습니다."
+                ),
+                "mapping_target": None,
+            }
+        draft_id = draft["profile_analysis_draft"]["draft_id"]
+        reviews = select_latest_profile_analysis_reviews(
+            draft_id,
+            DEFAULT_PROFILE_ANALYSIS_REVIEW_DIRECTORY,
+        )
+        proposal = build_profile_analysis_update_proposal(
+            profile,
+            draft,
+            reviews.values(),
+            created_at=created_at,
+        )
+        save_profile_analysis_update_proposal(
+            proposal,
+            DEFAULT_PROFILE_ANALYSIS_UPDATE_PROPOSAL_DIRECTORY,
+        )
+    except (KeyError, TypeError, ProfileDocumentError) as error:
+        raise SlackEventError("프로필 변경 제안을 안전하게 만들 수 없음") from error
+    return build_slack_profile_update_mapping_item_result(profile, proposal)
+
+
 def _run_slack_action(
     action: str,
     request: Mapping[str, Any],
@@ -257,6 +316,13 @@ def _run_slack_action(
         }
     if action in {PROFILE_REVIEW_APPROVE_ACTION, PROFILE_REVIEW_REJECT_ACTION}:
         return _run_profile_review_decision(action, request)
+    if action == PROFILE_UPDATE_MAPPING_ACTION:
+        _, created_at = _request_context(request)
+        result = _build_latest_profile_update_mapping_result(created_at)
+        return {
+            "status": "completed",
+            "public_message": result["public_message"],
+        }
     return run_slack_career_action(
         action,
         repository_root=REPOSITORY_ROOT,
@@ -292,6 +358,7 @@ def main() -> int:
         print("- 지원 명령: @career_break 다음 공고 찾아줘")
         print("- 지원 명령: @career_break 프로필 초안 보여줘")
         print("- 지원 명령: @career_break 프로필 검토 시작")
+        print("- 지원 명령: @career_break 프로필 변경 검토 시작")
         print("- 검토 스레드 답변: @career_break 맞아 또는 @career_break 제외해줘")
         print("- 지원 입력: @career_break 프로필 분석해줘 + 첨부파일 1개")
         print("- 현재 단계: 공고 1건 분석 또는 첨부파일 저장과 검토 후보 추출")

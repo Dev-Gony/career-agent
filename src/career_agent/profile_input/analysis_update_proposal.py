@@ -48,6 +48,7 @@ _MAPPING_STATUSES = frozenset(
         "ready_for_final_review",
     }
 )
+_MAX_STORED_PROPOSAL_FILES = 1000
 
 
 def _mapping(value: Any, name: str) -> Mapping[str, Any]:
@@ -668,6 +669,15 @@ def save_profile_analysis_update_proposal(
     return target_path, True
 
 
+def validate_profile_analysis_update_proposal(
+    proposal: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Validate one stored-shape proposal and return an isolated copy."""
+
+    _validated_proposal(proposal)
+    return deepcopy(dict(proposal))
+
+
 def load_profile_analysis_update_proposal(
     proposal_id: str,
     directory: str | Path,
@@ -690,3 +700,39 @@ def load_profile_analysis_update_proposal(
     if stored_id != normalized_id:
         raise ProfileDocumentError("프로필 분석 갱신안 ID가 요청과 일치하지 않음")
     return deepcopy(proposal)
+
+
+def select_latest_profile_analysis_update_proposal(
+    profile_document: Mapping[str, Any],
+    directory: str | Path,
+) -> dict[str, Any] | None:
+    """Select the newest verified proposal for the current profile content."""
+
+    expected_hash = profile_content_sha256(profile_document)
+    target_directory = Path(directory)
+    if not target_directory.exists():
+        return None
+    if not target_directory.is_dir() or target_directory.is_symlink():
+        raise ProfileDocumentError("프로필 분석 갱신안 경로가 안전한 디렉터리가 아님")
+    paths = sorted(
+        target_directory.glob("profile-analysis-update-proposal-*.json")
+    )
+    if len(paths) > _MAX_STORED_PROPOSAL_FILES:
+        raise ProfileDocumentError("프로필 분석 갱신안 파일이 허용 개수를 초과함")
+
+    matches: list[tuple[datetime, str, dict[str, Any]]] = []
+    for path in paths:
+        proposal = load_profile_analysis_update_proposal(
+            path.stem,
+            target_directory,
+        )
+        proposal_id, created_at = _validated_proposal(proposal)
+        root = _mapping(
+            proposal.get("profile_analysis_update_proposal"),
+            "profile_analysis_update_proposal",
+        )
+        if root.get("base_profile_content_sha256") == expected_hash:
+            matches.append((created_at, proposal_id, proposal))
+    if not matches:
+        return None
+    return deepcopy(max(matches, key=lambda value: (value[0], value[1]))[2])

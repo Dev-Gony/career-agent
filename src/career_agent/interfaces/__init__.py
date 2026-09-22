@@ -5,6 +5,7 @@ from .slack_events import (
     PROFILE_REVIEW_APPROVE_ACTION,
     PROFILE_REVIEW_ACTION,
     PROFILE_REVIEW_REJECT_ACTION,
+    PROFILE_UPDATE_MAPPING_ACTION,
     SLACK_COMMAND_REQUEST_SCHEMA_VERSION,
     SlackEventError,
     build_slack_profile_document_reference,
@@ -51,6 +52,7 @@ from .slack_profile_review_session import (
     save_slack_profile_review_session,
     select_active_slack_profile_review_session,
 )
+from .slack_profile_update import build_slack_profile_update_mapping_item_result
 
 __all__ = [
     "SLACK_COMMAND_REQUEST_SCHEMA_VERSION",
@@ -58,6 +60,7 @@ __all__ = [
     "PROFILE_REVIEW_APPROVE_ACTION",
     "PROFILE_REVIEW_ACTION",
     "PROFILE_REVIEW_REJECT_ACTION",
+    "PROFILE_UPDATE_MAPPING_ACTION",
     "SlackEventError",
     "build_slack_profile_document_reference",
     "build_slack_command_request",
@@ -90,4 +93,5 @@ __all__ = [
     "load_slack_profile_review_session",
     "save_slack_profile_review_session",
     "select_active_slack_profile_review_session",
+    "build_slack_profile_update_mapping_item_result",
 ]

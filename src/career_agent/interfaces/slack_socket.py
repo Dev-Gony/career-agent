@@ -11,6 +11,7 @@ from .slack_events import (
     PROFILE_REVIEW_APPROVE_ACTION,
     PROFILE_REVIEW_ACTION,
     PROFILE_REVIEW_REJECT_ACTION,
+    PROFILE_UPDATE_MAPPING_ACTION,
     SlackEventError,
     build_slack_command_request,
     save_slack_command_request,
@@ -28,6 +29,9 @@ PROFILE_REVIEW_APPROVE_STARTED_REPLY = "요청을 확인했습니다. 표시된 
 PROFILE_REVIEW_REJECT_STARTED_REPLY = "요청을 확인했습니다. 표시된 항목의 제외를 기록합니다."
 PROFILE_REVIEW_THREAD_REQUIRED_REPLY = (
     "승인 또는 제외 답변은 `프로필 검토 시작`으로 생성된 스레드 안에서 보내주세요."
+)
+PROFILE_UPDATE_MAPPING_STARTED_REPLY = (
+    "요청을 확인했습니다. 프로필 변경 제안의 매핑 항목을 확인합니다."
 )
 UNSUPPORTED_COMMAND_REPLY = (
     "현재 지원하는 명령은 `다음 공고 찾아줘`, `프로필 초안 보여줘`, "
@@ -202,6 +206,8 @@ def _action_started_reply(action: str) -> str:
         return PROFILE_REVIEW_APPROVE_STARTED_REPLY
     if action == PROFILE_REVIEW_REJECT_ACTION:
         return PROFILE_REVIEW_REJECT_STARTED_REPLY
+    if action == PROFILE_UPDATE_MAPPING_ACTION:
+        return PROFILE_UPDATE_MAPPING_STARTED_REPLY
     return ACTION_STARTED_REPLY
 
 
@@ -331,6 +337,7 @@ def register_slack_app_mention_listener(
                     PROFILE_REVIEW_ACTION,
                     PROFILE_REVIEW_APPROVE_ACTION,
                     PROFILE_REVIEW_REJECT_ACTION,
+                    PROFILE_UPDATE_MAPPING_ACTION,
                 }
                 else "공고 분석을 시작하지 못했습니다. 로컬 실행 이력을 확인해주세요."
             )

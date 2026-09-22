@@ -130,6 +130,22 @@ class SlackEventsTest(unittest.TestCase):
             json.dumps(request, ensure_ascii=False),
         )
 
+    def test_maps_profile_update_mapping_start_without_message_text(self) -> None:
+        request = build_slack_command_request(
+            _event("<@U01234567> 프로필 변경 검토 시작"),
+            _config(),
+            received_at=RECEIVED_AT,
+        )
+
+        root = request["slack_command_request"]
+        self.assertEqual("action_identified", root["routing_status"])
+        self.assertEqual("start_profile_update_mapping", root["command_name"])
+        self.assertEqual("show_next_profile_update_mapping_item", root["action"])
+        self.assertNotIn(
+            "프로필 변경 검토 시작",
+            json.dumps(request, ensure_ascii=False),
+        )
+
     def test_maps_profile_review_answers_only_inside_a_thread(self) -> None:
         for command, expected_action in (
             ("맞아", "approve_active_profile_analysis_review_item"),

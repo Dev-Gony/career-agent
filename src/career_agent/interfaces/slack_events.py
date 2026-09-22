@@ -28,6 +28,8 @@ PROFILE_REVIEW_APPROVE_COMMAND = "맞아"
 PROFILE_REVIEW_APPROVE_ACTION = "approve_active_profile_analysis_review_item"
 PROFILE_REVIEW_REJECT_COMMAND = "제외해줘"
 PROFILE_REVIEW_REJECT_ACTION = "reject_active_profile_analysis_review_item"
+PROFILE_UPDATE_MAPPING_COMMAND = "프로필 변경 검토 시작"
+PROFILE_UPDATE_MAPPING_ACTION = "show_next_profile_update_mapping_item"
 
 _EVENT_ID_PATTERN = re.compile(r"^Ev[A-Za-z0-9]{6,62}$")
 _TEAM_ID_PATTERN = re.compile(r"^T[A-Za-z0-9]{6,31}$")
@@ -325,6 +327,13 @@ def build_slack_command_request(
                 reason = "supported_command"
                 action = PROFILE_REVIEW_ACTION
                 command_name = "start_profile_analysis_review"
+            elif (
+                command == PROFILE_UPDATE_MAPPING_COMMAND.casefold()
+                and file_count == 0
+            ):
+                reason = "supported_command"
+                action = PROFILE_UPDATE_MAPPING_ACTION
+                command_name = "start_profile_update_mapping"
             elif command in {
                 PROFILE_REVIEW_APPROVE_COMMAND.casefold(),
                 PROFILE_REVIEW_REJECT_COMMAND.casefold(),
