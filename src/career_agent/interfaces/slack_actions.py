@@ -16,7 +16,14 @@ ANALYZE_NEXT_REVIEW_ACTION = "analyze_next_greenhouse_review"
 MAX_ACTION_OUTPUT_CHARS = 32 * 1024
 MAX_ANALYSIS_FILE_BYTES = 2 * 1024 * 1024
 NO_CANDIDATE_MARKER = "Greenhouse 다음 검토 공고 없음"
-STALE_QUEUE_MARKER = "검토 큐를 다시 생성해야 함"
+STALE_QUEUE_MARKERS = (
+    "검토 큐를 다시 생성해야 함",
+    "현재 스키마 버전의 검토 큐가 아님",
+    "검색 계획 식별 정보가 없는 검토 큐는 재사용할 수 없음",
+    "검색 계획 내용 지문이 없는 검토 큐는 재사용할 수 없음",
+    "검토 큐의 검색 계획 ID가 현재 계획과 다름",
+    "검토 큐의 검색 계획 내용이 현재 계획과 다름",
+)
 
 _RESULT_LABELS = (
     "선택",
@@ -384,7 +391,9 @@ def run_slack_career_action(
         initial_stderr = (
             completed.stderr if isinstance(completed.stderr, str) else ""
         )
-        if completed.returncode != 0 and STALE_QUEUE_MARKER in initial_stderr:
+        if completed.returncode != 0 and any(
+            marker in initial_stderr for marker in STALE_QUEUE_MARKERS
+        ):
             queue_script = root / "scripts" / "build_greenhouse_review_queue.py"
             if not queue_script.is_file():
                 raise SlackEventError("검토 큐 생성 실행 파일을 찾을 수 없음")

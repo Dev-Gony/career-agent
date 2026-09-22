@@ -222,6 +222,52 @@ class SlackActionsTest(unittest.TestCase):
             calls,
         )
 
+    def test_rebuilds_legacy_queue_without_search_plan_identity(self) -> None:
+        calls: list[str] = []
+
+        with _repository() as directory:
+            analysis_path = _save_analysis(directory)
+            responses = iter(
+                [
+                    subprocess.CompletedProcess(
+                        [],
+                        1,
+                        "",
+                        (
+                            "Greenhouse 다음 검토 공고 분석 실패: "
+                            "검색 계획 식별 정보가 없는 검토 큐는 재사용할 수 없음"
+                        ),
+                    ),
+                    subprocess.CompletedProcess([], 0, "큐 생성 완료", ""),
+                    subprocess.CompletedProcess(
+                        [],
+                        0,
+                        _success_output(analysis_path),
+                        "",
+                    ),
+                ]
+            )
+
+            def run_process(command, **_options):
+                calls.append(Path(command[1]).name)
+                return next(responses)
+
+            result = run_slack_career_action(
+                "analyze_next_greenhouse_review",
+                repository_root=directory,
+                run_process=run_process,
+            )
+
+        self.assertEqual("completed", result["status"])
+        self.assertEqual(
+            [
+                "analyze_next_greenhouse_review.py",
+                "build_greenhouse_review_queue.py",
+                "analyze_next_greenhouse_review.py",
+            ],
+            calls,
+        )
+
     def test_returns_normal_message_when_no_candidate_is_available(self) -> None:
         output = """Greenhouse 다음 검토 공고 없음
 - 현재 큐 분석 완료: 1개
