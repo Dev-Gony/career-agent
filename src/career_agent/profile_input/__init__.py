@@ -96,6 +96,10 @@ from .analysis_review import (
     validate_profile_analysis_review,
 )
 from .analysis_service import ProfileAnalysisProvider, analyze_profile_extraction
+from .local_analysis import (
+    LOCAL_EVIDENCE_PROFILE_ANALYSIS_MODEL,
+    LocalEvidenceProfileAnalysisProvider,
+)
 from .analysis_external_consent import (
     PROFILE_ANALYSIS_EXTERNAL_CONSENT_DECISIONS,
     PROFILE_ANALYSIS_EXTERNAL_CONSENT_SCHEMA_VERSION,
@@ -238,6 +242,8 @@ __all__ = [
     "validate_profile_analysis_review",
     "ProfileAnalysisProvider",
     "analyze_profile_extraction",
+    "LOCAL_EVIDENCE_PROFILE_ANALYSIS_MODEL",
+    "LocalEvidenceProfileAnalysisProvider",
     "PROFILE_ANALYSIS_EXTERNAL_CONSENT_DECISIONS",
     "PROFILE_ANALYSIS_EXTERNAL_CONSENT_SCHEMA_VERSION",
     "build_profile_analysis_external_consent",

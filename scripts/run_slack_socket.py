@@ -52,7 +52,9 @@ from career_agent.interfaces import (  # noqa: E402
 from career_agent.profile_input import (  # noqa: E402
     DEFAULT_GEMINI_DEVELOPMENT_MODEL,
     GeminiDevelopmentProfileAnalysisProvider,
+    LocalEvidenceProfileAnalysisProvider,
     ProfileDocumentError,
+    analyze_profile_extraction,
     build_profile_analysis_review,
     build_profile_analysis_mapping_review,
     build_profile_analysis_update_proposal,
@@ -67,6 +69,7 @@ from career_agent.profile_input import (  # noqa: E402
     load_profile_analysis_update_proposal,
     load_profile_analysis_final_proposal,
     save_profile_analysis_update_proposal,
+    save_profile_analysis_draft,
     save_profile_analysis_review,
     save_profile_analysis_mapping_review,
     save_profile_analysis_final_proposal,
@@ -194,6 +197,15 @@ def _extract_imported_profile_document(
             evidence_summary,
             DEFAULT_PROFILE_EVIDENCE_DIRECTORY,
         )
+        analysis_draft = analyze_profile_extraction(
+            extraction,
+            LocalEvidenceProfileAnalysisProvider(),
+            analyzed_at=extracted_at,
+        )
+        _, draft_created = save_profile_analysis_draft(
+            analysis_draft,
+            DEFAULT_PROFILE_ANALYSIS_DRAFT_DIRECTORY,
+        )
     except ProfileDocumentError as error:
         raise SlackEventError("저장된 프로필 문서를 추출할 수 없음") from error
     return {
@@ -202,6 +214,8 @@ def _extract_imported_profile_document(
         "extraction_id": extraction["profile_extraction"]["extraction_id"],
         "summary": extraction["summary"],
         "evidence_summary": evidence_summary["summary"],
+        "analysis_draft_status": "created" if draft_created else "reused",
+        "analysis_draft_summary": analysis_draft["summary"],
     }
 
 

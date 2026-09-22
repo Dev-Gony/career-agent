@@ -200,6 +200,31 @@ def _profile_extraction_reply(result: Mapping[str, Any]) -> str:
             "자동 탐지 근거 신호(미확정)",
             *detected_lines,
         ]
+    analysis_draft_summary = result.get("analysis_draft_summary")
+    draft_lines: list[str] = []
+    if analysis_draft_summary is not None:
+        if not isinstance(analysis_draft_summary, Mapping):
+            raise SlackEventError("로컬 프로필 분석 초안 요약 형식이 올바르지 않음")
+        draft_fields = (
+            ("경력·프로젝트 수행 근거", "career_evidence_count"),
+            ("성과 후보", "achievement_evidence_count"),
+            ("기술 사용 후보", "technology_evidence_count"),
+            ("추가 확인 질문", "unknown_count"),
+        )
+        draft_counts: list[str] = []
+        for label, field in draft_fields:
+            value = analysis_draft_summary.get(field)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise SlackEventError(f"로컬 프로필 분석 초안 {field}가 올바르지 않음")
+            draft_counts.append(f"- {label}: {value}개")
+        draft_lines = [
+            "",
+            "로컬 검증 초안",
+            *draft_counts,
+            "이 초안은 외부 전송 없이 만들어졌으며 각 항목은 사용자 확인 전까지 미확정입니다.",
+            "`@career_break 프로필 초안 보여줘`로 요약을 보고, "
+            "`@career_break 프로필 검토 시작`으로 항목을 한 건씩 확인할 수 있습니다.",
+        ]
     reply_lines = [
         "첨부파일 1차 문단 분류를 완료했습니다.",
         f"- 프로필 검토 후보: {candidate_count}개",
@@ -207,6 +232,7 @@ def _profile_extraction_reply(result: Mapping[str, Any]) -> str:
         f"- 미분류 문단: {unclassified_count}개",
         f"- 개인정보 형태 제외: {sensitive_count}개",
         *evidence_lines,
+        *draft_lines,
         "",
         f"분류 품질: 확인 필요. {quality_note}",
         "이 결과는 이력서의 최종 분석 결과가 아니며, "

@@ -229,6 +229,12 @@ class SlackSocketTest(unittest.TestCase):
                     "action_expression_count": 2,
                     "technology_mention_candidate_count": 1,
                 },
+                "analysis_draft_summary": {
+                    "career_evidence_count": 1,
+                    "achievement_evidence_count": 1,
+                    "technology_evidence_count": 1,
+                    "unknown_count": 2,
+                },
             }
 
         with tempfile.TemporaryDirectory() as directory:
@@ -254,6 +260,11 @@ class SlackSocketTest(unittest.TestCase):
         self.assertIn("자동 탐지 근거 신호", replies[1]["text"])
         self.assertIn("기간 표현: 1개 문장", replies[1]["text"])
         self.assertIn("실행·개선 표현: 2개 문장", replies[1]["text"])
+        self.assertIn("로컬 검증 초안", replies[1]["text"])
+        self.assertIn("경력·프로젝트 수행 근거: 1개", replies[1]["text"])
+        self.assertIn("추가 확인 질문: 2개", replies[1]["text"])
+        self.assertIn("프로필 검토 시작", replies[1]["text"])
+        self.assertIn("외부 전송 없이", replies[1]["text"])
         self.assertNotIn("\n\n\n", replies[1]["text"])
         self.assertIn("최종 분석 결과가 아니며", replies[1]["text"])
         self.assertNotIn("safe-document-id", replies[1]["text"])
