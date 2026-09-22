@@ -1,6 +1,8 @@
 """External chat interfaces for Career Agent."""
 
 from .slack_events import (
+    PROFILE_EXTERNAL_ANALYSIS_APPROVE_ACTION,
+    PROFILE_EXTERNAL_ANALYSIS_REJECT_ACTION,
     PROFILE_DRAFT_ACTION,
     PROFILE_REVIEW_APPROVE_ACTION,
     PROFILE_REVIEW_ACTION,
@@ -73,9 +75,18 @@ from .slack_profile_final_session import (
     save_slack_profile_final_session,
     select_active_slack_profile_final_session,
 )
+from .slack_profile_analysis_consent_session import (
+    SLACK_PROFILE_ANALYSIS_CONSENT_SESSION_SCHEMA_VERSION,
+    build_slack_profile_analysis_consent_session,
+    load_slack_profile_analysis_consent_session,
+    save_slack_profile_analysis_consent_session,
+    select_active_slack_profile_analysis_consent_session,
+)
 
 __all__ = [
     "SLACK_COMMAND_REQUEST_SCHEMA_VERSION",
+    "PROFILE_EXTERNAL_ANALYSIS_APPROVE_ACTION",
+    "PROFILE_EXTERNAL_ANALYSIS_REJECT_ACTION",
     "PROFILE_DRAFT_ACTION",
     "PROFILE_REVIEW_APPROVE_ACTION",
     "PROFILE_REVIEW_ACTION",
@@ -130,4 +141,9 @@ __all__ = [
     "load_slack_profile_final_session",
     "save_slack_profile_final_session",
     "select_active_slack_profile_final_session",
+    "SLACK_PROFILE_ANALYSIS_CONSENT_SESSION_SCHEMA_VERSION",
+    "build_slack_profile_analysis_consent_session",
+    "load_slack_profile_analysis_consent_session",
+    "save_slack_profile_analysis_consent_session",
+    "select_active_slack_profile_analysis_consent_session",
 ]

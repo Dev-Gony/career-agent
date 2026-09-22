@@ -96,6 +96,16 @@ from .analysis_review import (
     validate_profile_analysis_review,
 )
 from .analysis_service import ProfileAnalysisProvider, analyze_profile_extraction
+from .analysis_external_consent import (
+    PROFILE_ANALYSIS_EXTERNAL_CONSENT_DECISIONS,
+    PROFILE_ANALYSIS_EXTERNAL_CONSENT_SCHEMA_VERSION,
+    build_profile_analysis_external_consent,
+    load_profile_analysis_external_consent,
+    profile_analysis_request_sha256,
+    save_profile_analysis_external_consent,
+    select_latest_profile_analysis_external_consent_for_session,
+    validate_profile_analysis_external_consent,
+)
 from .analysis_update_proposal import (
     PROFILE_ANALYSIS_UPDATE_PROPOSAL_SCHEMA_VERSION,
     build_profile_analysis_update_proposal,
@@ -228,6 +238,14 @@ __all__ = [
     "validate_profile_analysis_review",
     "ProfileAnalysisProvider",
     "analyze_profile_extraction",
+    "PROFILE_ANALYSIS_EXTERNAL_CONSENT_DECISIONS",
+    "PROFILE_ANALYSIS_EXTERNAL_CONSENT_SCHEMA_VERSION",
+    "build_profile_analysis_external_consent",
+    "load_profile_analysis_external_consent",
+    "profile_analysis_request_sha256",
+    "save_profile_analysis_external_consent",
+    "select_latest_profile_analysis_external_consent_for_session",
+    "validate_profile_analysis_external_consent",
     "PROFILE_ANALYSIS_UPDATE_PROPOSAL_SCHEMA_VERSION",
     "build_profile_analysis_update_proposal",
     "load_profile_analysis_update_proposal",

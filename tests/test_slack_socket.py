@@ -260,6 +260,53 @@ class SlackSocketTest(unittest.TestCase):
         self.assertIn("아직 개인 프로필에는 반영하지 않았습니다", replies[1]["text"])
         self.assertEqual([], logger.messages)
 
+    def test_registered_listener_prepares_external_analysis_consent_in_same_thread(self) -> None:
+        app = _FakeApp()
+        replies: list[dict] = []
+        prepared: list[tuple] = []
+        logger = _FakeLogger()
+
+        def prepare_consent(request, extraction_result, created_at):
+            prepared.append((request, extraction_result, created_at))
+
+        with tempfile.TemporaryDirectory() as directory:
+            listener = register_slack_app_mention_listener(
+                app,
+                _config(),
+                output_directory=directory,
+                now=lambda: RECEIVED_AT,
+                profile_document_importer=lambda _reference, _at: {
+                    "status": "stored",
+                    "document_id": "safe-document-id",
+                },
+                profile_document_extractor=lambda _result, _at: {
+                    "status": "extracted",
+                    "document_format": "docx",
+                    "extraction_id": "profile-text-extraction-0123456789abcdef01234567",
+                    "summary": {
+                        "candidate_count": 2,
+                        "section_counts": {"career_history": 2},
+                    },
+                },
+                profile_analysis_consent_session_creator=prepare_consent,
+            )
+            listener(
+                _profile_event(),
+                lambda **values: replies.append(values),
+                logger,
+            )
+
+        self.assertEqual(1, len(prepared))
+        self.assertEqual(
+            "1789372800.000100",
+            prepared[0][0]["source"]["thread_ts"],
+        )
+        self.assertEqual(RECEIVED_AT, prepared[0][2])
+        self.assertIn("무료 Gemini 개발 키", replies[1]["text"])
+        self.assertIn("외부 AI 분석 동의", replies[1]["text"])
+        self.assertIn("동의 전에는 외부 전송이 없습니다", replies[1]["text"])
+        self.assertEqual([], logger.messages)
+
     def test_registered_listener_warns_when_only_one_section_is_found(self) -> None:
         app = _FakeApp()
         replies: list[dict] = []

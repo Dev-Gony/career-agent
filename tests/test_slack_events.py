@@ -181,6 +181,32 @@ class SlackEventsTest(unittest.TestCase):
         self.assertEqual("profile_final_thread_required", outside["slack_command_request"]["reason"])
         self.assertIsNone(outside["slack_command_request"]["action"])
 
+    def test_maps_external_analysis_consent_only_inside_document_thread(self) -> None:
+        for command, expected_action in (
+            ("외부 AI 분석 동의", "approve_external_profile_analysis"),
+            ("외부 AI 분석 거부", "reject_external_profile_analysis"),
+        ):
+            event = _event(f"<@U01234567> {command}")
+            event["event"]["thread_ts"] = "1789372700.000900"
+            request = build_slack_command_request(
+                event,
+                _config(),
+                received_at=RECEIVED_AT,
+            )
+            self.assertEqual(expected_action, request["slack_command_request"]["action"])
+            self.assertNotIn(command, json.dumps(request, ensure_ascii=False))
+
+        outside = build_slack_command_request(
+            _event("<@U01234567> 외부 AI 분석 동의"),
+            _config(),
+            received_at=RECEIVED_AT,
+        )
+        self.assertEqual(
+            "profile_external_analysis_consent_thread_required",
+            outside["slack_command_request"]["reason"],
+        )
+        self.assertIsNone(outside["slack_command_request"]["action"])
+
     def test_maps_profile_review_answers_only_inside_a_thread(self) -> None:
         for command, expected_action in (
             ("맞아", "approve_active_profile_analysis_review_item"),

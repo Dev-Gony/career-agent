@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 
 from .slack_events import (
+    PROFILE_EXTERNAL_ANALYSIS_APPROVE_ACTION,
+    PROFILE_EXTERNAL_ANALYSIS_REJECT_ACTION,
     PROFILE_DRAFT_ACTION,
     PROFILE_REVIEW_APPROVE_ACTION,
     PROFILE_REVIEW_ACTION,
@@ -49,6 +51,24 @@ PROFILE_FINAL_DECISION_STARTED_REPLY = (
 )
 PROFILE_FINAL_THREAD_REQUIRED_REPLY = (
     "최종 승인 또는 취소는 `프로필 최종 검토`로 생성된 스레드 안에서 보내주세요."
+)
+PROFILE_EXTERNAL_ANALYSIS_DECISION_STARTED_REPLY = (
+    "요청을 확인했습니다. 외부 AI 분석 전송 결정을 기록합니다."
+)
+PROFILE_EXTERNAL_ANALYSIS_THREAD_REQUIRED_REPLY = (
+    "외부 AI 분석 동의 또는 거부는 파일 분석 결과가 표시된 스레드 안에서 보내주세요."
+)
+PROFILE_EXTERNAL_ANALYSIS_CONSENT_PROMPT = (
+    "외부 AI 분석은 자동으로 실행하지 않습니다. 후보 문장에는 경력, 회사와 "
+    "프로젝트 정보가 포함될 수 있습니다. 현재 무료 Gemini 개발 키에는 실제 문서 "
+    "내용을 보내지 않으며, 이 단계에서는 향후 허용된 외부 공급자에 보낼 최소 후보 "
+    "텍스트의 동의 경계만 확인합니다. 동의하려면 이 스레드에서 "
+    "`@career_break 외부 AI 분석 동의`, 전송하지 않으려면 "
+    "`@career_break 외부 AI 분석 거부`라고 답해주세요. 동의 전에는 외부 전송이 없습니다."
+)
+PROFILE_EXTERNAL_ANALYSIS_CONSENT_PREPARATION_FAILED_REPLY = (
+    "외부 AI 분석 동의 단계를 준비하지 못했습니다. 문서와 추출 결과는 비공개 저장소에 "
+    "남아 있으며 외부 전송은 실행되지 않았습니다."
 )
 PROFILE_MAPPING_THREAD_REQUIRED_REPLY = (
     "경력 또는 기술수준 답변은 `프로필 변경 검토 시작`으로 생성된 "
@@ -219,6 +239,8 @@ def _reply_text(request: Mapping[str, Any], *, created: bool) -> str | None:
         return PROFILE_MAPPING_THREAD_REQUIRED_REPLY
     if root.get("reason") == "profile_final_thread_required":
         return PROFILE_FINAL_THREAD_REQUIRED_REPLY
+    if root.get("reason") == "profile_external_analysis_consent_thread_required":
+        return PROFILE_EXTERNAL_ANALYSIS_THREAD_REQUIRED_REPLY
     return None
 
 
@@ -239,6 +261,11 @@ def _action_started_reply(action: str) -> str:
         return PROFILE_FINAL_REVIEW_STARTED_REPLY
     if action in {PROFILE_FINAL_APPROVE_ACTION, PROFILE_FINAL_REJECT_ACTION}:
         return PROFILE_FINAL_DECISION_STARTED_REPLY
+    if action in {
+        PROFILE_EXTERNAL_ANALYSIS_APPROVE_ACTION,
+        PROFILE_EXTERNAL_ANALYSIS_REJECT_ACTION,
+    }:
+        return PROFILE_EXTERNAL_ANALYSIS_DECISION_STARTED_REPLY
     return ACTION_STARTED_REPLY
 
 
@@ -278,6 +305,9 @@ def register_slack_app_mention_listener(
     ) = None,
     profile_document_extractor: (
         Callable[[Mapping[str, Any], datetime], Mapping[str, Any]] | None
+    ) = None,
+    profile_analysis_consent_session_creator: (
+        Callable[[Mapping[str, Any], Mapping[str, Any], datetime], None] | None
     ) = None,
 ) -> Callable[..., None]:
     """Register the single supported Bolt event listener and return it for tests."""
@@ -333,6 +363,30 @@ def register_slack_app_mention_listener(
                     if not isinstance(extraction_result, Mapping):
                         raise SlackEventError("프로필 문서 추출 결과가 올바르지 않음")
                     reply_text = _profile_extraction_reply(extraction_result)
+                    summary = extraction_result.get("summary")
+                    candidate_count = (
+                        summary.get("candidate_count")
+                        if isinstance(summary, Mapping)
+                        else 0
+                    )
+                    if (
+                        candidate_count
+                        and profile_analysis_consent_session_creator is not None
+                    ):
+                        try:
+                            profile_analysis_consent_session_creator(
+                                request,
+                                extraction_result,
+                                received_at,
+                            )
+                        except SlackEventError as error:
+                            logger.warning("Slack 외부 분석 동의 준비 실패: %s", error)
+                            reply_text += (
+                                "\n\n"
+                                + PROFILE_EXTERNAL_ANALYSIS_CONSENT_PREPARATION_FAILED_REPLY
+                            )
+                        else:
+                            reply_text += "\n\n" + PROFILE_EXTERNAL_ANALYSIS_CONSENT_PROMPT
             except SlackEventError as error:
                 logger.warning("Slack 첨부파일 처리 실패: %s", error)
                 reply_text = (
@@ -374,6 +428,8 @@ def register_slack_app_mention_listener(
                     PROFILE_FINAL_REVIEW_ACTION,
                     PROFILE_FINAL_APPROVE_ACTION,
                     PROFILE_FINAL_REJECT_ACTION,
+                    PROFILE_EXTERNAL_ANALYSIS_APPROVE_ACTION,
+                    PROFILE_EXTERNAL_ANALYSIS_REJECT_ACTION,
                 }
                 else "공고 분석을 시작하지 못했습니다. 로컬 실행 이력을 확인해주세요."
             )

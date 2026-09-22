@@ -12,6 +12,8 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
 
 from career_agent.interfaces import (  # noqa: E402
+    PROFILE_EXTERNAL_ANALYSIS_APPROVE_ACTION,
+    PROFILE_EXTERNAL_ANALYSIS_REJECT_ACTION,
     PROFILE_DRAFT_ACTION,
     PROFILE_REVIEW_APPROVE_ACTION,
     PROFILE_REVIEW_ACTION,
@@ -26,6 +28,7 @@ from career_agent.interfaces import (  # noqa: E402
     build_latest_slack_profile_analysis_review_item_result,
     build_latest_slack_profile_analysis_summary,
     build_slack_profile_review_session,
+    build_slack_profile_analysis_consent_session,
     build_slack_profile_mapping_session,
     build_slack_profile_update_mapping_item_result,
     build_slack_profile_final_proposal_result,
@@ -38,13 +41,17 @@ from career_agent.interfaces import (  # noqa: E402
     run_slack_career_action,
     run_slack_socket_mode,
     save_slack_profile_review_session,
+    save_slack_profile_analysis_consent_session,
     save_slack_profile_mapping_session,
     save_slack_profile_final_session,
     select_active_slack_profile_review_session,
+    select_active_slack_profile_analysis_consent_session,
     select_active_slack_profile_mapping_session,
     select_active_slack_profile_final_session,
 )
 from career_agent.profile_input import (  # noqa: E402
+    DEFAULT_GEMINI_DEVELOPMENT_MODEL,
+    GeminiDevelopmentProfileAnalysisProvider,
     ProfileDocumentError,
     build_profile_analysis_review,
     build_profile_analysis_mapping_review,
@@ -55,6 +62,7 @@ from career_agent.profile_input import (  # noqa: E402
     build_profile_evidence_summary,
     build_profile_text_extraction,
     load_profile_document_import,
+    load_profile_text_extraction,
     load_profile_analysis_draft,
     load_profile_analysis_update_proposal,
     load_profile_analysis_final_proposal,
@@ -64,6 +72,9 @@ from career_agent.profile_input import (  # noqa: E402
     save_profile_analysis_final_proposal,
     save_profile_analysis_final_review,
     save_profile_analysis_application,
+    build_profile_analysis_external_consent,
+    profile_analysis_request_sha256,
+    save_profile_analysis_external_consent,
     build_profile_activation,
     resolve_active_profile_path,
     save_profile_activation,
@@ -92,6 +103,12 @@ DEFAULT_PROFILE_EVIDENCE_DIRECTORY = (
 )
 DEFAULT_PROFILE_ANALYSIS_DRAFT_DIRECTORY = (
     REPOSITORY_ROOT / "private-data/profile-analysis-drafts"
+)
+DEFAULT_PROFILE_ANALYSIS_EXTERNAL_CONSENT_DIRECTORY = (
+    REPOSITORY_ROOT / "private-data/profile-analysis-external-consents"
+)
+DEFAULT_SLACK_PROFILE_ANALYSIS_CONSENT_SESSION_DIRECTORY = (
+    REPOSITORY_ROOT / "private-data/slack-profile-analysis-consent-sessions"
 )
 DEFAULT_PROFILE_ANALYSIS_REVIEW_DIRECTORY = (
     REPOSITORY_ROOT / "private-data/profile-analysis-reviews"
@@ -182,9 +199,42 @@ def _extract_imported_profile_document(
     return {
         "status": "extracted" if created else "reused",
         "document_format": document_format,
+        "extraction_id": extraction["profile_extraction"]["extraction_id"],
         "summary": extraction["summary"],
         "evidence_summary": evidence_summary["summary"],
     }
+
+
+def _create_profile_analysis_consent_session(
+    request: Mapping[str, Any],
+    extraction_result: Mapping[str, Any],
+    created_at: datetime,
+) -> None:
+    source = request.get("source")
+    extraction_id = extraction_result.get("extraction_id")
+    if not isinstance(source, Mapping) or not isinstance(extraction_id, str):
+        raise SlackEventError("외부 분석 동의 세션 입력이 올바르지 않음")
+    try:
+        extraction = load_profile_text_extraction(
+            extraction_id,
+            DEFAULT_PROFILE_EXTRACTION_DIRECTORY,
+        )
+        session = build_slack_profile_analysis_consent_session(
+            extraction,
+            team_id=str(source["team_id"]),
+            channel_id=str(source["channel_id"]),
+            user_id=str(source["user_id"]),
+            thread_ts=str(source["thread_ts"]),
+            provider_name=GeminiDevelopmentProfileAnalysisProvider.provider_name,
+            model_name=DEFAULT_GEMINI_DEVELOPMENT_MODEL,
+            created_at=created_at,
+        )
+        save_slack_profile_analysis_consent_session(
+            session,
+            DEFAULT_SLACK_PROFILE_ANALYSIS_CONSENT_SESSION_DIRECTORY,
+        )
+    except (KeyError, TypeError, ProfileDocumentError) as error:
+        raise SlackEventError("외부 분석 동의 세션을 안전하게 만들 수 없음") from error
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -269,6 +319,78 @@ def _run_profile_review_decision(
             f"표시된 항목을 {outcome}했습니다. "
             "아직 개인 프로필과 공고 검색 조건에는 반영하지 않았습니다. "
             "다음 항목은 새 메시지에서 `프로필 검토 시작`을 호출해 확인할 수 있습니다."
+        ),
+    }
+
+
+def _run_profile_external_analysis_decision(
+    action: str,
+    request: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    source, decided_at = _request_context(request)
+    try:
+        session = select_active_slack_profile_analysis_consent_session(
+            team_id=str(source["team_id"]),
+            channel_id=str(source["channel_id"]),
+            user_id=str(source["user_id"]),
+            thread_ts=str(source["thread_ts"]),
+            session_directory=DEFAULT_SLACK_PROFILE_ANALYSIS_CONSENT_SESSION_DIRECTORY,
+            consent_directory=DEFAULT_PROFILE_ANALYSIS_EXTERNAL_CONSENT_DIRECTORY,
+        )
+        if session is None:
+            return {
+                "status": "no_active_external_analysis_consent_session",
+                "public_message": (
+                    "이 스레드에 결정할 외부 AI 분석 요청이 없습니다. "
+                    "새 메시지에서 파일을 첨부해 `프로필 분석해줘`를 다시 호출해주세요."
+                ),
+            }
+        target = session["target"]
+        extraction = load_profile_text_extraction(
+            target["extraction_id"],
+            DEFAULT_PROFILE_EXTRACTION_DIRECTORY,
+        )
+        if profile_analysis_request_sha256(extraction) != target["request_sha256"]:
+            raise SlackEventError("외부 분석 동의 대상 문서 지문이 달라짐")
+        decision = (
+            "approve"
+            if action == PROFILE_EXTERNAL_ANALYSIS_APPROVE_ACTION
+            else "reject"
+        )
+        consent = build_profile_analysis_external_consent(
+            extraction,
+            provider_name=target["provider_name"],
+            model_name=target["model_name"],
+            consent_session_id=session["slack_profile_analysis_consent_session"][
+                "session_id"
+            ],
+            team_id=str(source["team_id"]),
+            channel_id=str(source["channel_id"]),
+            user_id=str(source["user_id"]),
+            thread_ts=str(source["thread_ts"]),
+            decision=decision,
+            decided_at=decided_at,
+        )
+        save_profile_analysis_external_consent(
+            consent,
+            DEFAULT_PROFILE_ANALYSIS_EXTERNAL_CONSENT_DIRECTORY,
+        )
+    except (KeyError, TypeError, ProfileDocumentError) as error:
+        raise SlackEventError("외부 AI 분석 결정을 안전하게 저장할 수 없음") from error
+    if decision == "reject":
+        return {
+            "status": "rejected",
+            "public_message": (
+                "외부 AI 분석 거부를 기록했습니다. 문서 후보 텍스트는 외부로 전송되지 않았고 "
+                "개인 프로필도 변경하지 않았습니다."
+            ),
+        }
+    return {
+        "status": "approved",
+        "public_message": (
+            "이 문서의 최소 후보 텍스트를 허용된 외부 AI 공급자로 분석하는 데 동의한 "
+            "기록을 저장했습니다. 무료 Gemini에는 실제 문서를 보내지 않으며, 외부 전송과 "
+            "개인 프로필 변경은 실행하지 않았습니다."
         ),
     }
 
@@ -558,6 +680,11 @@ def _run_slack_action(
     action: str,
     request: Mapping[str, Any],
 ) -> Mapping[str, Any]:
+    if action in {
+        PROFILE_EXTERNAL_ANALYSIS_APPROVE_ACTION,
+        PROFILE_EXTERNAL_ANALYSIS_REJECT_ACTION,
+    }:
+        return _run_profile_external_analysis_decision(action, request)
     if action == PROFILE_DRAFT_ACTION:
         return {
             "status": "completed",
@@ -689,6 +816,9 @@ def main() -> int:
                 )
             ),
             profile_document_extractor=_extract_imported_profile_document,
+            profile_analysis_consent_session_creator=(
+                _create_profile_analysis_consent_session
+            ),
         )
         print("Slack Socket Mode 수신기를 시작합니다.")
         print("- 지원 명령: @career_break 다음 공고 찾아줘")
@@ -701,6 +831,7 @@ def main() -> int:
         print("- 지원 명령: @career_break 프로필 최종 검토")
         print("- 최종 검토 스레드 답변: @career_break 최종 승인 또는 @career_break 최종 취소")
         print("- 지원 입력: @career_break 프로필 분석해줘 + 첨부파일 1개")
+        print("- 문서 스레드 답변: @career_break 외부 AI 분석 동의 또는 외부 AI 분석 거부")
         print("- 현재 단계: 공고 1건 분석 또는 첨부파일 저장과 검토 후보 추출")
         print("- 종료: Ctrl+C")
         print("주의: 메시지 원문과 Token은 콘솔에 출력하지 않습니다.")

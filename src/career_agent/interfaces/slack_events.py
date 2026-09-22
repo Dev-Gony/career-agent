@@ -20,6 +20,10 @@ MAX_SLACK_MESSAGE_CHARS = 4000
 NEXT_JOB_COMMAND = "다음 공고 찾아줘"
 NEXT_JOB_ACTION = "analyze_next_greenhouse_review"
 PROFILE_DOCUMENT_COMMAND = "프로필 분석해줘"
+PROFILE_EXTERNAL_ANALYSIS_APPROVE_COMMAND = "외부 ai 분석 동의"
+PROFILE_EXTERNAL_ANALYSIS_APPROVE_ACTION = "approve_external_profile_analysis"
+PROFILE_EXTERNAL_ANALYSIS_REJECT_COMMAND = "외부 ai 분석 거부"
+PROFILE_EXTERNAL_ANALYSIS_REJECT_ACTION = "reject_external_profile_analysis"
 PROFILE_DRAFT_COMMAND = "프로필 초안 보여줘"
 PROFILE_DRAFT_ACTION = "show_latest_profile_analysis_draft"
 PROFILE_REVIEW_COMMAND = "프로필 검토 시작"
@@ -355,6 +359,22 @@ def build_slack_command_request(
                 reason = "supported_command"
                 action = PROFILE_FINAL_REVIEW_ACTION
                 command_name = "show_profile_final_update_proposal"
+            elif command in {
+                PROFILE_EXTERNAL_ANALYSIS_APPROVE_COMMAND.casefold(),
+                PROFILE_EXTERNAL_ANALYSIS_REJECT_COMMAND.casefold(),
+            } and file_count == 0:
+                if raw_thread_ts is None:
+                    reason = "profile_external_analysis_consent_thread_required"
+                    action = None
+                    command_name = None
+                elif command == PROFILE_EXTERNAL_ANALYSIS_APPROVE_COMMAND.casefold():
+                    reason = "supported_command"
+                    action = PROFILE_EXTERNAL_ANALYSIS_APPROVE_ACTION
+                    command_name = "approve_external_profile_analysis"
+                else:
+                    reason = "supported_command"
+                    action = PROFILE_EXTERNAL_ANALYSIS_REJECT_ACTION
+                    command_name = "reject_external_profile_analysis"
             elif command in {
                 PROFILE_REVIEW_APPROVE_COMMAND.casefold(),
                 PROFILE_REVIEW_REJECT_COMMAND.casefold(),
